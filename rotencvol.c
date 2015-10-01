@@ -79,13 +79,17 @@ struct paramList Parameters =
 
 /********************************************************************************/
 /*										*/
-/* Get logarithmic volume from linear. 	 					*/
+/* Get volume based on shape function. 	 					*/
 /*										*/
 /* The value of Parameters.Factor changes the profile of the volume control:	*/
-/* As value -> 0, volume response is logarithmic.				*/
-/* As value -> 1, volume response is more linear. 				*/
-/* As value -> inf, volume response is more exponential.			*/
-/* Note a value of 1 is asymptotic!						*/
+/* As value -> 0, volume input is logarithmic.					*/
+/* As value -> 1, volume input is more linear	 				*/
+/* As value -> inf, volume is is more exponential.				*/
+/* Note: A value of 1 is asymptotic!						*/
+/* Note: A reasonable linear response is achieved with a value of between 0.0	*/
+/*	and 0.2, i.e. 0.1.							*/
+/* Note: Although a wider range is possible, extreme values less than 0.001 or	*/
+/*	greater than 10 will probably have little benefit.			*/
 /*										*/
 /********************************************************************************/
 
