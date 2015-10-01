@@ -5,17 +5,18 @@
 /* Adjusts ALSA volume based on left channel value.				*/
 /* Assumes IQaudIO.com Pi-DAC volume range -103dB to 0dB			*/
 /*										*/
-/* Original version: 	G.Garrity 	30/08/2015 IQaudIO.com 	v0.1 -> V1.5	*/
-/* Contributors:	D.Faulke	15/09/2015		V2.0		*/
+/* Original version: 	G.Garrity 	30/08/2015 IQaudIO.com 	v0.1 -> v1.5	*/
+/*			--see https://github.com/iqaudio/tools.			*/
+/* Authors:		D.Faulke	01/10/2015		v1.5 -> v2.3	*/
 /*										*/
 /* V1.5 Changed hard encoded values for card name and control.			*/
 /* V2.0 Modified to accept command line parameters and created data structures	*/
-/* for easier conversion to other uses.						*/
+/* 	for easier conversion to other uses.					*/
 /* V2.1 Additional command line parameters.					*/
 /* V2.2 Changed volume control to allow shaping of profile via factor.		*/
 /* V2.3 Tweaked default parameters.						*/
 /*										*/
-/* Uses WiringPi library.							*/
+/* Uses wiringPi, alsa and math libraries.					*/
 /* Compile with gcc IQ_rot.c -oIQ_rot -lwiringPi -lasound -lm			*/
 /*										*/
 /********************************************************************************/
