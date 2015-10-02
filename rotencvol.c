@@ -5,11 +5,20 @@
 /* Adjusts ALSA volume based on left channel value.				*/
 /* Assumes IQaudIO.com Pi-DAC volume range -103dB to 0dB			*/
 /*										*/
-/* Original version: 	G.Garrity 	30/08/2015 IQaudIO.com 	v0.1 -> v1.5	*/
+/* Original version: 	G.Garrity 	30/08/2015 IQaudIO.com.			*/
 /*			--see https://github.com/iqaudio/tools.			*/
-/* Authors:		D.Faulke	01/10/2015		v1.5 -> v2.4	*/
+/* Authors:		D.Faulke	02/10/2015				*/
 /* Contributors:								*/
 /*										*/
+/********************************************************************************/
+
+#define Version "Version 2.5"
+
+/********************************************************************************/
+/*										*/
+/* Changelog:									*/
+/*										*/
+/* V1.0 Forked from iqaudio.							*/
 /* V1.5 Changed hard encoded values for card name and control.			*/
 /* V2.0 Modified to accept command line parameters and created data structures	*/
 /* 	for easier conversion to other uses.					*/
@@ -17,28 +26,35 @@
 /* V2.2 Changed volume control to allow shaping of profile via factor.		*/
 /* V2.3 Tweaked default parameters.						*/
 /* V2.4 Modified getWiringPiNum routine for efficiency.				*/
+/* v2.5 Split info parameters and added some helpful output.			*/
+/*										*/
+/********************************************************************************/
+
+/********************************************************************************/
+/*										*/
+/* Compilation:									*/
 /*										*/
 /* Uses wiringPi, alsa and math libraries.					*/
 /* Compile with gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm		*/
+/* Also use the following flags for Raspberry Pi:				*/
+/*	--march=???? --mtune=???? -O2 -pipe					*/
 /*										*/
 /********************************************************************************/
 
 #include <stdio.h>
 #include <string.h>
 #include <argp.h>		// Command parameter parsing.
-//#include <stdlib.h>
 #include <wiringPi.h>		// Raspberry Pi GPIO access.
 #include <alsa/asoundlib.h>
 #include <alsa/mixer.h>
-//#include <errno.h>
-#include <math.h>		// Needed for power function.
+#include <math.h>		// Needed for pow function.
 
 // Boolean definitions.
 #define TRUE	1
 #define FALSE	0
 
-// Program version
-#define Version "Version 2.3"
+// Maximum GPIO pin number
+static const int maxGPIO=35;
 
 // Encoder state.
 static volatile int encoderPos;
@@ -49,17 +65,41 @@ static volatile int inCriticalSection = FALSE;
 // Data structure of command line parameters.
 struct paramList
 {
-	char *Name;
-	char *Control;
-	int GPIO_A;
-	int GPIO_B;
-	int WiringPiPin_A;
-	int WiringPiPin_B;
-	int Initial;
-	double Factor;
-	int Increments;
-	int Delay;
-	int Debug;
+	char *Name;		// Name of card.
+	char *Control;		// Name of control parameter.
+	int gpioA;		// GPIO pin for rotary encoder.
+	int gpioB;		// GPIO pin for rotary encoder.
+	int gpioC;		// GPIO pin for mute button.
+	int WiringPiPinA;	// Mapped wiringPi pin.
+	int WiringPiPinB;	// Mapped wiringPi pin.
+	int WiringPiPinC;	// Mapped wiringPi pin.
+	int Initial;		// Initial volume.
+	double Factor;		// Volume shaping factor
+	int Increments;		// No. of increments over volume range.
+	int Delay;		// Delay between encoder tics.
+};
+
+// Data structure for parameters bounds.
+struct boundsList
+{
+	int InitialLow;
+	int InitialHigh;
+	double FactorLow;
+	double FactorHigh;
+	int IncrementsLow;
+	int IncrementsHigh;
+	int DelayLow;
+	int DelayHigh;
+};
+
+// Data structure for debugging command line parameters.
+struct infoList
+{
+	int Output;		// Printing output toggle.
+	int Ranges;		// Parameter range printing toggle.
+	int Defaults;		// Default parameters printing toggle.
+	int Set;		// Set parameters printing toggle.
+	int Mapping;		// WiringPi map printing toggle.
 };
 
 /********************************************************************************/
@@ -73,20 +113,42 @@ struct paramList
 /*										*/
 /********************************************************************************/
 
-// Set default values.
-struct paramList Parameters = 
+// Set default values and keep a copy.
+struct paramList setParams, defaultParams =
 {
 	.Name = "default",
 	.Control = "PCM",	// Default ALSA control with no DAC.
-	.GPIO_A = 23,		// GPIO 23.
-	.GPIO_B = 24,		// GPIO 24.
-	.WiringPiPin_A = 4,	// WiringPi number equivalent to GPIO 23.
-	.WiringPiPin_B = 5,	// WiringPi number equivalent to GPIO 24.
+	.gpioA = 23,		// GPIO 23 for rotary encoder.
+	.gpioB = 24,		// GPIO 24 for rotary encoder.
+	.gpioC = 0,		// GPIO 0 (for mute/unmute push button).
+	.WiringPiPinA = 4,	// WiringPi number equivalent to GPIO 23.
+	.WiringPiPinB = 5,	// WiringPi number equivalent to GPIO 24.
+	.WiringPiPinC = 8,	// WiringPi number equivalent to GPIO 24.
 	.Initial = 0,		// Mute.
 	.Factor = 0.1,		// Volume change rate factor.
 	.Increments = 20,	// 20 increments from 0 to 100%.
-	.Delay = 250,		// 250 cycles between tics.
-	.Debug = 0		// No debug printing.
+	.Delay = 250		// 250 cycles between tics.
+};
+
+struct boundsList paramBounds =
+{
+	.InitialLow = 0,	// Lower bound for initial volume.
+	.InitialHigh = 100,	// Upper bound for initial volume.
+	.FactorLow = 0.001,	// Lower bound for volume shaping factor.
+	.FactorHigh = 10,	// Upper bound for volume shaping factor.
+	.IncrementsLow = 10,	// Lower bound for no. of volume increments.
+	.IncrementsHigh = 100,	// Upper bound for no. of volume increments.
+	.DelayLow = 50,		// Lower bound for delay between tics.
+	.DelayHigh = 1000	// Upper bound for delay between tics.
+};
+
+struct infoList infoParams =
+{
+	.Output = 0,		// No output printing.
+	.Ranges = 0,		// No range printing.
+	.Defaults = 0,		// No defaults printing.
+	.Set = 0,		// No set parameters printing.
+	.Mapping = 0		// No defaults printing.
 };
 
 /********************************************************************************/
@@ -110,8 +172,8 @@ long getVolume (long index, long min, long max)
 	double Power;
 	double Volume;
 
-	Power = (float)index / (float)Parameters.Increments;
-	Volume = (pow((float)Parameters.Factor, Power) - 1) / ((float)Parameters.Factor - 1) * (float)max;
+	Power = (float)index / (float)setParams.Increments;
+	Volume = (pow((float)setParams.Factor, Power) - 1) / ((float)setParams.Factor - 1) * (float)max;
 
 	if (Volume < min)
 	{
@@ -149,8 +211,8 @@ void encoderPulse()
 	if ( inCriticalSection == TRUE ) return;
 	inCriticalSection = TRUE;
 
-	int MSB = digitalRead(Parameters.WiringPiPin_A);
-	int LSB = digitalRead(Parameters.WiringPiPin_B);
+	int MSB = digitalRead(setParams.WiringPiPinA);
+	int LSB = digitalRead(setParams.WiringPiPinB);
 
 	int encoded = (MSB << 1) | LSB;
 	int sum = (lastEncoded << 2) | encoded;
@@ -170,8 +232,8 @@ void encoderPulse()
 /********************************************************************************/
 
 const char *argp_program_version = Version;
-const char *argp_program_bug_address = "";
-static char args_doc[] = "A program to control a sound card on the Raspberry Pi using a rotary encoder.";
+const char *argp_program_bug_address = "darren@alidaf.co.uk";
+static char args_doc[] = "A program to control volume on the Raspberry Pi with or without a DAC using a rotary encoder.";
 
 /********************************************************************************/
 /*										*/
@@ -182,20 +244,27 @@ static char args_doc[] = "A program to control a sound card on the Raspberry Pi 
 
 static struct argp_option options[] =
 {
-	{ 0, 0, 0, 0, "Hardware options:" },
-	{ "name", 'n', "String", 0, "Name of Raspberry Pi card, e.g. default/IQaudIODAC/etc." },
-	{ "control", 'c', "String", 0, "Name of control, e.g. PCM/Digital/etc." },
+	{ 0, 0, 0, 0, "Card name:" },
+	{ "name", 'n', "String", 0, "Usually default - check using alsamixer" },
+	{ 0, 0, 0, 0, "Control name:" },
+	{ "control", 'o', "String", 0, "e.g. PCM/Digital/etc. - check using alsamixer" },
+	{ 0, 0, 0, 0, "GPIO pin numbers:" },
 	{ "gpio1", 'a', "Integer", 0, "GPIO number (1 of 2)." },
 	{ "gpio2", 'b', "Integer", 0, "GPIO number (2 of 2)." },
+	{ "gpio3", 'c', "Integer", 0, "Optional for push button - not yet implemented" },
 	{ 0, 0, 0, 0, "Volume options:" },
 	{ "initial", 'i', "Integer", 0, "Initial volume (%)." },
-	{ "increments", 'e', "Integer", 0, "No of Volume increments over range, 0 < inc < 100" },
+	{ "increments", 'e', "Integer", 0, "No of Volume increments over range." },
 	{ 0, 0, 0, 0, "Rate of volume change:" },
-	{ "factor", 'f', "Real", 0, "Volume profile factor, 0.001 <= fac >= 10, fac != 1" },
+	{ "factor", 'f', "Double", 0, "Volume profile factor." },
 	{ 0, 0, 0, 0, "Responsiveness:" },
-	{ "delay", 'd', "Integer", 0, "Delay between tics, 0 < delay < 1000." },
+	{ "delay", 'd', "Integer", 0, "Delay between encoder tics" },
 	{ 0, 0, 0, 0, "Debugging:" },
-	{ "debug", 'z', "0/1", 0, "0 = Debug print off, 1 = Debug print on." },
+	{ "gpiomap", 'm', 0, 0, "Print wiringPi mapping." },
+	{ "output", 'p', 0, 0, "Print output." },
+	{ "default", 'q', 0, 0, "Print default settings." },
+	{ "ranges", 'r', 0, 0, "Print parameter ranges." },
+	{ "params", 's', 0, 0, "Print set parameter." },
 	{ 0 }
 };
 
@@ -262,6 +331,35 @@ int getWiringPiNum ( int gpio )
 
 };
 
+/********************************************************************************/
+/*										*/
+/* Print list of known GPIO pin mappings with wiringPi.				*/
+/* See http://wiringpi.com/pins/						*/
+/*										*/
+/********************************************************************************/
+
+void printWiringPiMap ()
+
+{
+	int loop;
+	int pin;
+
+	printf("Known GPIO pins and wiringPi mapping:\n\n");
+	printf("+----------+----------+\n");
+	printf("| GPIO pin | WiringPi |\n");
+	printf("+----------+----------+\n");
+
+	for (loop = 0; loop <= maxGPIO; loop++)
+	{
+		pin = getWiringPiNum(loop);
+		if (pin != -1) printf("|    %2d    |    %2d    |\n", loop, pin);
+	}
+
+	printf("+----------+----------+\n\n");
+
+	return;
+};
+
 
 /********************************************************************************/
 /*										*/
@@ -269,123 +367,149 @@ int getWiringPiNum ( int gpio )
 /*										*/
 /********************************************************************************/
 
+// Need to separate out error and bound checking.
+// Need to add validity checks for Name and Control for graceful exit - could
+// probe for default names - check ALSA documentation.
+
 static int parse_opt (int param, char *arg, struct argp_state *state)
 {
-//	struct paramList *Parameters = state->input;
-//	*Parameters = state->input;
-
 	switch (param)
 		{
 		case 'n' :
-			Parameters.Name = arg;			// No checks for validity.
+			setParams.Name = arg;			// No checks for validity.
 			break;
-		case 'c' :
-			Parameters.Control = arg;		// No checks for validity.
+		case 'o' :
+			setParams.Control = arg;		// No checks for validity.
 			break;
 		case 'a' :
-			Parameters.GPIO_A = atoi (arg);
-			Parameters.WiringPiPin_A = getWiringPiNum( Parameters.GPIO_A );
-			if (Parameters.WiringPiPin_A == -1)
+			setParams.gpioA = atoi (arg);
+			setParams.WiringPiPinA = getWiringPiNum( setParams.gpioA );
+			if (setParams.WiringPiPinA == -1)
 			{
-				Parameters.GPIO_A = 23;
-				Parameters.WiringPiPin_A = 4; 	// Use default if not recognised.
+				setParams.gpioA = 23;
+				setParams.WiringPiPinA = 4; 	// Use default if not recognised.
 				printf("Warning. GPIO pin mapping not found, Set to default. GPIO pin = %d\n\n",
-					Parameters.GPIO_A);
+					setParams.gpioA);
 			}
 			break;
 		case 'b' :
-			Parameters.GPIO_B = atoi (arg);
-			Parameters.WiringPiPin_B = getWiringPiNum( Parameters.GPIO_B );
-			if (Parameters.WiringPiPin_B == -1)
+			setParams.gpioB = atoi (arg);
+			setParams.WiringPiPinB = getWiringPiNum( setParams.gpioB );
+			if (setParams.WiringPiPinB == -1)
 			{
-				Parameters.GPIO_B = 24;
-				Parameters.WiringPiPin_B = 5; 	// Use default if not recognised.
+				setParams.gpioB = 24;
+				setParams.WiringPiPinB = 5; 	// Use default if not recognised.
 				printf("Warning. GPIO pin mapping not found, Set to default. GPIO pin = %d\n\n",
-					Parameters.GPIO_B);
+					setParams.gpioB);
 			}
 			break;
 		case 'i' :
-			Parameters.Initial = atoi (arg);
-			if (Parameters.Initial > 100)		// Check upper limit (100%).
+			setParams.Initial = atoi (arg);
+			if (setParams.Initial > 100)		// Check upper limit (100%).
 			{
-				Parameters.Initial = 100;
-				printf("Warning. Initial volume set to %d%%. \n\n", Parameters.Initial);
+				setParams.Initial = 100;
+				printf("Warning. Initial volume set to %d%%. \n\n", setParams.Initial);
 			}
-			else if (Parameters.Initial < 0)	// Check lower limit (0%).
+			else if (setParams.Initial < 0)	// Check lower limit (0%).
 			{
-				Parameters.Initial = 0;
-				printf("Warning. Initial volume set to %d%%. \n\n", Parameters.Initial);
+				setParams.Initial = 0;
+				printf("Warning. Initial volume set to %d%%. \n\n", setParams.Initial);
 			}
 			break;
 		case 'e' :
-			Parameters.Increments = atoi (arg);
-			if (Parameters.Increments < 1)		// Check increments > 0.
+			setParams.Increments = atoi (arg);
+			if (setParams.Increments < 1)		// Check increments > 0.
 			{
-				Parameters.Increments = 1;	// Essentially Mute/Unmute.
+				setParams.Increments = 1;	// Essentially Mute/Unmute.
 				printf("Warning. Increments set to 1, i.e. Mute/Unmute. \n\n");
 			}
-			if (Parameters.Increments > 100)	// Arbitrary limit.
+			if (setParams.Increments > 100)	// Arbitrary limit.
 			{
-				Parameters.Increments = 100;
-				printf("Warning. Increments set to %d.\n\n", Parameters.Increments);
+				setParams.Increments = 100;
+				printf("Warning. Increments set to %d.\n\n", setParams.Increments);
 			}
 			break;
 		case 'f' :
-			Parameters.Factor = atof (arg);
-			if (Parameters.Factor <= 0)
+			setParams.Factor = atof (arg);
+			if (setParams.Factor <= 0)
 			{
-				Parameters.Factor = 0.001;	// Set to default.
-				printf("Warning. Factor set to %g.\n\n", Parameters.Factor);
+				setParams.Factor = 0.001;	// Set to default.
+				printf("Warning. Factor set to %g.\n\n", setParams.Factor);
 			}
-			else if (Parameters.Factor == 1)
+			else if (setParams.Factor == 1)
 			{
-				Parameters.Factor = 0.999999;	// 1 is asymptotic.
-				printf("Warning. Factor set to %g.\n\n", Parameters.Factor);
+				setParams.Factor = 0.999999;	// 1 is asymptotic.
+				printf("Warning. Factor set to %g.\n\n", setParams.Factor);
 			}
-			else if (Parameters.Factor > 10)
+			else if (setParams.Factor > 10)
 			{
-				Parameters.Factor = 10;		// Arbitrary limit.
-				printf("Warning. Factor set to %g.\n\n", Parameters.Factor);
+				setParams.Factor = 10;		// Arbitrary limit.
+				printf("Warning. Factor set to %g.\n\n", setParams.Factor);
 			}
 			break;
 		case 'd' :
-			Parameters.Delay = atoi (arg);
-			if ((Parameters.Delay < 0) || (Parameters.Delay > 1000))
+			setParams.Delay = atoi (arg);
+			if ((setParams.Delay < 0) || (setParams.Delay > 1000))
 			{
-				Parameters.Delay = 250;		// Set to default if out of reasonable bounds.
-				printf("Warning. Delay set to %d.\n\n", Parameters.Delay);
+				setParams.Delay = 250;		// Set to default if out of reasonable bounds.
+				printf("Warning. Delay set to %d.\n\n", setParams.Delay);
 			}
 			break;
-		case 'z' :
-			Parameters.Debug = atoi (arg);
-			if (Parameters.Debug != 0)
-			{
-				Parameters.Debug = 1;		// Force debug printing.
-				printf("Warning. Debug printing set to on. \n\n");
-			}
+		case 'm' :
+			infoParams.Mapping = 1;			// Print GPIO mapping.
+			break;
+		case 'p' :
+			infoParams.Output = 1;			// Print program output.
+			break;
+		case 'q' :
+			infoParams.Defaults = 1;		// Print default parameters.
+			break;
+		case 'r' :
+			infoParams.Ranges = 1;			// Print parameter ranges.
+			break;
+		case 's' :
+			infoParams.Set = 1;			// Print set parameters.
 			break;
 		}
+
 	return 0;
 };
 
 /********************************************************************************/
 /*										*/
-/* Print default or command line set values. 					*/
+/* Print default or command line set parameters values. 			*/
 /*										*/
 /********************************************************************************/
 
-void printParams ()
+void printParams (struct paramList *printList)
 {
-	printf ("Hardware name = %s\n", Parameters.Name);
-	printf ("Hardware control = %s\n", Parameters.Control);
-	printf ("GPIO pins %d", Parameters.GPIO_A);
-	printf (" & %d\n", Parameters.GPIO_B);
-	printf ("Mapped to WiringPi Numbers %d", Parameters.WiringPiPin_A);
-	printf (" & %d\n", Parameters.WiringPiPin_B);
-	printf ("Initial volume = %d%%\n", Parameters.Initial);
-	printf ("Volume factor = %g\n", Parameters.Factor);
-	printf ("Volume increments = %d\n", Parameters.Increments);
-	printf ("Tic delay = %d\n", Parameters.Delay);
+	printf ("Hardware name = %s\n", printList->Name);
+	printf ("Hardware control = %s\n", printList->Control);
+	printf ("GPIO pins %d", printList->gpioA);
+	printf (" & %d\n", printList->gpioB);
+	printf ("Mapped to WiringPi Numbers %d", printList->WiringPiPinA);
+	printf (" & %d\n", printList->WiringPiPinB);
+	printf ("Initial volume = %d%%\n", printList->Initial);
+	printf ("Volume factor = %g\n", printList->Factor);
+	printf ("Volume increments = %d\n", printList->Increments);
+	printf ("Tic delay = %d\n\n", printList->Delay);
+};
+
+/********************************************************************************/
+/*										*/
+/* Print command line parameter ranges.						*/
+/*										*/
+/********************************************************************************/
+
+void printRanges (struct boundsList *paramBounds)
+{
+
+	printf ("Command line parameter ranges:\n\n");
+	printf ("Initial volume range  = %d to %d\n", paramBounds->InitialLow, paramBounds->InitialHigh);
+	printf ("Volume shaping factor = %g to %g\n", paramBounds->FactorLow, paramBounds->FactorHigh);
+	printf ("Increment range = %d to %d\n", paramBounds->IncrementsLow, paramBounds->IncrementsHigh);
+	printf ("Delay range  = %d to %d\n\n", paramBounds->DelayLow, paramBounds->DelayHigh);
+
 };
 
 /********************************************************************************/
@@ -415,29 +539,46 @@ int main (int argc, char *argv[])
 	long i, currentVolume, logVolume;
 	int indexVolume;
 
+	// Set default parameters.
+
+	setParams = defaultParams;
+
 	// Initialise wiringPi.
 
 	wiringPiSetup ();
 
 	// Get command line parameters.
 
-	argp_parse (&argp, argc, argv, 0, 0, &Parameters);
+	argp_parse (&argp, argc, argv, 0, 0, &setParams);
 
-	// Print out values set by command line - for debugging.
+	// Print out any information requested on command line.
 
-	if (Parameters.Debug)
+	if (infoParams.Mapping) printWiringPiMap();
+	if (infoParams.Ranges) printRanges(&paramBounds);
+	if (infoParams.Defaults)
 	{
-		printf ("Parameters passed:\n");
-		printParams ();
-		printf ("\n");
+		printf("Default parameters:\n");
+		printParams(&defaultParams);
+	}
+	if (infoParams.Set)
+	{
+		printf ("Set parameters:\n");
+		printParams (&setParams);
+	}
+
+	// exit program for all information except program output.
+
+	if ((infoParams.Mapping) || (infoParams.Defaults) || (infoParams.Set) || (infoParams.Ranges))
+	{
+		return 0;
 	}
 
 	// Pull up is needed as encoder common is grounded.
 
-	pinMode (Parameters.WiringPiPin_A, INPUT);
-	pullUpDnControl (Parameters.WiringPiPin_A, PUD_UP);
-	pinMode (Parameters.WiringPiPin_B, INPUT);
-	pullUpDnControl (Parameters.WiringPiPin_B, PUD_UP);
+	pinMode (setParams.WiringPiPinA, INPUT);
+	pullUpDnControl (setParams.WiringPiPinA, PUD_UP);
+	pinMode (setParams.WiringPiPinB, INPUT);
+	pullUpDnControl (setParams.WiringPiPinB, PUD_UP);
 
 	// Initialise encoder position.
 
@@ -446,29 +587,29 @@ int main (int argc, char *argv[])
 	// Set up ALSA access.
 
 	snd_mixer_open(&handle, 0);
-	snd_mixer_attach(handle, Parameters.Name);
+	snd_mixer_attach(handle, setParams.Name);
 	snd_mixer_selem_register(handle, NULL, NULL);
 	snd_mixer_load(handle);
 
 	snd_mixer_selem_id_alloca(&sid);
 	snd_mixer_selem_id_set_index(sid, 0);
-	snd_mixer_selem_id_set_name(sid, Parameters.Control);
+	snd_mixer_selem_id_set_name(sid, setParams.Control);
 	snd_mixer_elem_t* elem = snd_mixer_find_selem(handle, sid);
 
 	snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
 
-	if (Parameters.Debug) printf("Returned card VOLUME  range - min: %ld, max: %ld\n", min, max);
+	if (infoParams.Output) printf("Returned card VOLUME  range - min: %ld, max: %ld\n", min, max);
 
 	// Set starting volume as a percentage of maximum.
 
-	indexVolume = (Parameters.Increments * Parameters.Initial / 100  );
+	indexVolume = (setParams.Increments * setParams.Initial / 100  );
 	currentVolume = getVolume (indexVolume, min, max);
 	snd_mixer_selem_set_playback_volume_all(elem, currentVolume);
 
 	// Monitor encoder level changes.
 
-	wiringPiISR (Parameters.WiringPiPin_A, INT_EDGE_BOTH, &encoderPulse);
-	wiringPiISR (Parameters.WiringPiPin_B, INT_EDGE_BOTH, &encoderPulse);
+	wiringPiISR (setParams.WiringPiPinA, INT_EDGE_BOTH, &encoderPulse);
+	wiringPiISR (setParams.WiringPiPinB, INT_EDGE_BOTH, &encoderPulse);
 
 	// Wait for GPIO pins to activate.
 
@@ -481,9 +622,9 @@ int main (int argc, char *argv[])
 			{
 				pos = encoderPos;
 				indexVolume++;
-				if ((indexVolume >= Parameters.Increments + 1) || (currentVolume > max))
+				if ((indexVolume >= setParams.Increments + 1) || (currentVolume > max))
 				{
-					indexVolume = Parameters.Increments;
+					indexVolume = setParams.Increments;
 					currentVolume = max;
 				}
 				if (encoderPos > 250)
@@ -518,12 +659,12 @@ int main (int argc, char *argv[])
 			{
 				printf("ERROR %d %s\n", x, snd_strerror(x));
 			}
-			else if (Parameters.Debug) printf("Volume = %ld, Encoder pos = %d, Index = %d\n",
+			else if (infoParams.Output) printf("Volume = %ld, Encoder pos = %d, Index = %d\n",
 					currentVolume, pos, indexVolume);
 		}
 
 		// Check x times per second. Adjust according to encoder.
-		delay(Parameters.Delay);
+		delay(setParams.Delay);
 
 	}
 
