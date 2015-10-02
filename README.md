@@ -10,19 +10,13 @@ Originally based on code available at IQaudIO but extended to allow command line
 
 Command line parameters allow specifying:
 
-()The name of the sound card in case it changes or for add-on cards.
-
-()The name of the control for sound cards with multiple controls.
-
-()The initial volume setting as a percentage of max, i.e. low for headphones and high for DAC/phono.
-
-()The number of volume increments over the full volume range.
-
-()The shape of the response, i.e. logarithmic -> linear (almost) -> exponential.
-
-()The GPIO pins to be used (mapped internally to the wiringPi numbers).
-
-()The delay between tic increments to fine tune responsiveness.
+* The name of the sound card in case it changes or for add-on cards.
+* The name of the control for sound cards with multiple controls.
+* The initial volume setting as a percentage of max, i.e. low for headphones and high for DAC/phono.
+* The number of volume increments over the full volume range.
+* The shape of the response, i.e. logarithmic -> linear (almost) -> exponential.
+* The GPIO pins to be used (mapped internally to the wiringPi numbers).
+* The delay between tic increments to fine tune responsiveness.
 
 Push button support for rotary encoders to mute/unmute is planned.
 Hopefully, packages will also be built and supplied to the Tiny Core Linux repository for easier use.
