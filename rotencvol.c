@@ -7,7 +7,8 @@
 /*										*/
 /* Original version: 	G.Garrity 	30/08/2015 IQaudIO.com 	v0.1 -> v1.5	*/
 /*			--see https://github.com/iqaudio/tools.			*/
-/* Authors:		D.Faulke	01/10/2015		v1.5 -> v2.3	*/
+/* Authors:		D.Faulke	01/10/2015		v1.5 -> v2.4	*/
+/* Contributors:								*/
 /*										*/
 /* V1.5 Changed hard encoded values for card name and control.			*/
 /* V2.0 Modified to accept command line parameters and created data structures	*/
@@ -15,21 +16,21 @@
 /* V2.1 Additional command line parameters.					*/
 /* V2.2 Changed volume control to allow shaping of profile via factor.		*/
 /* V2.3 Tweaked default parameters.						*/
+/* V2.4 Modified getWiringPiNum routine for efficiency.				*/
 /*										*/
 /* Uses wiringPi, alsa and math libraries.					*/
-/* Compile with gcc IQ_rot.c -oIQ_rot -lwiringPi -lasound -lm			*/
+/* Compile with gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm		*/
 /*										*/
 /********************************************************************************/
 
 #include <stdio.h>
 #include <string.h>
 #include <argp.h>		// Command parameter parsing.
-#include <stdlib.h>
+//#include <stdlib.h>
 #include <wiringPi.h>		// Raspberry Pi GPIO access.
 #include <alsa/asoundlib.h>
 #include <alsa/mixer.h>
-#include <stdbool.h>
-#include <errno.h>
+//#include <errno.h>
 #include <math.h>		// Needed for power function.
 
 // Boolean definitions.
@@ -61,11 +62,22 @@ struct paramList
 	int Debug;
 };
 
+/********************************************************************************/
+/*										*/
+/* Set default values.								*/
+/*										*/
+/* Notes:									*/
+/*	for IQaudIODAC, .Control = "Digital".					*/
+/*	currently a workaround is needed in PiCorePlayer due to both Pi and	*/
+/*	DAC set as default. Delete "audio = on" from /mnt/mmcblk0p1/config.txt.	*/
+/*										*/
+/********************************************************************************/
+
 // Set default values.
 struct paramList Parameters = 
 {
 	.Name = "default",
-	.Control = "Digital",
+	.Control = "PCM",	// Default ALSA control with no DAC.
 	.GPIO_A = 23,		// GPIO 23.
 	.GPIO_B = 24,		// GPIO 24.
 	.WiringPiPin_A = 4,	// WiringPi number equivalent to GPIO 23.
@@ -189,97 +201,67 @@ static struct argp_option options[] =
 
 /********************************************************************************/
 /*										*/
-/* Map GPIO number to WiringPi number.	 					*/
+/* Map GPIO number to WiringPi number.						*/
 /* See http://wiringpi.com/pins/						*/
 /*										*/
 /********************************************************************************/
+/*										*/
+/*			+----------+----------+-------+				*/
+/*			| GPIO pin | WiringPi | Board |				*/
+/*			+----------+----------+-------+				*/
+/*			|     0    |     8    | Rev 1 |				*/
+/*			|     1    |     9    | Rev 1 |				*/
+/*			|     2    |     8    | Rev 2 |				*/
+/*			|     3    |     9    | Rev 2 |				*/
+/*			|     4    |     7    |       |				*/
+/*			|     7    |    11    |       |				*/
+/*			|     8    |    10    |       |				*/
+/*			|     9    |    13    |       |				*/
+/*			|    10    |    12    |       |				*/
+/*			|    11    |    14    |       |				*/
+/*			|    14    |    15    |       |				*/
+/*			|    15    |    16    |       |				*/
+/*			|    17    |     0    |       |				*/
+/*			|    21    |     2    | Rev 1 |				*/
+/*			|    22    |     3    |       |				*/
+/*			|    23    |     4    |       |				*/
+/*			|    24    |     5    |       |				*/
+/*			|    25    |     6    |       |				*/
+/*			|    27    |     2    | Rev 2 |				*/
+/*			|    28    |    17    | Rev 2 |				*/
+/*			|    29    |    18    | Rev 2 |				*/
+/*			|    30    |    19    | Rev 2 |				*/
+/*			|    31    |    20    | Rev 2 |				*/
+/*			+----------+----------+-------+				*/
+/*										*/
+/********************************************************************************/
 
-int getWiringPiNum ( int pin )
+int getWiringPiNum ( int gpio )
+
 {
-	int Num;
-
-// Lazy - probably better to use lookup array.
-
-	switch (pin)
+	int loop;
+	int wiringPiNum;
+	static const int elems = 23;
+	int pins[2][23] =
 	{
-	case 0 :	//Rev. 1 board.
-		Num = 8;
-		break;
-	case 1 :	// Rev. 1 board.
-		Num = 9;
-		break;
-	case 2 :	// Rev. 2 board.
-		Num = 8;
-		break;
-	case 3 :	// Rev. 2 board.
-		Num = 9;
-		break;
-	case 4 :
-		Num = 7;
-		break;
-	case 7 :
-		Num = 11;
-		break;
-	case 8 :
-		Num = 10;
-		break;
-	case 9 :
-		Num = 13;
-		break;
-	case 10 :
-		Num = 12;
-		break;
-	case 11 :
-		Num = 14;
-		break;
-	case 14 :
-		Num = 15;
-		break;
-	case 15 :
-		Num = 16;
-		break;
-	case 17 :
-		Num = 0;
-		break;
-	case 18 :
-		Num = 1;
-		break;
-	case 21 :	// Rev. 1 board.
-		Num = 2;
-		break;
-	case 22 :
-		Num = 3;
-		break;
-	case 23 :
-		Num = 4;
-		break;
-	case 24 :
-		Num = 5;
-		break;
-	case 25 :
-		Num = 6;
-		break;
-	case 27 :	// Rev. 2 board.
-		Num = 2;
-		break;
-	case 28 :	// Rev. 2 board.
-		Num = 17;
-		break;
-	case 29 :	// Rev. 2 board.
-		Num = 18;
-		break;
-	case 30 :	// Rev. 2 board.
-		Num = 19;
-		break;
-	case 31 :	// Rev. 2 board.
-		Num = 20;
-		break;
-	default :	// Return 0 to flag unknown number.
-		Num = 0;
-	}
-return Num;
+		{ 0, 1, 2, 3, 4, 7, 8, 9,10,11,14,15,17,21,22,23,24,25,27,28,29,30,31},
+		{ 8, 9, 8, 9, 7,11,10,13,12,14,15,16, 0, 2, 3, 4, 5, 6, 2,17,18,19,20}
+	};
+
+	wiringPiNum = -1;	// Returns -1 if no mapping found
+
+	for (loop = 0; loop < elems; loop++)
+	{
+		if (gpio == pins[0][loop])
+		{
+			wiringPiNum = pins[1][loop];
+		};
+	};
+
+	return wiringPiNum;
 
 };
+
 
 /********************************************************************************/
 /*										*/
@@ -303,22 +285,22 @@ static int parse_opt (int param, char *arg, struct argp_state *state)
 		case 'a' :
 			Parameters.GPIO_A = atoi (arg);
 			Parameters.WiringPiPin_A = getWiringPiNum( Parameters.GPIO_A );
-			if (Parameters.WiringPiPin_A == 0)
+			if (Parameters.WiringPiPin_A == -1)
 			{
 				Parameters.GPIO_A = 23;
 				Parameters.WiringPiPin_A = 4; 	// Use default if not recognised.
-				printf("Warning. GPIO pin A set to default. GPIO pin = %d\n\n",
+				printf("Warning. GPIO pin mapping not found, Set to default. GPIO pin = %d\n\n",
 					Parameters.GPIO_A);
 			}
 			break;
 		case 'b' :
 			Parameters.GPIO_B = atoi (arg);
 			Parameters.WiringPiPin_B = getWiringPiNum( Parameters.GPIO_B );
-			if (Parameters.WiringPiPin_B == 0)
+			if (Parameters.WiringPiPin_B == -1)
 			{
 				Parameters.GPIO_B = 24;
 				Parameters.WiringPiPin_B = 5; 	// Use default if not recognised.
-				printf("Warning. GPIO pin B set to default. GPIO pin = %d\n\n",
+				printf("Warning. GPIO pin mapping not found, Set to default. GPIO pin = %d\n\n",
 					Parameters.GPIO_B);
 			}
 			break;
