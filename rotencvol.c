@@ -1,18 +1,16 @@
 /********************************************************************************/
+/* 										*/
+/* Rotary encoder volume control app for Raspberry Pi.  			*/
+/* 										*/
+/* Original version: G.Garrity 30/08/2015 IQaudIO.com.  			*/
+/* 		--see https://github.com/iqaudio/tools.  			*/
 /*										*/
-/* Rotary encoder volume control app for Raspberry Pi.				*/
-/*										*/
-/* Adjusts ALSA volume based on left channel value.				*/
-/* Assumes IQaudIO.com Pi-DAC volume range -103dB to 0dB			*/
-/*										*/
-/* Original version: 	G.Garrity 	30/08/2015 IQaudIO.com.			*/
-/*			--see https://github.com/iqaudio/tools.			*/
-/* Authors:		D.Faulke	02/10/2015				*/
-/* Contributors:								*/
-/*										*/
+/* Authors: 		D.Faulke 		03/10/2015 			*/
+/* Contributors: 								*/
+/* 										*/
 /********************************************************************************/
 
-#define Version "Version 2.6"
+#define Version "Version 2.7"
 
 /********************************************************************************/
 /*										*/
@@ -28,6 +26,7 @@
 /* v2.4 Modified getWiringPiNum routine for efficiency.				*/
 /* v2.5 Split info parameters and added some helpful output.			*/
 /* v2.6 Reworked bounds checking and error trapping.				*/
+/* v2.7 Added soft volume limits.						*/
 /*										*/
 /********************************************************************************/
 
@@ -38,7 +37,8 @@
 /* Uses wiringPi, alsa and math libraries.					*/
 /* Compile with gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm		*/
 /* Also use the following flags for Raspberry Pi:				*/
-/*	--march=???? --mtune=???? -O2 -pipe					*/
+/*	-march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp		*/
+/*	-ffast-math -pipe -O3							*/
 /*										*/
 /********************************************************************************/
 
@@ -75,8 +75,8 @@ struct paramList
 	int wiringPiPinB;	// Mapped wiringPi pin.
 	int wiringPiPinC;	// Mapped wiringPi pin.
 	int initVol;		// Initial volume (%).
-	int minVol;		// Minimum volume (%).
-	int maxVol;		// Maximum volume (%).
+	int minVol;		// Minimum soft volume (%).
+	int maxVol;		// Maximum soft volume (%).
 	int incVol;		// No. of increments over volume range.
 	double facVol;		// Volume shaping factor
 	int ticDelay;		// Delay between encoder tics.
@@ -130,7 +130,7 @@ struct paramList setParams, defaultParams =
 	.initVol = 0,		// Mute.
 	.minVol = 0,		// 0% of Maximum output level.
 	.maxVol = 100,		// 100% of Maximum output level.
-	.incVol = 50,		// 50 increments from 0 to 100%.
+	.incVol = 20,		// 20 increments from 0 to 100%.
 	.facVol = 0.1,		// Volume change rate factor.
 	.ticDelay = 250		// 250 cycles between tics.
 };
@@ -172,31 +172,24 @@ struct infoList infoParams =
 /*										*/
 /********************************************************************************/
 
-long getVolume (long index, long min, long max, struct paramList *setParams)
+long getVolume (long indexVol, long minVol, long maxVol, long incVol, float facVol)
 {
-	double Power;
-	double Volume;
-	double softMin, softMax;
+	double power;
+	double outVol;
 
-	softMin = (float)max / 100 * setParams->minVol;
-	softMax = (float)max / 100 * setParams->maxVol;
+	power = (float)indexVol / (float)incVol;
+	outVol = (pow((float)facVol, power) - 1) / ((float)facVol - 1) * (float)maxVol;
 
-	printf("Soft volume levels are %g to %g\n", softMin, softMax);
-
-	Power = (float)index / (float)setParams->incVol;
-//	Volume = (pow((float)setParams->facVol, Power) - 1) / ((float)setParams->facVol - 1) * (float)max;
-	Volume = (pow((float)setParams->facVol, Power) - 1) / ((float)setParams->facVol - 1) * softMax;
-
-	if (Volume < softMin)
+	if (outVol < minVol)
 	{
-		Volume = softMin;
+		outVol = minVol;
 	}
-	else if (Volume > softMax)
+	else if (outVol > maxVol)
 	{
-		Volume = softMax;
+		outVol = maxVol;
 	}
 
-	return (long)Volume;
+	return (long)outVol;
 
 };
 
@@ -265,14 +258,13 @@ static struct argp_option options[] =
 	{ "gpio2", 'b', "Integer", 0, "GPIO number (2 of 2)." },
 	{ "gpio3", 'c', "Integer", 0, "Optional for push button - not yet implemented." },
 	{ 0, 0, 0, 0, "Volume options:" },
-	{ "init", 'i', "Integer", 0, "Initial volume (%)." },
+	{ "init", 'i', "Integer", 0, "Initial volume (% of range)." },
 	{ "min", 'j', "Integer", 0, "Minimum volume (% of full output)." },
 	{ "max", 'k', "Integer", 0, "Maximum volume (% of full output)." },
-	{ "inc", 'l', "Integer", 0, "No of Volume increments over range (min % to max %)." },
-	{ 0, 0, 0, 0, "Rate of volume change:" },
+	{ "inc", 'l', "Integer", 0, "No of volume increments over range." },
 	{ "fac", 'f', "Double", 0, "Volume profile factor." },
 	{ 0, 0, 0, 0, "Responsiveness:" },
-	{ "delay", 'd', "Integer", 0, "Delay between encoder tics." },
+	{ "delay", 'd', "Integer", 0, "Delay between encoder tics (mS)." },
 	{ 0, 0, 0, 0, "Debugging:" },
 	{ "gpiomap", 'm', 0, 0, "Print GPIO/wiringPi map." },
 	{ "output", 'p', 0, 0, "Print program output." },
@@ -384,49 +376,52 @@ static int parse_opt (int param, char *arg, struct argp_state *state)
 {
 	switch (param)
 		{
-		case 'n' :
+		case 'n' :				// Card name.
 			setParams.cardName = arg;
 			break;
-		case 'o' :
+		case 'o' :				// Control name.
 			setParams.controlName = arg;
 			break;
-		case 'a' :
+		case 'a' :				// GPIO 1 for rotary encoder.
 			setParams.gpioA = atoi (arg);
 			break;
-		case 'b' :
+		case 'b' :				// GPIO 2 for rotary encoder.
 			setParams.gpioB = atoi (arg);
 			break;
-		case 'i' :
-			setParams.initVol = atoi (arg);
+		case 'c' :				// GPIO 3 for push button.
+			setParams.gpioC = atoi (arg);
 			break;
-		case 'j' :
-			setParams.minVol = atoi (arg);
-			break;
-		case 'k' :
-			setParams.maxVol = atoi (arg);
-			break;
-		case 'l' :
-			setParams.incVol = atoi (arg);
-			break;
-		case 'f' :
+		case 'f' :				// Volume shape factor.
 			setParams.facVol = atof (arg);
 			break;
-		case 'd' :
+		case 'i' :				// Initial volume.
+			setParams.initVol = atoi (arg);
+			break;
+		case 'j' :				// Minimum soft volume.
+			setParams.minVol = atoi (arg);
+			break;
+		case 'k' :				// Maximum soft volume.
+			setParams.maxVol = atoi (arg);
+			break;
+		case 'l' :				// No. of volume increments.
+			setParams.incVol = atoi (arg);
+			break;
+		case 'd' :				// Tic delay.
 			setParams.ticDelay = atoi (arg);
 			break;
-		case 'm' :
+		case 'm' :				// Print GPIO mapping.
 			infoParams.printMapping = 1;
 			break;
-		case 'p' :
+		case 'p' :				// Print program output.
 			infoParams.printOutput = 1;
 			break;
-		case 'q' :
+		case 'q' :				// Print default values.
 			infoParams.printDefaults = 1;
 			break;
-		case 'r' :
+		case 'r' :				// Print parameter ranges.
 			infoParams.printRanges = 1;
 			break;
-		case 's' :
+		case 's' :				// Print set ranges.
 			infoParams.printSet = 1;
 			break;
 		}
@@ -563,7 +558,7 @@ static struct argp argp = { options, parse_opt };
 int main (int argc, char *argv[])
 {
 	int pos = 125;
-	long min, max;
+	long softMin, softMax;
 
 	snd_mixer_t *handle;
 	snd_mixer_selem_id_t *sid;
@@ -573,7 +568,7 @@ int main (int argc, char *argv[])
 	int indexVolume;
 	int error = 0;
 
-	// Set default parameters.
+	// Set default parameters and keep a copy of defaults.
 
 	setParams = defaultParams;
 
@@ -588,6 +583,7 @@ int main (int argc, char *argv[])
 		printRanges(&paramBounds);
 		return 0;
 	}
+
 	// Print out any information requested on command line.
 
 	if (infoParams.printMapping) printWiringPiMap();
@@ -637,21 +633,26 @@ int main (int argc, char *argv[])
 	snd_mixer_selem_id_set_name(sid, setParams.controlName);
 	snd_mixer_elem_t* elem = snd_mixer_find_selem(handle, sid);
 
-	// Get ALSA min and max levels.
+	// Get ALSA min and max levels and set soft limits.
 
-	snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
-	if (infoParams.printOutput) printf("\nCard volume range = %ld to %ld\n\n", min, max);
-
-	// Set starting volume as a percentage of maximum.
+	snd_mixer_selem_get_playback_volume_range(elem, &softMin, &softMax);
+	if (infoParams.printOutput) printf("\nCard volume range = %ld to %ld\n\n", softMin, softMax);
 
 	indexVolume = (setParams.incVol * setParams.initVol / 100  );
-	currentVolume = getVolume (indexVolume, min, max, &setParams);
+
+	softMin = getVolume( setParams.minVol * setParams.incVol / 100, softMin, softMax, setParams.incVol, setParams.facVol );
+	softMax = getVolume( setParams.maxVol * setParams.incVol / 100, softMin, softMax, setParams.incVol, setParams.facVol );
+	if( infoParams.printOutput ) printf( "\nSoft limts are %d to %d\n\n", softMin, softMax );
+
+	// Set starting volume.
+
+	currentVolume = getVolume (indexVolume, softMin, softMax, setParams.incVol, setParams.facVol);
 	snd_mixer_selem_set_playback_volume_all(elem, currentVolume);
 
 	// Monitor encoder level changes.
 
-	wiringPiISR (setParams.wiringPiPinA, INT_EDGE_BOTH, &encoderPulse);
-	wiringPiISR (setParams.wiringPiPinB, INT_EDGE_BOTH, &encoderPulse);
+	wiringPiISR( setParams.wiringPiPinA, INT_EDGE_BOTH, &encoderPulse );
+	wiringPiISR( setParams.wiringPiPinB, INT_EDGE_BOTH, &encoderPulse );
 
 	// Wait for GPIO pins to activate.
 
@@ -664,33 +665,33 @@ int main (int argc, char *argv[])
 			{
 				pos = encoderPos;
 				indexVolume++;
-				if ((indexVolume >= setParams.incVol + 1) || (currentVolume > max))
+				if ((indexVolume >= setParams.incVol + 1) || (currentVolume > softMax))
 				{
 					indexVolume = setParams.incVol;
-					currentVolume = max;
+					currentVolume = softMax;
 				}
 				if (encoderPos > 250)
 				{
 					encoderPos = 250;	// Prevent encoderPos overflowing.
 					pos = 250;
 				}
-				currentVolume = getVolume (indexVolume, min, max, &setParams);
+				currentVolume = getVolume( indexVolume, softMin, softMax, setParams.incVol, setParams.facVol );
 			}
 			else if (encoderPos < pos)
 			{
 				pos = encoderPos;
 				indexVolume--;
-				if ((indexVolume < 0) || (currentVolume < min))
+				if ((indexVolume < 0) || (currentVolume < softMin))
 				{
 					indexVolume = 0;
-					currentVolume = min;
+					currentVolume = softMin;
 				}
 				if (encoderPos < 0)
 				{
 					encoderPos = 0;		// Prevent encoderPos underflowing.
 					pos = 0;
 				}
-				currentVolume = getVolume (indexVolume, min, max, &setParams);
+				currentVolume = getVolume( indexVolume, softMin, softMax, setParams.incVol, setParams.facVol );
 			}
 			if (x = snd_mixer_selem_set_playback_volume_all(elem, currentVolume))
 			{
@@ -700,7 +701,7 @@ int main (int argc, char *argv[])
 					currentVolume, pos, indexVolume);
 		}
 
-		// Check x times per second. Adjust according to encoder.
+		// Tic delay in mS. Adjust according to encoder.
 		delay(setParams.ticDelay);
 
 	}
