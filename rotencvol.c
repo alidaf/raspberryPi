@@ -10,7 +10,7 @@
 /* 										*/
 /********************************************************************************/
 
-#define Version "Version 2.71"
+#define Version "Version 2.72"
 
 /********************************************************************************/
 /*										*/
@@ -105,6 +105,22 @@ struct infoList
 	int printMapping;	// WiringPi map printing toggle.
 };
 
+// Data structure for volume calculation.
+struct volStruct
+{
+	long index;
+	double facVol;
+	long volIncs;
+	long softMin;
+	long softMax;
+	long softRange;
+	long hardMin;
+	long hardMax;
+	long hardRange;
+	long linearVol;
+	long shapedVol;
+};
+
 /********************************************************************************/
 /*										*/
 /* Set default values.								*/
@@ -158,6 +174,51 @@ struct infoList infoParams =
 
 /********************************************************************************/
 /*										*/
+/* Print volume output. 							*/
+/*										*/
+/********************************************************************************/
+
+void printOutput( struct volStruct *volParams )
+{
+	double linearP; // Percentage of hard volume range (linear).
+	double shapedP; // Percentage of hard volume range (shaped)..
+
+	linearP = ( volParams->linearVol - (float) volParams->hardMin ) /
+		(float) volParams->hardRange * 100;
+	shapedP = ( volParams->shapedVol - (float) volParams->hardMin ) /
+		(float) volParams->hardRange * 100;
+
+	printf( "Index = %3d, Linear volume = %6d, (%3d%%), Shaped volume = %6d, (%3d%%)\n",
+		volParams->index, (long) volParams->linearVol, (long) linearP,
+			(long) volParams->shapedVol, (long) shapedP );
+};
+
+/********************************************************************************/
+/*										*/
+/* Get linear volume.								*/
+/*										*/
+/********************************************************************************/
+
+long getLinearVolume( struct volStruct *volParams )
+{
+	double power;
+	double linearVol;
+
+	// Calculate linear volume.
+
+	linearVol = ( (float) volParams->index / (float) volParams->volIncs *
+		(float) volParams->softRange ) + (float) volParams->softMin;
+
+	// Check volume is within soft limits.
+
+	if ( linearVol < volParams->softMin ) linearVol = volParams->softMin;
+	else if ( linearVol > volParams->softMax ) linearVol = volParams->softMax;
+
+	return linearVol;
+};
+
+/********************************************************************************/
+/*										*/
 /* Get volume based on shape function. 	 					*/
 /*										*/
 /* The value of Parameters.Factor changes the profile of the volume control:	*/
@@ -172,42 +233,40 @@ struct infoList infoParams =
 /*										*/
 /********************************************************************************/
 
-long getVolume (long indexVol, struct paramList *setParams)
+long getShapedVolume ( struct volStruct *volParams )
 {
 	double power;
-	double outVol;
-	double linearVol;
-	double rangeVol;
+	double shapedVol;
 
-	rangeVol = (float)setParams->maxVol - (float)setParams->minVol;
-	linearVol = ( (float)indexVol / (float)setParams->incVol * rangeVol ) + (float)setParams->minVol;
+	// Calculate shaped volume.
 
-	printf("Index  = %d, ", indexVol);
-	printf("Linear volume = %g\n\n", linearVol);
+	power = (float) volParams->index / (float) volParams->volIncs;
+	shapedVol = ( pow( (float) volParams->facVol, power ) - 1 ) /
+		( (float) volParams->facVol - 1 ) *
+		(float) volParams->softRange + (float) volParams->softMin;
 
-//	power = (float)indexVol / (float)incVol;
-//	power = (float)indexVol * ((float)maxVol - (float)minVol) / (float)incVol;
+	// Check volume is within soft limits.
 
-	if ( setParams->facVol == 1 ) outVol = linearVol;
-	else
-	{
-		power = (float)indexVol / (float)setParams->incVol;
-//		outVol = (pow((float)facVol, power) - 1) / ((float)facVol - 1) * (float)maxVol;
-		outVol = (pow((float)setParams->facVol, power) - 1) / ((float)setParams->facVol - 1) *
-			rangeVol + (float)setParams->minVol;
-	}
+	if ( shapedVol < volParams->softMin ) shapedVol = volParams->softMin;
+	else if ( shapedVol > volParams->softMax ) shapedVol = volParams->softMax;
 
-	if (outVol < setParams->minVol)
-	{
-		outVol = setParams->minVol;
-	}
-	else if (outVol > setParams->maxVol)
-	{
-		outVol = setParams->maxVol;
-	}
+	return shapedVol;
+};
 
-	return (long)outVol;
 
+/********************************************************************************/
+/*										*/
+/* Get soft volume bounds.		 					*/
+/*										*/
+/********************************************************************************/
+
+long getSoftVol (long paramVol, long hardRange, long hardMin)
+{
+	double softVol;
+
+	softVol = (float) paramVol / 100 * (float) hardRange + (float) hardMin;
+
+	return (long) softVol;
 };
 
 /********************************************************************************/
@@ -329,7 +388,6 @@ static struct argp_option options[] =
 /********************************************************************************/
 
 int getWiringPiNum ( int gpio )
-
 {
 	int loop;
 	int wiringPiNum;
@@ -344,14 +402,10 @@ int getWiringPiNum ( int gpio )
 
 	for (loop = 0; loop < elems; loop++)
 	{
-		if (gpio == pins[0][loop])
-		{
-			wiringPiNum = pins[1][loop];
-		};
+		if (gpio == pins[0][loop]) wiringPiNum = pins[1][loop];
 	}
 
 	return wiringPiNum;
-
 };
 
 /********************************************************************************/
@@ -362,7 +416,6 @@ int getWiringPiNum ( int gpio )
 /********************************************************************************/
 
 void printWiringPiMap ()
-
 {
 	int loop;
 	int pin;
@@ -453,12 +506,9 @@ static int parse_opt (int param, char *arg, struct argp_state *state)
 /********************************************************************************/
 
 int checkIfInBounds(double value, double lower, double upper)
-
 {
-
 	if ((value < lower) || (value > upper)) return 1;
 	else return 0;
-
 };
 
 /********************************************************************************/
@@ -471,7 +521,6 @@ int checkIfInBounds(double value, double lower, double upper)
 // probe for default names - check ALSA documentation.
 
 int checkParams (struct paramList *setParams, struct  boundsList *paramBounds)
-
 {
 	int error = 0;
 	int pinA, pinB;
@@ -573,15 +622,17 @@ static struct argp argp = { options, parse_opt };
 int main (int argc, char *argv[])
 {
 	int pos = 125;
-	long softMin, softMax, rangeVol;
+//	long hardMin, hardMax, hardRange;
+//	long softMin, softMax;
 
 	snd_mixer_t *handle;
 	snd_mixer_selem_id_t *sid;
 
 	int x, mute_state;
-	long i, currentVolume, logVolume;
-	int indexVolume;
+//	long i, currentVolume, logVolume;
 	int error = 0;
+
+	struct volStruct volParams;
 
 	// Set default parameters and keep a copy of defaults.
 
@@ -591,11 +642,11 @@ int main (int argc, char *argv[])
 
 	argp_parse( &argp, argc, argv, 0, 0, &setParams );
 	error = checkParams( &setParams, &paramBounds );
-	if(error)
+	if (error)
 	{
 		printf("\nThere is something wrong with the parameters you set.\n");
 		printf("Use the -m -p -q -r -s flags to check values or -? to check flags.\n\n");
-		printRanges(&paramBounds);
+		printRanges( &paramBounds );
 		return 0;
 	}
 
@@ -605,13 +656,13 @@ int main (int argc, char *argv[])
 	if (infoParams.printRanges) printRanges(&paramBounds);
 	if (infoParams.printDefaults)
 	{
-		printf("\nDefault parameters:\n\n");
-		printParams(&defaultParams);
+		printf( "\nDefault parameters:\n\n" );
+		printParams( &defaultParams );
 	}
 	if (infoParams.printSet)
 	{
-		printf ("\nSet parameters:\n\n");
-		printParams (&setParams);
+		printf ( "\nSet parameters:\n\n" );
+		printParams ( &setParams );
 	}
 
 	// exit program for all information except program output.
@@ -627,10 +678,10 @@ int main (int argc, char *argv[])
 
 	// Pull up is needed as encoder common is grounded.
 
-	pinMode (setParams.wiringPiPinA, INPUT);
-	pullUpDnControl (setParams.wiringPiPinA, PUD_UP);
-	pinMode (setParams.wiringPiPinB, INPUT);
-	pullUpDnControl (setParams.wiringPiPinB, PUD_UP);
+	pinMode ( setParams.wiringPiPinA, INPUT );
+	pullUpDnControl ( setParams.wiringPiPinA, PUD_UP );
+	pinMode ( setParams.wiringPiPinB, INPUT );
+	pullUpDnControl ( setParams.wiringPiPinB, PUD_UP );
 
 	// Initialise encoder position.
 
@@ -638,40 +689,55 @@ int main (int argc, char *argv[])
 
 	// Set up ALSA access.
 
-	snd_mixer_open(&handle, 0);
-	snd_mixer_attach(handle, setParams.cardName);
-	snd_mixer_selem_register(handle, NULL, NULL);
-	snd_mixer_load(handle);
+	snd_mixer_open( &handle, 0 );
+	snd_mixer_attach( handle, setParams.cardName );
+	snd_mixer_selem_register( handle, NULL, NULL );
+	snd_mixer_load( handle );
 
-	snd_mixer_selem_id_alloca(&sid);
-	snd_mixer_selem_id_set_index(sid, 0);
-	snd_mixer_selem_id_set_name(sid, setParams.controlName);
-	snd_mixer_elem_t* elem = snd_mixer_find_selem(handle, sid);
+	snd_mixer_selem_id_alloca( &sid );
+	snd_mixer_selem_id_set_index( sid, 0 );
+	snd_mixer_selem_id_set_name( sid, setParams.controlName );
+	snd_mixer_elem_t* elem = snd_mixer_find_selem( handle, sid );
 
-	// Get ALSA min and max levels and set soft limits.
 
-	snd_mixer_selem_get_playback_volume_range(elem, &softMin, &softMax);
-	if (infoParams.printOutput) printf("\nCard volume range = %ld to %ld\n\n", softMin, softMax);
+	// Set up volume data structure.
 
-	indexVolume = (setParams.incVol * setParams.initVol / 100  );
+//	snd_mixer_selem_get_playback_volume_range(elem, &hardMin, &hardMax);
+	snd_mixer_selem_get_playback_volume_range(elem, &volParams.hardMin, &volParams.hardMax);
 
-//	rangeVol = softMax - softMin;
-//	rangeVol = rangeVol * ( setParams.maxVol - setParams.minVol ) / 100;
-//	softMax = getVolume( setParams.maxVol * setParams.incVol / 100, &setParams );
-//	softMin = softMax - rangeVol;
+	if ( infoParams.printOutput ) printf( "\nHardware volume range = %ld to %ld\n",
+		volParams.hardMin, volParams.hardMax );
 
-	setParams.maxVol = softMax;
-	setParams.minVol = softMin;
+	volParams.volIncs = setParams.incVol;
+	volParams.hardRange = volParams.hardMax - volParams.hardMin;
+	volParams.softMin = getSoftVol( setParams.minVol, volParams.hardRange, volParams.hardMin);
+	volParams.softMax = getSoftVol( setParams.maxVol, volParams.hardRange, volParams.hardMin);
+	volParams.softRange = volParams.softMax - volParams.softMin;
 
-	if( infoParams.printOutput ) printf( "\nSoft limts are %d to %d\n\n", softMin, softMax );
+	if( infoParams.printOutput ) printf( "Soft volume range = %d to %d\n\n",
+		volParams.softMin, volParams.softMax );
 
-	// Set starting volume.
+	// Calculate starting volume..
 
-	currentVolume = getVolume (indexVolume, &setParams);
-	snd_mixer_selem_set_playback_volume_all(elem, currentVolume);
+	volParams.index = (setParams.incVol * setParams.initVol / 100  );
 
-	if( infoParams.printOutput ) printf( "\nStarting index =  %d\n\n", indexVolume );
-	if( infoParams.printOutput ) printf( "\nStarting volume =  %d\n\n", currentVolume );
+	volParams.linearVol = getLinearVolume( &volParams );
+	if ( setParams.facVol = 1 )
+	{
+		volParams.shapedVol = volParams.linearVol;
+		snd_mixer_selem_set_playback_volume_all(elem, volParams.linearVol);
+	}
+	else
+	{
+		volParams.shapedVol = getShapedVolume( &volParams );
+		snd_mixer_selem_set_playback_volume_all(elem, volParams.shapedVol);
+	}
+
+	if ( infoParams.printOutput )
+	{
+		printf( "Starting volume:\n\n" );
+		printOutput( &volParams );
+	}
 
 	// Monitor encoder level changes.
 
@@ -684,45 +750,53 @@ int main (int argc, char *argv[])
 	{
 		if (encoderPos != pos)
 		{
-			// Find encoder direction and adjust volume.
-			if (encoderPos > pos)
+			if (encoderPos > pos)		// Volume is increasing.
 			{
 				pos = encoderPos;
-				indexVolume++;
-				if ((indexVolume >= setParams.incVol + 1) || (currentVolume > softMax))
-				{
-					indexVolume = setParams.incVol;
-					currentVolume = softMax;
-				}
+				volParams.index++;
+				if ( volParams.index >= setParams.incVol + 1 ) volParams.index = volParams.volIncs;
+
 				if (encoderPos > 250)
 				{
 					encoderPos = 250;	// Prevent encoderPos overflowing.
 					pos = 250;
 				}
-				currentVolume = getVolume( indexVolume, &setParams );
 			}
-			else if (encoderPos < pos)
+			else if (encoderPos < pos)	// Volume is decreasing.
 			{
 				pos = encoderPos;
-				indexVolume--;
-				if ((indexVolume < 0) || (currentVolume < softMin))
-				{
-					indexVolume = 0;
-					currentVolume = softMin;
-				}
+				volParams.index--;
+				if ( volParams.index < 0 ) volParams.index = 0;
 				if (encoderPos < 0)
 				{
 					encoderPos = 0;		// Prevent encoderPos underflowing.
 					pos = 0;
 				}
-				currentVolume = getVolume( indexVolume, &setParams );
 			}
-			if (x = snd_mixer_selem_set_playback_volume_all(elem, currentVolume))
+
+			// Get linear volume.
+
+			volParams.linearVol = getLinearVolume( &volParams );
+
+			// Get shaped volume.
+
+			if ( setParams.facVol = 1 )
 			{
-				printf("ERROR %d %s\n", x, snd_strerror(x));
+				volParams.shapedVol = volParams.linearVol;
+				snd_mixer_selem_set_playback_volume_all(elem, volParams.linearVol);
 			}
-			else if (infoParams.printOutput) printf("Volume = %ld, Encoder pos = %d, Index = %d\n",
-					currentVolume, pos, indexVolume);
+			else
+			{
+				volParams.shapedVol = getShapedVolume( &volParams );
+				snd_mixer_selem_set_playback_volume_all(elem, volParams.shapedVol);
+			}
+
+			if ( infoParams.printOutput ) printOutput( &volParams );
+
+//			if (x = snd_mixer_selem_set_playback_volume_all(elem, currentVolume))
+//			{
+//				printf("ERROR %d %s\n", x, snd_strerror(x));
+//			}
 		}
 
 		// Tic delay in mS. Adjust according to encoder.
