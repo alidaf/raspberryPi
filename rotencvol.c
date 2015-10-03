@@ -10,7 +10,7 @@
 /* 										*/
 /********************************************************************************/
 
-#define Version "Version 2.7"
+#define Version "Version 2.71"
 
 /********************************************************************************/
 /*										*/
@@ -131,7 +131,7 @@ struct paramList setParams, defaultParams =
 	.minVol = 0,		// 0% of Maximum output level.
 	.maxVol = 100,		// 100% of Maximum output level.
 	.incVol = 20,		// 20 increments from 0 to 100%.
-	.facVol = 0.1,		// Volume change rate factor.
+	.facVol = 1,		// Volume change rate factor.
 	.ticDelay = 250		// 250 cycles between tics.
 };
 
@@ -172,21 +172,38 @@ struct infoList infoParams =
 /*										*/
 /********************************************************************************/
 
-long getVolume (long indexVol, long minVol, long maxVol, long incVol, float facVol)
+long getVolume (long indexVol, struct paramList *setParams)
 {
 	double power;
 	double outVol;
+	double linearVol;
+	double rangeVol;
 
-	power = (float)indexVol / (float)incVol;
-	outVol = (pow((float)facVol, power) - 1) / ((float)facVol - 1) * (float)maxVol;
+	rangeVol = (float)setParams->maxVol - (float)setParams->minVol;
+	linearVol = ( (float)indexVol / (float)setParams->incVol * rangeVol ) + (float)setParams->minVol;
 
-	if (outVol < minVol)
+	printf("Index  = %d, ", indexVol);
+	printf("Linear volume = %g\n\n", linearVol);
+
+//	power = (float)indexVol / (float)incVol;
+//	power = (float)indexVol * ((float)maxVol - (float)minVol) / (float)incVol;
+
+	if ( setParams->facVol == 1 ) outVol = linearVol;
+	else
 	{
-		outVol = minVol;
+		power = (float)indexVol / (float)setParams->incVol;
+//		outVol = (pow((float)facVol, power) - 1) / ((float)facVol - 1) * (float)maxVol;
+		outVol = (pow((float)setParams->facVol, power) - 1) / ((float)setParams->facVol - 1) *
+			rangeVol + (float)setParams->minVol;
 	}
-	else if (outVol > maxVol)
+
+	if (outVol < setParams->minVol)
 	{
-		outVol = maxVol;
+		outVol = setParams->minVol;
+	}
+	else if (outVol > setParams->maxVol)
+	{
+		outVol = setParams->maxVol;
 	}
 
 	return (long)outVol;
@@ -491,8 +508,6 @@ int checkParams (struct paramList *setParams, struct  boundsList *paramBounds)
 				   paramBounds->delayLow,
 				   paramBounds->delayHigh ));
 
-	if (setParams->facVol == 1) setParams->facVol = 0.999999;
-
 	return error;
 };
 
@@ -558,7 +573,7 @@ static struct argp argp = { options, parse_opt };
 int main (int argc, char *argv[])
 {
 	int pos = 125;
-	long softMin, softMax;
+	long softMin, softMax, rangeVol;
 
 	snd_mixer_t *handle;
 	snd_mixer_selem_id_t *sid;
@@ -640,14 +655,23 @@ int main (int argc, char *argv[])
 
 	indexVolume = (setParams.incVol * setParams.initVol / 100  );
 
-	softMin = getVolume( setParams.minVol * setParams.incVol / 100, softMin, softMax, setParams.incVol, setParams.facVol );
-	softMax = getVolume( setParams.maxVol * setParams.incVol / 100, softMin, softMax, setParams.incVol, setParams.facVol );
+//	rangeVol = softMax - softMin;
+//	rangeVol = rangeVol * ( setParams.maxVol - setParams.minVol ) / 100;
+//	softMax = getVolume( setParams.maxVol * setParams.incVol / 100, &setParams );
+//	softMin = softMax - rangeVol;
+
+	setParams.maxVol = softMax;
+	setParams.minVol = softMin;
+
 	if( infoParams.printOutput ) printf( "\nSoft limts are %d to %d\n\n", softMin, softMax );
 
 	// Set starting volume.
 
-	currentVolume = getVolume (indexVolume, softMin, softMax, setParams.incVol, setParams.facVol);
+	currentVolume = getVolume (indexVolume, &setParams);
 	snd_mixer_selem_set_playback_volume_all(elem, currentVolume);
+
+	if( infoParams.printOutput ) printf( "\nStarting index =  %d\n\n", indexVolume );
+	if( infoParams.printOutput ) printf( "\nStarting volume =  %d\n\n", currentVolume );
 
 	// Monitor encoder level changes.
 
@@ -675,7 +699,7 @@ int main (int argc, char *argv[])
 					encoderPos = 250;	// Prevent encoderPos overflowing.
 					pos = 250;
 				}
-				currentVolume = getVolume( indexVolume, softMin, softMax, setParams.incVol, setParams.facVol );
+				currentVolume = getVolume( indexVolume, &setParams );
 			}
 			else if (encoderPos < pos)
 			{
@@ -691,7 +715,7 @@ int main (int argc, char *argv[])
 					encoderPos = 0;		// Prevent encoderPos underflowing.
 					pos = 0;
 				}
-				currentVolume = getVolume( indexVolume, softMin, softMax, setParams.incVol, setParams.facVol );
+				currentVolume = getVolume( indexVolume, &setParams );
 			}
 			if (x = snd_mixer_selem_set_playback_volume_all(elem, currentVolume))
 			{
