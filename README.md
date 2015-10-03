@@ -1,10 +1,10 @@
 # raspberryPi
 RaspberryPi projects
 
-rotaryenc:
+rotencvol:
 
-A program to enable rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi 
-or via the rotary encoder pins on an IQaudioDAC. 
+A program to provide rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi 
+or via the rotary encoder pins on an IQaudioDAC to control volume levels.
 
 Originally based on code available at IQaudIO but extended to allow command line input for generic use and allow shaped volume adjustments to compensate for, or accentuate the logarithmic response of ALSA. This will allow better control according to the type of use, e.g. headphones need better refinement at low volumes but DACs or line level devices may need better refinement at higher levels.
 
