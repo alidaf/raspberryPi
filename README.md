@@ -17,6 +17,8 @@ Command line parameters allow specifying:
 * The shape of the response, i.e. logarithmic -> linear (almost) -> exponential.
 * The GPIO pins to be used (mapped internally to the wiringPi numbers).
 * The delay between tic increments to fine tune responsiveness.
+* Print out a variety of information such as GPIO maps, default or defined settings, ranges and program output.
+* Soft volume limits.
 
 Push button support for rotary encoders to mute/unmute is planned.
 Hopefully, packages will also be built and supplied to the Tiny Core Linux repository for easier use.
