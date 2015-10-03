@@ -233,7 +233,7 @@ long getLinearVolume( struct volStruct *volParams )
 /*										*/
 /********************************************************************************/
 
-long getShapedVolume ( struct volStruct *volParams )
+long getShapedVolume( struct volStruct *volParams )
 {
 	double power;
 	double shapedVol;
@@ -260,14 +260,31 @@ long getShapedVolume ( struct volStruct *volParams )
 /*										*/
 /********************************************************************************/
 
-long getSoftVol (long paramVol, long hardRange, long hardMin)
+long getSoftVol( long paramVol, long hardRange, long hardMin )
 {
 	double softVol;
 
 	softVol = (float) paramVol / 100 * (float) hardRange + (float) hardMin;
 
-	return (long) softVol;
+	return softVol;
 };
+/********************************************************************************/
+/*										*/
+/* Get initial volume index.		 					*/
+/*										*/
+/********************************************************************************/
+
+long getVolIndex ( int initVol )
+{
+	float volIndex;
+
+	volIndex = (float) initVol / 100;
+	printf( "Double Index = %g, ", volIndex );
+	printf( "Long Index = %g.\n", (long) volIndex );
+	return volIndex;
+};
+
+
 
 /********************************************************************************/
 /*										*/
@@ -387,7 +404,7 @@ static struct argp_option options[] =
 /*										*/
 /********************************************************************************/
 
-int getWiringPiNum ( int gpio )
+int getWiringPiNum( int gpio )
 {
 	int loop;
 	int wiringPiNum;
@@ -415,7 +432,7 @@ int getWiringPiNum ( int gpio )
 /*										*/
 /********************************************************************************/
 
-void printWiringPiMap ()
+void printWiringPiMap()
 {
 	int loop;
 	int pin;
@@ -442,7 +459,7 @@ void printWiringPiMap ()
 /*										*/
 /********************************************************************************/
 
-static int parse_opt (int param, char *arg, struct argp_state *state)
+static int parse_opt( int param, char *arg, struct argp_state *state )
 {
 	switch (param)
 		{
@@ -505,7 +522,7 @@ static int parse_opt (int param, char *arg, struct argp_state *state)
 /*										*/
 /********************************************************************************/
 
-int checkIfInBounds(double value, double lower, double upper)
+int checkIfInBounds( double value, double lower, double upper )
 {
 	if ((value < lower) || (value > upper)) return 1;
 	else return 0;
@@ -520,7 +537,7 @@ int checkIfInBounds(double value, double lower, double upper)
 // Need to add validity checks for Name and Control for graceful exit - could
 // probe for default names - check ALSA documentation.
 
-int checkParams (struct paramList *setParams, struct  boundsList *paramBounds)
+int checkParams ( struct paramList *setParams, struct  boundsList *paramBounds )
 {
 	int error = 0;
 	int pinA, pinB;
@@ -566,20 +583,20 @@ int checkParams (struct paramList *setParams, struct  boundsList *paramBounds)
 /*										*/
 /********************************************************************************/
 
-void printParams (struct paramList *printList)
+void printParams ( struct paramList *printList )
 {
-	printf ("\tHardware name = %s.\n", printList->cardName);
-	printf ("\tHardware control = %s.\n", printList->controlName);
-	printf ("\tRotary encoder attached to GPIO pins %d", printList->gpioA);
-	printf (" & %d,\n", printList->gpioB);
-	printf ("\tMapped to WiringPi pin numbers %d", printList->wiringPiPinA);
-	printf (" & %d.\n", printList->wiringPiPinB);
-	printf ("\tInitial volume = %d%%.\n", printList->initVol);
-	printf ("\tMinimum volume = %d%%.\n", printList->minVol);
-	printf ("\tMaximum volume = %d%%.\n", printList->maxVol);
-	printf ("\tVolume increments = %d.\n", printList->incVol);
-	printf ("\tVolume factor = %g.\n", printList->facVol);
-	printf ("\tTic delay = %d.\n\n", printList->ticDelay);
+	printf ( "\tHardware name = %s.\n", printList->cardName );
+	printf ( "\tHardware control = %s.\n", printList->controlName );
+	printf ( "\tRotary encoder attached to GPIO pins %d", printList->gpioA );
+	printf ( " & %d,\n", printList->gpioB );
+	printf ( "\tMapped to WiringPi pin numbers %d", printList->wiringPiPinA );
+	printf ( " & %d.\n", printList->wiringPiPinB );
+	printf ( "\tInitial volume = %d%%.\n", printList->initVol );
+	printf ( "\tMinimum volume = %d%%.\n", printList->minVol );
+	printf ( "\tMaximum volume = %d%%.\n", printList->maxVol );
+	printf ( "\tVolume increments = %d.\n", printList->incVol );
+	printf ( "\tVolume factor = %g.\n", printList->facVol );
+	printf ( "\tTic delay = %d.\n\n", printList->ticDelay );
 };
 
 /********************************************************************************/
@@ -588,21 +605,21 @@ void printParams (struct paramList *printList)
 /*										*/
 /********************************************************************************/
 
-void printRanges (struct boundsList *paramBounds)
+void printRanges( struct boundsList *paramBounds )
 {
-	printf ("\nCommand line parameter ranges:\n\n");
-	printf ("\tInitial volume range (-i) = %d to %d.\n",
+	printf ( "\nCommand line parameter ranges:\n\n" );
+	printf ( "\tInitial volume range (-i) = %d to %d.\n",
 			paramBounds->volumeLow,
-			paramBounds->volumeHigh);
-	printf ("\tVolume shaping factor (-f) = %g to %g.\n",
+			paramBounds->volumeHigh );
+	printf ( "\tVolume shaping factor (-f) = %g to %g.\n",
 			paramBounds->factorLow,
-			paramBounds->factorHigh);
-	printf ("\tIncrement range (-e) = %d to %d.\n",
+			paramBounds->factorHigh );
+	printf ( "\tIncrement range (-e) = %d to %d.\n",
 			paramBounds->incLow,
-			paramBounds->incHigh);
-	printf ("\tDelay range (-d) = %d to %d.\n\n",
+			paramBounds->incHigh );
+	printf ( "\tDelay range (-d) = %d to %d.\n\n",
 			paramBounds->delayLow,
-			paramBounds->delayHigh);
+			paramBounds->delayHigh );
 };
 
 /********************************************************************************/
@@ -619,17 +636,14 @@ static struct argp argp = { options, parse_opt };
 /*										*/
 /********************************************************************************/
 
-int main (int argc, char *argv[])
+int main( int argc, char *argv[] )
 {
 	int pos = 125;
-//	long hardMin, hardMax, hardRange;
-//	long softMin, softMax;
 
 	snd_mixer_t *handle;
 	snd_mixer_selem_id_t *sid;
 
 	int x, mute_state;
-//	long i, currentVolume, logVolume;
 	int error = 0;
 
 	struct volStruct volParams;
@@ -644,22 +658,22 @@ int main (int argc, char *argv[])
 	error = checkParams( &setParams, &paramBounds );
 	if (error)
 	{
-		printf("\nThere is something wrong with the parameters you set.\n");
-		printf("Use the -m -p -q -r -s flags to check values or -? to check flags.\n\n");
+		printf( "\nThere is something wrong with the parameters you set.\n" );
+		printf( "Use the -m -p -q -r -s flags to check values or -? to check flags.\n\n" );
 		printRanges( &paramBounds );
 		return 0;
 	}
 
 	// Print out any information requested on command line.
 
-	if (infoParams.printMapping) printWiringPiMap();
-	if (infoParams.printRanges) printRanges(&paramBounds);
-	if (infoParams.printDefaults)
+	if ( infoParams.printMapping ) printWiringPiMap();
+	if ( infoParams.printRanges ) printRanges( &paramBounds );
+	if ( infoParams.printDefaults )
 	{
 		printf( "\nDefault parameters:\n\n" );
 		printParams( &defaultParams );
 	}
-	if (infoParams.printSet)
+	if ( infoParams.printSet )
 	{
 		printf ( "\nSet parameters:\n\n" );
 		printParams ( &setParams );
@@ -667,7 +681,10 @@ int main (int argc, char *argv[])
 
 	// exit program for all information except program output.
 
-	if ((infoParams.printMapping) || (infoParams.printDefaults) || (infoParams.printSet) || (infoParams.printRanges))
+	if (	( infoParams.printMapping ) ||
+		( infoParams.printDefaults ) ||
+		( infoParams.printSet ) ||
+		( infoParams.printRanges ))
 	{
 		return 0;
 	}
@@ -678,10 +695,10 @@ int main (int argc, char *argv[])
 
 	// Pull up is needed as encoder common is grounded.
 
-	pinMode ( setParams.wiringPiPinA, INPUT );
-	pullUpDnControl ( setParams.wiringPiPinA, PUD_UP );
-	pinMode ( setParams.wiringPiPinB, INPUT );
-	pullUpDnControl ( setParams.wiringPiPinB, PUD_UP );
+	pinMode( setParams.wiringPiPinA, INPUT );
+	pullUpDnControl( setParams.wiringPiPinA, PUD_UP );
+	pinMode( setParams.wiringPiPinB, INPUT );
+	pullUpDnControl( setParams.wiringPiPinB, PUD_UP );
 
 	// Initialise encoder position.
 
@@ -702,8 +719,7 @@ int main (int argc, char *argv[])
 
 	// Set up volume data structure.
 
-//	snd_mixer_selem_get_playback_volume_range(elem, &hardMin, &hardMax);
-	snd_mixer_selem_get_playback_volume_range(elem, &volParams.hardMin, &volParams.hardMax);
+	snd_mixer_selem_get_playback_volume_range( elem, &volParams.hardMin, &volParams.hardMax );
 
 	if ( infoParams.printOutput ) printf( "\nHardware volume range = %ld to %ld\n",
 		volParams.hardMin, volParams.hardMax );
@@ -717,20 +733,23 @@ int main (int argc, char *argv[])
 	if( infoParams.printOutput ) printf( "Soft volume range = %d to %d\n\n",
 		volParams.softMin, volParams.softMax );
 
-	// Calculate starting volume..
+	// Calculate starting volume.
 
-	volParams.index = (setParams.incVol * setParams.initVol / 100  );
+	volParams.index = ( setParams.incVol * setParams.initVol / 100  );
+//	volParams.index = getVolIndex( setParams.initVol );	// Why doesn't this work?
+	printf( "initVol = %d,", setParams.initVol );
+	printf( "init vol index = %d\n", volParams.index );
 
 	volParams.linearVol = getLinearVolume( &volParams );
 	if ( setParams.facVol = 1 )
 	{
 		volParams.shapedVol = volParams.linearVol;
-		snd_mixer_selem_set_playback_volume_all(elem, volParams.linearVol);
+		snd_mixer_selem_set_playback_volume_all( elem, volParams.linearVol );
 	}
 	else
 	{
 		volParams.shapedVol = getShapedVolume( &volParams );
-		snd_mixer_selem_set_playback_volume_all(elem, volParams.shapedVol);
+		snd_mixer_selem_set_playback_volume_all( elem, volParams.shapedVol );
 	}
 
 	if ( infoParams.printOutput )
@@ -746,28 +765,28 @@ int main (int argc, char *argv[])
 
 	// Wait for GPIO pins to activate.
 
-	while (1)
+	while ( 1 )
 	{
-		if (encoderPos != pos)
+		if ( encoderPos != pos )
 		{
-			if (encoderPos > pos)		// Volume is increasing.
+			if ( encoderPos > pos )		// Volume is increasing.
 			{
 				pos = encoderPos;
 				volParams.index++;
 				if ( volParams.index >= setParams.incVol + 1 ) volParams.index = volParams.volIncs;
 
-				if (encoderPos > 250)
+				if ( encoderPos > 250 )
 				{
 					encoderPos = 250;	// Prevent encoderPos overflowing.
 					pos = 250;
 				}
 			}
-			else if (encoderPos < pos)	// Volume is decreasing.
+			else if ( encoderPos < pos )	// Volume is decreasing.
 			{
 				pos = encoderPos;
 				volParams.index--;
 				if ( volParams.index < 0 ) volParams.index = 0;
-				if (encoderPos < 0)
+				if ( encoderPos < 0 )
 				{
 					encoderPos = 0;		// Prevent encoderPos underflowing.
 					pos = 0;
@@ -783,12 +802,12 @@ int main (int argc, char *argv[])
 			if ( setParams.facVol = 1 )
 			{
 				volParams.shapedVol = volParams.linearVol;
-				snd_mixer_selem_set_playback_volume_all(elem, volParams.linearVol);
+				snd_mixer_selem_set_playback_volume_all( elem, volParams.linearVol );
 			}
 			else
 			{
 				volParams.shapedVol = getShapedVolume( &volParams );
-				snd_mixer_selem_set_playback_volume_all(elem, volParams.shapedVol);
+				snd_mixer_selem_set_playback_volume_all( elem, volParams.shapedVol );
 			}
 
 			if ( infoParams.printOutput ) printOutput( &volParams );
@@ -800,12 +819,12 @@ int main (int argc, char *argv[])
 		}
 
 		// Tic delay in mS. Adjust according to encoder.
-		delay(setParams.ticDelay);
+		delay( setParams.ticDelay );
 
 	}
 
 	// Close sockets.
-	snd_mixer_close(handle);
+	snd_mixer_close( handle );
 
 	return 0;
 }
