@@ -183,10 +183,14 @@ void printOutput( struct volStruct *volParams )
 	double linearP; // Percentage of hard volume range (linear).
 	double shapedP; // Percentage of hard volume range (shaped)..
 
-	linearP = ( volParams->linearVol - (float) volParams->hardMin ) /
-		(float) volParams->hardRange * 100;
-	shapedP = ( volParams->shapedVol - (float) volParams->hardMin ) /
-		(float) volParams->hardRange * 100;
+//	linearP = ( volParams->linearVol - (float) volParams->hardMin ) /
+//		(float) volParams->hardRange * 100;
+//	shapedP = ( volParams->shapedVol - (float) volParams->hardMin ) /
+//		(float) volParams->hardRange * 100;
+	linearP = 100 - ( volParams->hardMax - volParams->linearVol ) * 100 /
+				volParams->hardRange;
+	shapedP = 100 - ( volParams->hardMax - volParams->shapedVol ) * 100 /
+				volParams->hardRange;
 
 	printf( "Index = %3d, Linear volume = %6d, (%3d%%), Shaped volume = %6d, (%3d%%)\n",
 		volParams->index, (long) volParams->linearVol, (long) linearP,
@@ -268,23 +272,6 @@ long getSoftVol( long paramVol, long hardRange, long hardMin )
 
 	return softVol;
 };
-/********************************************************************************/
-/*										*/
-/* Get initial volume index.		 					*/
-/*										*/
-/********************************************************************************/
-
-long getVolIndex ( int initVol )
-{
-	float volIndex;
-
-	volIndex = (float) initVol / 100;
-	printf( "Double Index = %g, ", volIndex );
-	printf( "Long Index = %g.\n", (long) volIndex );
-	return volIndex;
-};
-
-
 
 /********************************************************************************/
 /*										*/
@@ -735,8 +722,8 @@ int main( int argc, char *argv[] )
 
 	// Calculate starting volume.
 
-	volParams.index = ( setParams.incVol * setParams.initVol / 100  );
-//	volParams.index = getVolIndex( setParams.initVol );	// Why doesn't this work?
+	volParams.index = ( setParams.incVol - ( setParams.maxVol - setParams.initVol ) *
+				setParams.incVol / ( setParams.maxVol - setParams.minVol ));
 	printf( "initVol = %d,", setParams.initVol );
 	printf( "init vol index = %d\n", volParams.index );
 
@@ -811,16 +798,10 @@ int main( int argc, char *argv[] )
 			}
 
 			if ( infoParams.printOutput ) printOutput( &volParams );
-
-//			if (x = snd_mixer_selem_set_playback_volume_all(elem, currentVolume))
-//			{
-//				printf("ERROR %d %s\n", x, snd_strerror(x));
-//			}
 		}
 
 		// Tic delay in mS. Adjust according to encoder.
 		delay( setParams.ticDelay );
-
 	}
 
 	// Close sockets.
