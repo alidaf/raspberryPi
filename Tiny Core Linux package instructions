@@ -5,28 +5,28 @@ requirements to get it into the repo. These are instructions on how to do it usi
 
 Download the tcz package with the following command:
 
-  wget https://github.com/alidaf/raspberryP...encvol-2.7.tcz
+* wget https://github.com/alidaf/raspberryP...encvol-2.7.tcz
 
 and type the following command in a terminal:
 
-  cp rotencvol-2.7.tcz /mnt/mmcblk0p2/tce/optional/
+* cp rotencvol-2.7.tcz /mnt/mmcblk0p2/tce/optional/
 
 This copies the package to the optional packages area.
 
 Now edit /mnt/mmcblk0p2/tce/onboot.lst and add rotencvol-2.7.tcz at the bottom to make it persistent after a reboot.
 I use nano so the command would be:
 
-  sudo nano /mnt/mmcblk0p2/tce/onboot.lst
+* sudo nano /mnt/mmcblk0p2/tce/onboot.lst
 
 Add the line, then press ctrl-x, press y and then return to save the file.
 
 Now load the package:
 
-  tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-2.7
+* tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-2.7
 
 To run, until I can sort out a startup script run:
 
-sudo /bin/rotencvol -?
+* sudo /bin/rotencvol -?
 
 This will give you all of the command line options. Some handy switches are:
   -q will print the default settings. 
@@ -56,28 +56,28 @@ ctrl-c will stop the program if it is running interactively.
 Once you are happy run the command with the '&' character at the end of the line. This will force it to the 
 background and free up your prompt. E.g.
 
-  sudo /bin/rotencvol -i 20 -p -a 2 -b 3 &
+* sudo /bin/rotencvol -i 20 -p -a 2 -b 3 &
   Note the file in /bin is rotencvol, not rotencvol-2.7!
 
 Press return to get your prompt back.
 
 You should see the process running with the following command:
 
-  ps aux | grep rotencvol
+* ps aux | grep rotencvol
 
 You will get a list of command that are running that contain the word ‘rotencvol’. One of them should be the command you just typed with the process id at the start of the line. To stop the program running you have to kill it with the command:
 
-  sudo kill <process id>
+* sudo kill <process id>
 
 Workaround for IQaudioDAC and possibly for other DACs and add-ons.
 
 mount mmcblk0p1 with the command:
 
-  sudo mount mmcblk0p1
+* sudo mount mmcblk0p1
 
 then edit the file /mnt/mmcblk0p1/config.txt and remove audio=on:
 
-  sudo nano /mnt/mmcblk0p1/config.txt
+* sudo nano /mnt/mmcblk0p1/config.txt
 
 Find the line with 'audio=on'.
 Get the cursor onto the line and press ctrl-k.
