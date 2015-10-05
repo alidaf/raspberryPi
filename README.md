@@ -29,7 +29,7 @@ Hopefully, packages will also be built and supplied to the Tiny Core Linux repos
 Compilation instructions for all projects are included in the code files.
 
 
-# Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
+### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
 
 At the moment, the package has to be installed by hand until I can get to grips with the package management
 requirements to get it into the repo. These are instructions on how to do it using a command line.
@@ -103,7 +103,7 @@ it with the command:
 * sudo kill <process id>
 
 
-# Workaround for IQaudioDAC and possibly for other DACs and add-ons.
+### Workaround for IQaudioDAC and possibly for other DACs and add-ons.
 
 mount mmcblk0p1 with the command:
 
