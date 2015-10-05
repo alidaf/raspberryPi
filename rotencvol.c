@@ -78,7 +78,7 @@ struct paramList
 	int minVol;		// Minimum soft volume (%).
 	int maxVol;		// Maximum soft volume (%).
 	int incVol;		// No. of increments over volume range.
-	double facVol;		// Volume shaping factor
+	float facVol;		// Volume shaping factor
 	int ticDelay;		// Delay between encoder tics.
 };
 
@@ -87,8 +87,8 @@ struct boundsList
 {
 	int volumeLow;
 	int volumeHigh;
-	double factorLow;
-	double factorHigh;
+	float factorLow;
+	float factorHigh;
 	int incLow;
 	int incHigh;
 	int delayLow;
@@ -109,7 +109,7 @@ struct infoList
 struct volStruct
 {
 	long index;
-	double facVol;
+	float facVol;
 	long volIncs;
 	long softMin;
 	long softMax;
@@ -180,13 +180,9 @@ struct infoList infoParams =
 
 void printOutput( struct volStruct *volParams )
 {
-	double linearP; // Percentage of hard volume range (linear).
-	double shapedP; // Percentage of hard volume range (shaped)..
+	float linearP; // Percentage of hard volume range (linear).
+	float shapedP; // Percentage of hard volume range (shaped)..
 
-//	linearP = ( volParams->linearVol - (float) volParams->hardMin ) /
-//		(float) volParams->hardRange * 100;
-//	shapedP = ( volParams->shapedVol - (float) volParams->hardMin ) /
-//		(float) volParams->hardRange * 100;
 	linearP = 100 - ( volParams->hardMax - volParams->linearVol ) * 100 /
 				volParams->hardRange;
 	shapedP = 100 - ( volParams->hardMax - volParams->shapedVol ) * 100 /
@@ -205,8 +201,7 @@ void printOutput( struct volStruct *volParams )
 
 long getLinearVolume( struct volStruct *volParams )
 {
-	double power;
-	double linearVol;
+	float linearVol;
 
 	// Calculate linear volume.
 
@@ -239,15 +234,24 @@ long getLinearVolume( struct volStruct *volParams )
 
 long getShapedVolume( struct volStruct *volParams )
 {
-	double power;
-	double shapedVol;
+	float base;
+	float power;
+	float fac;
+	float shapedVol;
 
 	// Calculate shaped volume.
 
+	base = (float) volParams->facVol;
 	power = (float) volParams->index / (float) volParams->volIncs;
-	shapedVol = ( pow( (float) volParams->facVol, power ) - 1 ) /
-		( (float) volParams->facVol - 1 ) *
+//	fac = pow( volParams->facVol, power );
+	shapedVol = ( pow( (float) volParams->facVol, power ) - 1 ) / (
+		(float) volParams->facVol - 1 ) *
 		(float) volParams->softRange + (float) volParams->softMin;
+
+//	power = (float) volParams->linearVol / volParams->hardMax;
+//	shapedVol = ( pow( (float) volParams->facVol, power ) - 1 ) / (
+//		(float) volParams->facVol - 1 ) *
+//		(float) volParams->hardRange + (float) volParams->hardMin;
 
 	// Check volume is within soft limits.
 
@@ -266,7 +270,7 @@ long getShapedVolume( struct volStruct *volParams )
 
 long getSoftVol( long paramVol, long hardRange, long hardMin )
 {
-	double softVol;
+	float softVol;
 
 	softVol = (float) paramVol / 100 * (float) hardRange + (float) hardMin;
 
@@ -342,7 +346,7 @@ static struct argp_option options[] =
 	{ "min", 'j', "Integer", 0, "Minimum volume (% of full output)." },
 	{ "max", 'k', "Integer", 0, "Maximum volume (% of full output)." },
 	{ "inc", 'l', "Integer", 0, "No of volume increments over range." },
-	{ "fac", 'f', "Double", 0, "Volume profile factor." },
+	{ "fac", 'f', "Float", 0, "Volume profile factor." },
 	{ 0, 0, 0, 0, "Responsiveness:" },
 	{ "delay", 'd', "Integer", 0, "Delay between encoder tics (mS)." },
 	{ 0, 0, 0, 0, "Debugging:" },
@@ -509,7 +513,7 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
 /*										*/
 /********************************************************************************/
 
-int checkIfInBounds( double value, double lower, double upper )
+int checkIfInBounds( float value, float lower, float upper )
 {
 	if ((value < lower) || (value > upper)) return 1;
 	else return 0;
@@ -724,11 +728,13 @@ int main( int argc, char *argv[] )
 
 	volParams.index = ( setParams.incVol - ( setParams.maxVol - setParams.initVol ) *
 				setParams.incVol / ( setParams.maxVol - setParams.minVol ));
-	printf( "initVol = %d,", setParams.initVol );
-	printf( "init vol index = %d\n", volParams.index );
+	volParams.facVol = setParams.facVol;
+
+//	printf( "initVol = %d,", setParams.initVol );
+//	printf( "init vol index = %d\n", volParams.index );
 
 	volParams.linearVol = getLinearVolume( &volParams );
-	if ( setParams.facVol = 1 )
+	if ( volParams.facVol == 1 )
 	{
 		volParams.shapedVol = volParams.linearVol;
 		snd_mixer_selem_set_playback_volume_all( elem, volParams.linearVol );
@@ -786,7 +792,7 @@ int main( int argc, char *argv[] )
 
 			// Get shaped volume.
 
-			if ( setParams.facVol = 1 )
+			if ( volParams.facVol == 1 )
 			{
 				volParams.shapedVol = volParams.linearVol;
 				snd_mixer_selem_set_playback_volume_all( elem, volParams.linearVol );
