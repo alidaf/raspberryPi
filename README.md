@@ -101,7 +101,7 @@ it with the command:
 
 * sudo kill <process id>
 
-#### Workaround for IQaudioDAC and possibly for other DACs and add-ons.
+#### Workaround for IQaudioDAC and possibly for other DACs and add-ons with PiCorePlayer.
 
 mount mmcblk0p1 with the command:
 
