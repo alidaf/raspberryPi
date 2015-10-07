@@ -10,7 +10,7 @@
 /* 										*/
 /********************************************************************************/
 
-#define Version "Version 2.73"
+#define Version "Version 2.8"
 
 /********************************************************************************/
 /*										*/
@@ -27,6 +27,7 @@
 /* v2.5 Split info parameters and added some helpful output.			*/
 /* v2.6 Reworked bounds checking and error trapping.				*/
 /* v2.7 Added soft volume limits.						*/
+/* v2.8 Added push button mute support for keyswitch.				*/
 /*										*/
 /********************************************************************************/
 
@@ -58,10 +59,14 @@
 static const int maxGPIO=35;
 
 // Encoder state.
-static volatile int encoderPos;
+static volatile int encoderDirection;
 static volatile int lastEncoded;
 static volatile int encoded;
 static volatile int inCriticalSection = FALSE;
+
+// Button state.
+static volatile int muteState = 0;
+static volatile int muteStateChanged = 0;
 
 // Data structure of command line parameters.
 struct paramStruct
@@ -119,6 +124,7 @@ struct volStruct
 	long hardRange;
 	long linearVol;
 	long shapedVol;
+	int muteState;
 };
 
 /********************************************************************************/
@@ -139,16 +145,16 @@ struct paramStruct setParams, defaultParams =
 	.controlName = "PCM",	// Default ALSA control with no DAC.
 	.gpioA = 23,		// GPIO 23 for rotary encoder.
 	.gpioB = 24,		// GPIO 24 for rotary encoder.
-	.gpioC = 0,		// GPIO 0 (for mute/unmute push button).
+	.gpioC = 2,		// GPIO 0 (for mute/unmute push button).
 	.wiringPiPinA = 4,	// WiringPi number equivalent to GPIO 23.
 	.wiringPiPinB = 5,	// WiringPi number equivalent to GPIO 24.
-	.wiringPiPinC = 8,	// WiringPi number equivalent to GPIO 24.
+	.wiringPiPinC = 8,	// WiringPi number equivalent to GPIO 2.
 	.initVol = 0,		// Mute.
 	.minVol = 0,		// 0% of Maximum output level.
 	.maxVol = 100,		// 100% of Maximum output level.
 	.incVol = 20,		// 20 increments from 0 to 100%.
 	.facVol = 1,		// Volume change rate factor.
-	.ticDelay = 100		// 250 cycles between tics.
+	.ticDelay = 100		// 100 cycles between tics.
 };
 
 struct boundsStruct paramBounds =
@@ -157,7 +163,7 @@ struct boundsStruct paramBounds =
 	.volumeHigh = 100,	// Upper bound for initial volume.
 	.factorLow = 0.001,	// Lower bound for volume shaping factor.
 	.factorHigh = 10,	// Upper bound for volume shaping factor.
-	.incLow = 1,		// Lower bound for no. of volume increments. 1=Mute/Unmute.
+	.incLow = 1,		// Lower bound for no. of volume increments.
 	.incHigh = 100,		// Upper bound for no. of volume increments.
 	.delayLow = 50,		// Lower bound for delay between tics.
 	.delayHigh = 1000	// Upper bound for delay between tics.
@@ -191,23 +197,28 @@ void printOutput( struct volStruct *volParams, int header )
 	if ( header == 1 )
 	{
 		printf( "\n\tHardware volume range = %ld to %ld\n",
-			volParams->hardMin, volParams->hardMax );
+			volParams->hardMin,
+			volParams->hardMax );
 		printf( "\tSoft volume range =     %ld to %ld\n\n",
-			volParams->softMin, volParams->softMax );
+			volParams->softMin,
+			volParams->softMax );
 
 		printf( "\t+-------+------------+-----+------------+-----+\n" );
 		printf( "\t| Index | Linear Vol |  %%  | Shaped Vol |  %%  |\n" );
 		printf( "\t+-------+------------+-----+------------+-----+\n" );
-		printf( "\t| %5d | %10d | %3d | %10d | %3d |\n",
-			volParams->index, volParams->linearVol, lroundf( linearP ),
-				volParams->shapedVol, lroundf( shapedP ));
+		printf( "\t| %4d |", volParams->index );
 	}
 	else
 	{
-		printf( "\t| %5d | %10d | %3d | %10d | %3d |\n",
-			volParams->index, volParams->linearVol, lroundf( linearP ),
-				volParams->shapedVol, lroundf( shapedP ));
+		if ( volParams->muteState )
+			printf( "\t| MUTE |" );
+		else	printf( "\t| %4d |", volParams->index );
 	}
+	printf( " %10d | %3d | %10d | %3d |\n",
+		volParams->linearVol,
+		lroundf( linearP ),
+		volParams->shapedVol,
+		lroundf( shapedP ));
 };
 
 /********************************************************************************/
@@ -221,12 +232,20 @@ long getLinearVolume( struct volStruct *volParams )
 	long linearVol;
 
 	// Calculate linear volume.
-	linearVol = lroundf(( (float) volParams->index / (float) volParams->volIncs *
-		(float) volParams->softRange ) + (float) volParams->softMin );
+	if ( volParams->muteState ) linearVol = volParams->hardMin;
+	else
+	{
+		linearVol = lroundf(( (float) volParams->index /
+				      (float) volParams->volIncs *
+				      (float) volParams->softRange ) +
+				      (float) volParams->softMin );
 
-	// Check volume is within soft limits.
-	if ( linearVol < volParams->softMin ) linearVol = volParams->softMin;
-	else if ( linearVol > volParams->softMax ) linearVol = volParams->softMax;
+		// Check volume is within soft limits.
+		if ( linearVol < volParams->softMin )
+			linearVol = volParams->softMin;
+		else if ( linearVol > volParams->softMax )
+			linearVol = volParams->softMax;
+	}
 
 	return linearVol;
 };
@@ -249,19 +268,26 @@ long getShapedVolume( struct volStruct *volParams )
 	long shapedVol;
 
 	// Calculate shaped volume.
-	base = (float) volParams->facVol;
-	power = (float) volParams->index / (float) volParams->volIncs;
-	shapedVol = lroundf(( pow( (float) volParams->facVol, power ) - 1 ) / (
-		(float) volParams->facVol - 1 ) *
-		(float) volParams->softRange + (float) volParams->softMin );
+	if ( volParams->muteState ) shapedVol = volParams->hardMin;
+	else
+	{
+		base = (float) volParams->facVol;
+		power = (float) volParams->index / (float) volParams->volIncs;
+		shapedVol = lroundf(( pow( (float) volParams->facVol,
+				      power ) - 1 ) / (
+				      (float) volParams->facVol - 1 ) *
+				      (float) volParams->softRange +
+				      (float) volParams->softMin );
 
-	// Check volume is within soft limits.
-	if ( shapedVol < volParams->softMin ) shapedVol = volParams->softMin;
-	else if ( shapedVol > volParams->softMax ) shapedVol = volParams->softMax;
+		// Check volume is within soft limits.
+		if ( shapedVol < volParams->softMin )
+				shapedVol = volParams->softMin;
+		else if ( shapedVol > volParams->softMax )
+				shapedVol = volParams->softMax;
+	}
 
 	return shapedVol;
 };
-
 
 /********************************************************************************/
 /*										*/
@@ -280,7 +306,23 @@ long getSoftVol( long paramVol, long hardRange, long hardMin )
 
 /********************************************************************************/
 /*										*/
-/* GPIO activity call.								*/
+/* Get volume index.			 					*/
+/*										*/
+/********************************************************************************/
+
+long getIndex( struct paramStruct *setParams )
+{
+	int index = ( setParams->incVol -
+			( setParams->maxVol - setParams->initVol ) *
+			  setParams->incVol /
+			( setParams->maxVol - setParams->minVol ));
+
+	return index;
+};
+
+/********************************************************************************/
+/*										*/
+/* GPIO activity call for rotary encoder.					*/
 /*										*/
 /*		+-------+	+-------+	+-------+	0		*/
 /*			|	|	|	|	|			*/
@@ -310,15 +352,28 @@ void encoderPulse()
 	if ( 	sum == 0b1101 ||
 		sum == 0b0100 ||
 		sum == 0b0010 ||
-		sum == 0b1011 ) encoderPos++;
+		sum == 0b1011 ) encoderDirection = 1;
 
 	else if ( sum == 0b1110 ||
 		  sum == 0b0111 ||
 		  sum == 0b0001 ||
-		  sum == 0b1000 ) encoderPos--;
+		  sum == 0b1000 ) encoderDirection = -1;;
 
 	lastEncoded = encoded;
 	inCriticalSection = FALSE;
+};
+
+/********************************************************************************/
+/*										*/
+/* GPIO activity call for mute button.						*/
+/*										*/
+/********************************************************************************/
+
+void buttonMute()
+{
+	int buttonRead = digitalRead( setParams.wiringPiPinC );
+
+	if ( buttonRead ) muteState = !muteState;
 };
 
 /********************************************************************************/
@@ -330,7 +385,7 @@ void encoderPulse()
 
 const char *argp_program_version = Version;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
-static char args_doc[] = "A program to control volume on the Raspberry Pi with or without a DAC using a rotary encoder.";
+static char args_doc[] = "rotencvol [options]";
 
 /********************************************************************************/
 /*										*/
@@ -342,13 +397,13 @@ static char args_doc[] = "A program to control volume on the Raspberry Pi with o
 static struct argp_option options[] =
 {
 	{ 0, 0, 0, 0, "Card name:" },
-	{ "name", 'n', "String", 0, "Usually default - check using alsamixer." },
+	{ "name", 'n', "String", 0, "Usually default." },
 	{ 0, 0, 0, 0, "Control name:" },
-	{ "control", 'o', "String", 0, "e.g. PCM/Digital/etc. - check using alsamixer." },
+	{ "control", 'o', "String", 0, "e.g. PCM/Digital/etc." },
 	{ 0, 0, 0, 0, "GPIO pin numbers:" },
-	{ "gpio1", 'a', "Integer", 0, "GPIO number (1 of 2)." },
-	{ "gpio2", 'b', "Integer", 0, "GPIO number (2 of 2)." },
-	{ "gpio3", 'c', "Integer", 0, "Optional for push button - not yet implemented." },
+	{ "gpio1", 'a', "Integer", 0, "GPIO pin 1 for encoder." },
+	{ "gpio2", 'b', "Integer", 0, "GPIO pin 2 for encoder." },
+	{ "gpio3", 'c', "Integer", 0, "GPIO pin for mute." },
 	{ 0, 0, 0, 0, "Volume options:" },
 	{ "init", 'i', "Integer", 0, "Initial volume (% of range)." },
 	{ "min", 'j', "Integer", 0, "Minimum volume (% of full output)." },
@@ -463,52 +518,52 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
 {
 	switch ( param )
 		{
-		case 'n' :				// Card name.
+		case 'n' :			// Card name.
 			setParams.cardName = arg;
 			break;
-		case 'o' :				// Control name.
+		case 'o' :			// Control name.
 			setParams.controlName = arg;
 			break;
-		case 'a' :				// GPIO 1 for rotary encoder.
+		case 'a' :			// GPIO 1 for rotary encoder.
 			setParams.gpioA = atoi (arg);
 			break;
-		case 'b' :				// GPIO 2 for rotary encoder.
+		case 'b' :			// GPIO 2 for rotary encoder.
 			setParams.gpioB = atoi (arg);
 			break;
-		case 'c' :				// GPIO 3 for push button.
+		case 'c' :			// GPIO 3 for push button.
 			setParams.gpioC = atoi (arg);
 			break;
-		case 'f' :				// Volume shape factor.
+		case 'f' :			// Volume shape factor.
 			setParams.facVol = atof (arg);
 			break;
-		case 'i' :				// Initial volume.
+		case 'i' :			// Initial volume.
 			setParams.initVol = atoi (arg);
 			break;
-		case 'j' :				// Minimum soft volume.
+		case 'j' :			// Minimum soft volume.
 			setParams.minVol = atoi (arg);
 			break;
-		case 'k' :				// Maximum soft volume.
+		case 'k' :			// Maximum soft volume.
 			setParams.maxVol = atoi (arg);
 			break;
-		case 'l' :				// No. of volume increments.
+		case 'l' :			// No. of volume increments.
 			setParams.incVol = atoi (arg);
 			break;
-		case 'd' :				// Tic delay.
+		case 'd' :			// Tic delay.
 			setParams.ticDelay = atoi (arg);
 			break;
-		case 'm' :				// Print GPIO mapping.
+		case 'm' :			// Print GPIO mapping.
 			infoParams.printMapping = 1;
 			break;
-		case 'p' :				// Print program output.
+		case 'p' :			// Print program output.
 			infoParams.printOutput = 1;
 			break;
-		case 'q' :				// Print default values.
+		case 'q' :			// Print default values.
 			infoParams.printDefaults = 1;
 			break;
-		case 'r' :				// Print parameter ranges.
+		case 'r' :			// Print parameter ranges.
 			infoParams.printRanges = 1;
 			break;
-		case 's' :				// Print set ranges.
+		case 's' :			// Print set ranges.
 			infoParams.printSet = 1;
 			break;
 		}
@@ -537,7 +592,7 @@ int checkIfInBounds( float value, float lower, float upper )
 // Need to add validity checks for Name and Control for graceful exit - could
 // probe for default names - check ALSA documentation.
 
-int checkParams ( struct paramStruct *setParams, struct  boundsStruct *paramBounds )
+int checkParams ( struct paramStruct *setParams, struct boundsStruct *paramBounds )
 {
 	int error = 0;
 	int pinA, pinB;
@@ -652,7 +707,7 @@ int main( int argc, char *argv[] )
 	snd_mixer_t *handle;		// ALSA variables.
 	snd_mixer_selem_id_t *sid;	// ALSA variables.
 
-	int pos = 125;			// Starting encoder position.
+	int pos = 0;			// Starting encoder position.
 	int error = 0;			// Error trapping flag.
 
 	struct volStruct volParams;	// Data structure for volume.
@@ -680,14 +735,18 @@ int main( int argc, char *argv[] )
 	// Initialise wiringPi.
 	wiringPiSetup ();
 
-	// Pull up is needed as encoder common is grounded.
+	// Set encoder pin mode.
 	pinMode( setParams.wiringPiPinA, INPUT );
 	pullUpDnControl( setParams.wiringPiPinA, PUD_UP );
 	pinMode( setParams.wiringPiPinB, INPUT );
 	pullUpDnControl( setParams.wiringPiPinB, PUD_UP );
 
-	// Initialise encoder position.
-	encoderPos = pos;
+	// Set mute button pin mode.
+	pinMode( setParams.wiringPiPinC, INPUT );
+	pullUpDnControl( setParams.wiringPiPinC, PUD_UP );
+
+	// Initialise encoder direction.
+	encoderDirection = 0;
 
 	// Set up ALSA access.
 	snd_mixer_open( &handle, 0 );
@@ -699,19 +758,27 @@ int main( int argc, char *argv[] )
 	snd_mixer_selem_id_set_index( sid, 0 );
 	snd_mixer_selem_id_set_name( sid, setParams.controlName );
 	snd_mixer_elem_t* elem = snd_mixer_find_selem( handle, sid );
+	snd_mixer_selem_set_playback_switch_all(elem, !muteState);
 
 	// Get hardware min and max values.
-	snd_mixer_selem_get_playback_volume_range( elem, &volParams.hardMin, &volParams.hardMax );
+	snd_mixer_selem_get_playback_volume_range(
+		elem,
+		&volParams.hardMin,
+		&volParams.hardMax );
 
 	// Set up volume data structure.
 	volParams.volIncs = setParams.incVol;
 	volParams.facVol = setParams.facVol;
 	volParams.hardRange = volParams.hardMax - volParams.hardMin;
-	volParams.softMin = getSoftVol( setParams.minVol, volParams.hardRange, volParams.hardMin);
-	volParams.softMax = getSoftVol( setParams.maxVol, volParams.hardRange, volParams.hardMin);
+	volParams.softMin = getSoftVol( setParams.minVol,
+					volParams.hardRange,
+					volParams.hardMin );
+	volParams.softMax = getSoftVol( setParams.maxVol,
+					volParams.hardRange,
+					volParams.hardMin );
 	volParams.softRange = volParams.softMax - volParams.softMin;
-	volParams.index = ( setParams.incVol - ( setParams.maxVol - setParams.initVol ) *
-				setParams.incVol / ( setParams.maxVol - setParams.minVol ));
+	volParams.index = getIndex( &setParams );
+	volParams.muteState = 0;
 
 	// Calculate initial volume.
 	volParams.linearVol = getLinearVolume( &volParams );
@@ -728,36 +795,46 @@ int main( int argc, char *argv[] )
 	wiringPiISR( setParams.wiringPiPinA, INT_EDGE_BOTH, &encoderPulse );
 	wiringPiISR( setParams.wiringPiPinB, INT_EDGE_BOTH, &encoderPulse );
 
+	// Monitor mute button.
+	wiringPiISR( setParams.wiringPiPinC, INT_EDGE_BOTH, &buttonMute );
+
 	// Wait for GPIO pins to activate.
 	while ( 1 )
 	{
-		if ( encoderPos != pos )
+		if ( encoderDirection != 0 )
 		{
-			if ( encoderPos > pos )		// Volume is increasing.
+			// Volume +.
+			if (( encoderDirection > 0 ) && ( !volParams.muteState ))
 			{
 				volParams.index++;
 				if ( volParams.index >= setParams.incVol + 1 )
 					volParams.index = volParams.volIncs;
-				if ( encoderPos > 250 ) encoderPos = 250;	// Prevent encoderPos overflowing.
 			}
-			else if ( encoderPos < pos )	// Volume is decreasing.
+			// Volume -.
+			else if (( encoderDirection < 0 ) && ( !volParams.muteState ))
 			{
 				volParams.index--;
 				if ( volParams.index < 0 ) volParams.index = 0;
-				if ( encoderPos < 0 ) encoderPos = 0;		// Prevent encoderPos underflowing.
 			}
-			pos = encoderPos;;
+			encoderDirection = 0;
 
-			// Get linear volume.
+			// Get volume.
 			volParams.linearVol = getLinearVolume( &volParams );
-
-			// Get shaped volume.
 			if ( volParams.facVol == 1 ) volParams.shapedVol = volParams.linearVol;
 			else volParams.shapedVol = getShapedVolume( &volParams );
 
 			// Set volume.
 			snd_mixer_selem_set_playback_volume_all( elem, volParams.shapedVol );
 
+			if ( infoParams.printOutput ) printOutput( &volParams, 0 );
+		}
+
+		if ( muteStateChanged != muteState )
+		{
+			// Set mute state.
+			snd_mixer_selem_set_playback_switch_all(elem, !muteState);
+			muteStateChanged = !muteStateChanged;
+			volParams.muteState = muteState;
 			if ( infoParams.printOutput ) printOutput( &volParams, 0 );
 		}
 
