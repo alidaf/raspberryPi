@@ -1,7 +1,7 @@
 ## raspberryPi
 RaspberryPi projects
 
-rotencvol:
+###rotencvol:
 
 A program to provide rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi 
 or via the rotary encoder pins on an IQaudioDAC to control volume levels.
