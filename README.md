@@ -17,13 +17,21 @@ Command line parameters allow specifying:
 * The name of the control for sound cards with multiple controls.
 * The initial volume setting as a percentage of max, i.e. low for headphones and high for DAC/phono.
 * The number of volume increments over the full volume range.
-* The shape of the response, i.e. logarithmic -> linear (almost) -> exponential.
+* The shape of the response, i.e. logarithmic -> linear -> exponential.
 * The GPIO pins to be used (mapped internally to the wiringPi numbers).
 * The delay between tic increments to fine tune responsiveness.
 * Print out a variety of information such as GPIO maps, default or defined settings, ranges and program output.
 * Soft volume limits.
 
-Push button support for rotary encoders to mute/unmute is planned.
+Push button support is now in for rotary encoders that have push-to-switch actions.
+Note: If using any GPIO for the mute that is not I2C, a pull up resistor must be used between the +3.3V and the 
+      GPIO pin, e.g.
+
+            10k
+      +----/\/\/---+---< \--+
+      |            |        |
+    +3.3V        GPIO      GND
+
 Hopefully, packages will also be built and supplied to the Tiny Core Linux repository for easier use.
 
 Compilation instructions for all projects are included in the code files.
@@ -35,15 +43,17 @@ requirements to get it into the repo. These are instructions on how to do it usi
 
 Download the tcz package with the following command:
 
-* wget https://github.com/alidaf/raspberryP...encvol-2.7.tcz
+* wget https://github.com/alidaf/raspberryP...encvol-<ver>.tcz
 
 and type the following command in a terminal:
 
-* cp rotencvol-2.7.tcz /mnt/mmcblk0p2/tce/optional/
+* cp rotencvol-<ver>.tcz /mnt/mmcblk0p2/tce/optional/
 
 This copies the package to the optional packages area.
 
-Now edit /mnt/mmcblk0p2/tce/onboot.lst and add rotencvol-2.7.tcz at the bottom to make it persistent after a reboot.
+Now edit /mnt/mmcblk0p2/tce/onboot.lst and add rotencvol-<ver>.tcz at the bottom to make it persistent after 
+a reboot.
+
 I use nano so the command would be:
 
 * sudo nano /mnt/mmcblk0p2/tce/onboot.lst
@@ -52,7 +62,7 @@ Add the line, then press ctrl-x, press y and then return to save the file.
 
 Now load the package:
 
-* tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-2.7
+* tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-<ver>.tcz
 
 To run, until I can sort out a startup script run:
 
@@ -87,7 +97,7 @@ Once you are happy run the command with the '&' character at the end of the line
 background and free up your prompt. E.g.
 
 * sudo /bin/rotencvol -i 20 -p -a 2 -b 3 &
-  Note the file in /bin is rotencvol, not rotencvol-2.7!
+  Note the file in /bin is rotencvol, not rotencvol-<ver>!
 
 Press return to get your prompt back.
 
