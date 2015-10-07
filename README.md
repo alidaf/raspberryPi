@@ -45,6 +45,8 @@ Download the tcz package with the following command:
 
 * wget https://github.com/alidaf/raspberryP...encvol-[ver].tcz
 
+Note: Substitute [ver] with the lastest version number available.
+
 and type the following command in a terminal:
 
 * cp rotencvol-[ver].tcz /mnt/mmcblk0p2/tce/optional/
