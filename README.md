@@ -34,7 +34,9 @@ Note: If using any GPIO for the mute that is not I2C, a pull up resistor must be
 
 Hopefully, packages will also be built and supplied to the Tiny Core Linux repository for easier use.
 
-Compilation instructions for all projects are included in the code files.
+Compile for the Raspberry Pi with the command:
+
+gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -pipe -O3
 
 #### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
 
