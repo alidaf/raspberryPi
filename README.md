@@ -43,15 +43,15 @@ requirements to get it into the repo. These are instructions on how to do it usi
 
 Download the tcz package with the following command:
 
-* wget https://github.com/alidaf/raspberryP...encvol-<ver>.tcz
+* wget https://github.com/alidaf/raspberryP...encvol-[ver].tcz
 
 and type the following command in a terminal:
 
-* cp rotencvol-<ver>.tcz /mnt/mmcblk0p2/tce/optional/
+* cp rotencvol-[ver].tcz /mnt/mmcblk0p2/tce/optional/
 
 This copies the package to the optional packages area.
 
-Now edit /mnt/mmcblk0p2/tce/onboot.lst and add rotencvol-<ver>.tcz at the bottom to make it persistent after 
+Now edit /mnt/mmcblk0p2/tce/onboot.lst and add rotencvol-[ver].tcz at the bottom to make it persistent after 
 a reboot.
 
 I use nano so the command would be:
@@ -62,7 +62,7 @@ Add the line, then press ctrl-x, press y and then return to save the file.
 
 Now load the package:
 
-* tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-<ver>.tcz
+* tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-[ver].tcz
 
 To run, until I can sort out a startup script run:
 
@@ -97,7 +97,7 @@ Once you are happy run the command with the '&' character at the end of the line
 background and free up your prompt. E.g.
 
 * sudo /bin/rotencvol -i 20 -p -a 2 -b 3 &
-  Note the file in /bin is rotencvol, not rotencvol-<ver>!
+  Note the file in /bin is rotencvol, not rotencvol-[ver]!
 
 Press return to get your prompt back.
 
