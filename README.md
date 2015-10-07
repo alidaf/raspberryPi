@@ -17,7 +17,7 @@ Command line parameters allow specifying:
 * The name of the control for sound cards with multiple controls.
 * The initial volume setting as a percentage of max, i.e. low for headphones and high for DAC/phono.
 * The number of volume increments over the full volume range.
-* The shape of the response, i.e. logarithmic -> linear -> exponential.
+* The shape of the volume request, i.e. logarithmic -> linear -> exponential.
 * The GPIO pins to be used (mapped internally to the wiringPi numbers).
 * The delay between tic increments to fine tune responsiveness.
 * Print out a variety of information such as GPIO maps, default or defined settings, ranges and program output.
