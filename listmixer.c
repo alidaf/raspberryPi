@@ -1,177 +1,160 @@
-/************************************************************************/
-/*																		*/
-/* Lists ALSA mixer devices.											*/
-/*																		*/
-/************************************************************************/
+/*****************************************************************************/
+/*                                                                           */
+/*    Simple test program to list all ALSA cards and devices.                */
+/*                                                                           */
+/*    Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>                 */
+/*                                                                           */
+/*    This program is free software; you can redistribute it and/or modify   */
+/*    it under the terms of the GNU General Public License as published by   */
+/*    the Free Software Foundation, either version 2 of the License, or      */
+/*    (at your option) any later version.                                    */
+/*                                                                           */
+/*    This program is distributed in the hope that it will be useful,        */
+/*    but WITHOUT ANY WARRANTY; without even the implied warranty of         */
+/*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          */
+/*    GNU General Public License for more details.                           */
+/*                                                                           */
+/*    You should have received a copy of the GNU General Public License      */
+/*    along with this program. If not, see <http://www.gnu.org/licenses/>.   */
+/*                                                                           */
+/*****************************************************************************/
+
+#define Version "Version 0.3"
+
+/*****************************************************************************/
+/*                                                                           */
+/*    Authors:            D.Faulke                    19/10/15               */
+/*    Contributors:                                                          */
+/*                                                                           */
+/*    Changelog:                                                             */
+/*                                                                           */
+/*    v0.1 Initial version.                                                  */
+/*    v0.2 Modified output and added control type.                           */
+/*    v0.3 Rewrite from scratch.                                             */
+/*                                                                           */
+/*****************************************************************************/
 
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
 #include <alsa/mixer.h>
 
-char deviceID[16];
-static struct snd_mixer_selem_regopt smixerOptions;
-
-/************************************************************************/
-/*																		*/
-/* Print controls.														*/
-/*																		*/
-/************************************************************************/
-
-void printControls( const char *cardName )
-{
-
-	int errNum;
-	char deviceNum[16];
-
-	snd_hctl_t *hctlHandle;				// High level control handle;
-	snd_hctl_elem_t *hctlElemHandle;	// High level control element handle.
-	snd_ctl_elem_id_t *elemID;			// Simple control element ID.
-	snd_ctl_elem_info_t *elemInfo;		// Simple control element info container.
-
-	snd_ctl_elem_id_alloca( &elemID );
-	snd_ctl_elem_info_alloca( &elemInfo );
-
-	// Open an empty high level control.
-	errNum = snd_hctl_open( &hctlHandle, deviceID, 0 );
-
-	// Load high level control element.
-	errNum = snd_hctl_load( hctlHandle );
-
-	printf( "\t+-----------------------------------------------+\n" );
-	printf( "\t| Card: %-40s", cardName );
-	printf( "|\n" );
-	printf( "\t+----------+------------------------------------+\n" );
-	printf( "\t| ID       | Name                               |\n" );
-	printf( "\t+----------+------------------------------------+\n" );
-
-
-	// For each control element.
-	for ( hctlElemHandle = snd_hctl_first_elem( hctlHandle );
-				hctlElemHandle;
-				hctlElemHandle = snd_hctl_elem_next( hctlElemHandle ))
-	{
-		// Get ID of high level control element.
-		snd_hctl_elem_get_id( hctlElemHandle, elemID );
-//		printf( "%i\n", snd_hctl_elem_get_numid( hctlElemHandle ));
-
-		// Concatenate strings to get card's control interface.
-		sprintf( deviceNum, "%s,%i",
-				 snd_hctl_name( hctlHandle ),
-				 snd_hctl_elem_get_numid( hctlElemHandle ));
-
-		printf( "\t| %-8s | %-34s |\n", deviceNum, snd_hctl_elem_get_name( hctlElemHandle ));
-
-//		printf( "%s,%i %s\n", snd_hctl_name( hctlHandle ),
-//							snd_hctl_elem_get_numid( hctlElemHandle ),
-//							snd_hctl_elem_get_name( hctlElemHandle ));
-	}
-
-	printf( "\t+----------+------------------------------------+\n\n" );
-
-	snd_hctl_close( hctlHandle );
-};
-
-/************************************************************************/
-/*																		*/
-/* Print mixer elements.												*/
-/*																		*/
-/************************************************************************/
-
-void printMixers( const char *cardName )
-{
-
-	int errNum;
-	snd_mixer_t *mixerHandle;			// Mixer handle.
-	snd_mixer_selem_id_t *mixerSelemID;	// Mixer simple element channel ID.
-	snd_mixer_elem_t *mixerElemHandle;	// Mixer element handle.
-
-	snd_mixer_selem_id_alloca( &mixerSelemID );
-
-	// Open an empty mixer.
-	errNum = snd_mixer_open( &mixerHandle, 0 );
-
-	// Attach a control to the opened mixer.
-	errNum = snd_mixer_attach( mixerHandle, deviceID );
-
-	// Register mixer simple element class.
-	errNum = snd_mixer_selem_register( mixerHandle, NULL, NULL );
-
-	// Load mixer elements.
-	errNum = snd_mixer_load( mixerHandle );
-
-	// For each mixer element.
-	for ( mixerElemHandle = snd_mixer_first_elem( mixerHandle );
-			mixerElemHandle;
-			mixerElemHandle = snd_mixer_elem_next( mixerElemHandle ))
-	{
-		// Get ID of simple mixer element.
-		snd_mixer_selem_get_id( mixerElemHandle, mixerSelemID );
-		printf( "\t%s\n",snd_mixer_selem_id_get_name( mixerSelemID ));
-	}
-
-	snd_mixer_close( mixerHandle );
-};
-
-/************************************************************************/
-/*																		*/
-/* Main routine.														*/
-/*																		*/
-/************************************************************************/
+/*****************************************************************************/
+/*                                                                           */
+/* Main routine.                                                             */
+/*                                                                           */
+/*****************************************************************************/
 
 void main()
 {
 
-	int cardNumber = -1;
-	int mixerNumber = -1;
-	const char *cardName = "";
-	const char *mixerName = "";
+    int cardNumber = -1;
+    int mixerNumber = -1;
+    const char *cardName = "";
+    const char *mixerName = "";
+    char deviceID[8];
+    long volMin, volMax;
 
-	int errNum;
-	int body = 1;
-	int controlArray[128];
+    int errNum;
+    int body = 1;
 
-	snd_ctl_t *ctlHandle;				// Simple control handle.
-//	snd_pcm_info_t *pcmInfo;			// PCM generic info container.
-	snd_ctl_card_info_t *cardInfo;		// Simple control card info container.
-	snd_ctl_elem_type_t *elemType;		// Simple control element type;
-	snd_ctl_elem_value_t *elemValue;	// Simple control element value container.
+    /*************************************************************************/
+    /*  ALSA mixer elements                                                  */
+    /*************************************************************************/
+    snd_mixer_t *handle;            // Mixer handle.
+    snd_mixer_selem_id_t *id;      // Mixer simple element identifier.
+    snd_mixer_elem_t *elem;         // Mixer element handle.
 
-	// Initialise ALSA card and device types.
-	snd_ctl_card_info_alloca( &cardInfo );
-//	snd_pcm_info_alloca( &pcmInfo );
-//	snd_ctl_elem_info_alloca( &elemInfo );
-	snd_ctl_elem_value_alloca( &elemValue );
+    /*************************************************************************/
+    /*  We are cycling through the mixers without knowing the CTL names so   */
+    /*  we need some high level control elements.                            */
+    /*  Using CTL or HCTL  elements should be avoided for 'safe' ALSA!       */
+    /*************************************************************************/
+    snd_ctl_t *ctl;                 // Simple control handle.
+    snd_hctl_t *hctl;               // High level control handle.
 
+    /*************************************************************************/
+    /*  ALSA info elements for retrieving certain information. Should also   */
+    /*  be avoided for 'safe' ALSA.                                          */
+    /*************************************************************************/
+    snd_ctl_card_info_t *card;      //  Control card info container.
 
-	// Print header.
-//	printInfo( cardNumber, cardName, mixerNumber, mixerName, 0 );
+    while (1)
+    {
+        // Find next card number. Exit loop if none.
+        errNum = snd_card_next( &cardNumber );
+        if (( errNum < 0 ) || ( cardNumber < 0 )) break;
 
-	// For each card.
-	while (1)
-	{
-		// Find next card number. If < 0 then returns 1st card.
-		errNum = snd_card_next( &cardNumber );
-		if (( errNum < 0 ) || ( cardNumber < 0 )) break;
+        sprintf( deviceID, "hw:%i", cardNumber );
 
-		// Concatenate strings to get card's control interface.
-		sprintf( deviceID, "hw:%i", cardNumber );
+        // Open card.
+        errNum = snd_ctl_open( &ctl, deviceID, 0 );
+        if (errNum < 0 ) continue;
 
-		//  Try to open card.
-		errNum = snd_ctl_open( &ctlHandle, deviceID, 0 );
-		if ( errNum < 0 ) continue;
+        // Allocate memory for card info.
+        snd_ctl_card_info_alloca( &card );
+        errNum = snd_ctl_card_info( ctl, card );
+        if (errNum < 0 ) continue;
 
-		// Fill control card info element type.
-		errNum = snd_ctl_card_info( ctlHandle, cardInfo );
+        /*********************************************************************/
+        /*  Print some card specific info.                                   */
+        /*********************************************************************/
 
-		// Get card name.
-		cardName = snd_ctl_card_info_get_name( cardInfo );
+        printf( "Card: %s.\n", snd_ctl_card_info_get_name( card ));
+        printf( "\t+------------------------------------------" );
+        printf( "+---+---------+---------+\n" );
+        printf( "\t| Control ID%-30s ", "" );
+        printf( "| * |   Min   |   Max   |\n" );
+        printf( "\t+------------------------------------------" );
+        printf( "+---+---------+---------+\n" );
 
-		printControls( cardName );
-//		printMixers( cardName );
+        /*********************************************************************/
+        /*  Now start with each card's mixers.                               */
+        /*********************************************************************/
 
-		snd_ctl_close( ctlHandle );
-	}
+        // Open an empty mixer and attach a control.
+        errNum = snd_mixer_open( &handle, 0 );
+        if ( errNum < 0 ) printf( "Error opening mixer.\n" );
+        errNum = snd_mixer_attach( handle, deviceID );
+        if ( errNum < 0 ) printf( "Error attaching control to mixer.\n" );
+        //** Note: need to determine a way of attaching using the card name.
 
-	return;
+        // Register the mixer simple element class and load mixer.
+        errNum = snd_mixer_selem_register( handle, NULL, NULL );
+        if ( errNum < 0 ) printf( "Error registering element class.\n" );
+        errNum = snd_mixer_load( handle );
+        if ( errNum < 0 ) printf( "Error loading mixer.\n" );
+
+        // Allocate an invalid simple element ID.
+        snd_mixer_selem_id_alloca( &id );
+
+        for ( elem = snd_mixer_first_elem( handle );
+              elem;
+              elem = snd_mixer_elem_next( elem ))
+        {
+            // Get ID of mixer element.
+            snd_mixer_selem_get_id( elem, id );
+
+            // Get range of values for control.
+            errNum = snd_mixer_selem_get_playback_volume_range(
+                            elem, &volMin, &volMax );
+
+            // Check whether element has volume control.
+            char *hasControl = "-";
+            if ( snd_mixer_selem_has_playback_volume( elem ))
+                    hasControl = "*";
+
+            printf( "\t| %-40s | %s | %+7d | %+7d |\n",
+                    snd_mixer_selem_id_get_name( id ),
+                    hasControl,
+                    volMin, volMax );
+        }
+        printf( "\t+------------------------------------------" );
+        printf( "------------------------+\n" );
+        printf( "IDs marked with '*' may be controlled.\n\n" );
+    }
+
+    snd_mixer_close( handle );
+
+    return;
 }
