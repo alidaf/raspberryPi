@@ -102,9 +102,8 @@ void main()
 
 
         /*********************************************************************/
-        /*  Print some card specific info.                                   */
+        /*  Print header block and some card specific info.                  */
         /*********************************************************************/
-
         printf( "Card: %s.\n", snd_ctl_card_info_get_name( card ));
         printf( "\t+------------------------------------------" );
         printf( "+---+---------+---------+\n" );
@@ -113,31 +112,42 @@ void main()
         printf( "\t+------------------------------------------" );
         printf( "+---+---------+---------+\n" );
 
-        /*********************************************************************/
-        /*  Now start with each card's mixers.                               */
-        /*********************************************************************/
 
+        /*********************************************************************/
+        /*  Set up control and mixer.                                        */
+        /*********************************************************************/
         // Open an empty mixer and attach a control.
-        errNum = snd_mixer_open( &handle, 0 );
-        if ( errNum < 0 ) printf( "Error opening mixer.\n" );
-        errNum = snd_mixer_attach( handle, deviceID );
-        if ( errNum < 0 ) printf( "Error attaching control to mixer.\n" );
-        //** Note: need to determine a way of attaching using the card name.
-
+        if ( snd_mixer_open( &handle, 0 ) < 0 )
+        {
+            printf( "Error opening mixer.\n" );
+            return;
+        }
+        if ( snd_mixer_attach( handle, deviceID ) < 0 )
+        {
+            printf( "Error attaching control to mixer.\n" );
+            return;
+        }
         // Register the mixer simple element class and load mixer.
-        errNum = snd_mixer_selem_register( handle, NULL, NULL );
-        if ( errNum < 0 ) printf( "Error registering element class.\n" );
-        errNum = snd_mixer_load( handle );
-        if ( errNum < 0 ) printf( "Error loading mixer.\n" );
-
-        // Allocate an invalid simple element ID.
+        if ( snd_mixer_selem_register( handle, NULL, NULL ) < 0 )
+        {
+            printf( "Error registering element class.\n" );
+            return;
+        }
+        if ( snd_mixer_load( handle ) < 0 )
+        {
+            printf( "Error loading mixer.\n" );
+            return;
+        }
         snd_mixer_selem_id_alloca( &sid );
 
+
+        /*********************************************************************/
+        /*  For each mixer element.                                          */
+        /*********************************************************************/
         for ( elem = snd_mixer_first_elem( handle );
               elem;
               elem = snd_mixer_elem_next( elem ))
         {
-
             // Get ID of mixer element.
             snd_mixer_selem_get_id( elem, sid );
 
@@ -156,8 +166,8 @@ void main()
                     volMin, volMax );
         }
         printf( "\t+------------------------------------------" );
-        printf( "------------------------+\n" );
-        printf( "IDs marked with '*' may be controlled.\n\n" );
+        printf( "+---+---------+---------+\n" );
+        printf( "Mixers elements marked with '*' have volume control.\n\n" );
     }
 
     snd_mixer_close( handle );

@@ -43,13 +43,15 @@
 
 void main()
 {
-
     int cardNumber = -1;
-    char *controlType;
-
     int errNum;
+    char *controlType;
     char deviceID[16];
 
+
+    /*************************************************************************/
+    /*  ALSA control elements.                                               */
+    /*************************************************************************/
     snd_ctl_t *ctl;                 // Simple control handle.
     snd_ctl_elem_id_t *id;          // Simple control element id.
     snd_ctl_elem_value_t *control;  // Simple control element value.
@@ -59,11 +61,15 @@ void main()
     snd_hctl_t *hctl;               // High level control handle;
     snd_hctl_elem_t *elem;          // High level control element handle.
 
-    // Initialise ALSA card and device types.
+
+    /*************************************************************************/
+    /*  Initialise ALSA card and device types.                               */
+    /*************************************************************************/
     snd_ctl_card_info_alloca( &card );
     snd_ctl_elem_value_alloca( &control );
     snd_ctl_elem_id_alloca( &id );
     snd_ctl_elem_info_alloca( &info );
+
 
     /*************************************************************************/
     /*  Start card section.                                                  */
@@ -79,16 +85,14 @@ void main()
         sprintf( deviceID, "hw:%i", cardNumber );
 
         //  Try to open card.
-        errNum = snd_ctl_open( &ctl, deviceID, 0 );
-        if ( errNum < 0 )
+        if ( snd_ctl_open( &ctl, deviceID, 0 ) < 0 )
         {
             printf( "Error opening card.\n" );
             continue;
         }
 
         // Fill control card info element.
-        errNum = snd_ctl_card_info( ctl, card );
-        if ( errNum < 0 )
+        if ( snd_ctl_card_info( ctl, card ) < 0 )
         {
             printf( "Error getting card info.\n" );
             continue;
@@ -105,28 +109,34 @@ void main()
 //        printf( "CTL info = %s.\n", ctlInfo );
 
 
-
-        // Print header block.
-        printf( "\t+----------------------------------------------------------+\n" );
+        /*********************************************************************/
+        /*  Print header block.                                              */
+        /*********************************************************************/
+        printf( "\t+-----------------------------" );
+        printf( "-----------------------------+\n" );
         printf( "\t| Card: %d - %-46s |",
                         cardNumber,
                         snd_ctl_card_info_get_name( card ));
         printf( "\n" );
-        printf( "\t+--------+------------+------------------------------------+\n" );
-        printf( "\t| Device | Type       | Name                               |\n" );
-        printf( "\t+--------+------------+------------------------------------+\n" );
+        printf( "\t+--------+------------" );
+        printf( "+------------------------------------+\n" );
+        printf( "\t| Device | Type       " );
+        printf( "| Name                               |\n" );
+        printf( "\t+--------+------------" );
+        printf( "+------------------------------------+\n" );
 
 
         /*********************************************************************/
         /*  Start control section.                                           */
         /*********************************************************************/
         // Open an empty high level control.
-        errNum = snd_hctl_open( &hctl, deviceID, 0 );
-        if ( errNum < 0 ) printf( "Error opening high level control.\n" );
+        if ( snd_hctl_open( &hctl, deviceID, 0 ) < 0 )
+            printf( "Error opening high level control.\n" );
 
         // Load high level control element.
-        errNum = snd_hctl_load( hctl );
-        if ( errNum < 0 ) printf( "Error loading high level control.\n" );
+        if ( snd_hctl_load( hctl ) < 0 )
+            printf( "Error loading high level control.\n" );
+
 
         /*********************************************************************/
         /*  For each control element.                                        */
@@ -135,7 +145,6 @@ void main()
                     elem;
                     elem = snd_hctl_elem_next( elem ))
         {
-
             // Get ID of high level control element.
             snd_hctl_elem_get_id( elem, id );
 
@@ -143,8 +152,11 @@ void main()
             /*****************************************************************/
             /* Determine control type                                        */
             /*****************************************************************/
-            // Doesn't seem to work !
+            if ( snd_hctl_elem_info( elem, info ) < 0 )
+                printf( "Can't get control information.\n" );
+
             type = snd_ctl_elem_info_get_type( info );
+
             switch ( type )
             {
                 case SND_CTL_ELEM_TYPE_NONE:
@@ -177,7 +189,8 @@ void main()
                 controlType,
                 snd_hctl_elem_get_name( elem ));
         }
-        printf( "\t+--------+------------+------------------------------------+\n" );
+        printf( "\t+--------+------------" );
+        printf( "+------------------------------------+\n\n" );
 
 
         /*********************************************************************/
