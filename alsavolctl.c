@@ -154,14 +154,13 @@ void main( int argc, char *argv[] )
     /*****************************************************************************/
     /*  Set up ALSA control.                                                     */
     /*****************************************************************************/
-    // Open a high level control and load it's data.
     sprintf( cmdArgs.deviceID, "hw:%i", cmdArgs.card );
-    printf( "Device ID = %s\n", cmdArgs.deviceID );
+    printf( "Device ID = %s.\n", cmdArgs.deviceID );
 
-    if ( snd_ctl_open( &ctl, cmdArgs.deviceID, 1 ) < 0 );
+    if ( snd_ctl_open( &ctl, cmdArgs.deviceID, 1 ) < 0 )
     {
-        printf( "Error opening control." );
-//        return;
+        printf( "Error opening control.\n" );
+        return;
     }
     // Initialise a simple control element id structure.
     snd_ctl_elem_id_alloca( &id );
@@ -174,7 +173,7 @@ void main( int argc, char *argv[] )
     // Is the control valid?
     if ( snd_ctl_elem_info( ctl, info ) < 0 )
     {
-        printf( "Error: %s\n", snd_strerror( errNum ));
+        printf( "Error getting control element info.\n" );
         return;
     }
 
@@ -217,7 +216,7 @@ void main( int argc, char *argv[] )
     if ( snd_ctl_elem_write( ctl, control ) < 0 )
         printf( "Error setting R volume" );
     else
-        printf( "Set R volume to %d.\n", cmdArgs.value1 );
+        printf( "Set R volume to %d.\n", cmdArgs.value2 );
 
 
     /*************************************************************************/
