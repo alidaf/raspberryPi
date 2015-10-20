@@ -40,7 +40,6 @@
 #include <alsa/asoundlib.h>
 #include <argp.h>
 
-
 /*****************************************************************************/
 /*  Program documentation:                                                   */
 /*****************************************************************************/
@@ -49,7 +48,6 @@ const char *argp_program_version = Version;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
 static char doc[] = "A short test program to set ALSA control values.";
 static char args_doc[] = "alsavol <options>";
-
 
 /*****************************************************************************/
 /*  Data definitions:                                                        */
@@ -118,7 +116,6 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
 
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
-
 /*****************************************************************************/
 /*  Main routine.                                                            */
 /*****************************************************************************/
@@ -181,7 +178,7 @@ void main( int argc, char *argv[] )
     // either:
     // SND_CTL_ELEM_TYPE_INTEGER,
     // SND_CTL_ELEM_TYPE_INTEGER64,
-    // SND_CTL_ELEM_TYPE_ENUMERATED.
+    // SND_CTL_ELEM_TYPE_ENUMERATED, etc.
     // Only interested in INTEGER.
     type = snd_ctl_elem_info_get_type( info );
     if ( type != SND_CTL_ELEM_TYPE_INTEGER )
