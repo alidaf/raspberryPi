@@ -1,6 +1,6 @@
 /*****************************************************************************/
 /*                                                                           */
-/*    ALSA volume control using simple controls instead of mixer controls.   */
+/*    ALSA volume control using mixer controls.                              */
 /*    Used for testing ways of controlling volume and balance on a           */
 /*    Raspberry Pi.                                                          */
 /*                                                                           */
@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
+#include <alsa/mixer.h>
 #include <argp.h>
 
 /*****************************************************************************/
