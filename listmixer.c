@@ -62,8 +62,9 @@ void main()
     /*  ALSA mixer elements                                                  */
     /*************************************************************************/
     snd_mixer_t *handle;            // Mixer handle.
-    snd_mixer_selem_id_t *id;      // Mixer simple element identifier.
+    snd_mixer_selem_id_t *sid;      // Mixer simple element identifier.
     snd_mixer_elem_t *elem;         // Mixer element handle.
+
 
     /*************************************************************************/
     /*  We are cycling through the mixers without knowing the CTL names so   */
@@ -71,7 +72,10 @@ void main()
     /*  Using CTL or HCTL  elements should be avoided for 'safe' ALSA!       */
     /*************************************************************************/
     snd_ctl_t *ctl;                 // Simple control handle.
-    snd_hctl_t *hctl;               // High level control handle.
+    snd_ctl_elem_id_t *id;          // Control element identifier.
+//    snd_hctl_t *hctl;               // High level control handle.
+//    snd_hctl_elem_t *helem;         // High level control element handle.
+
 
     /*************************************************************************/
     /*  ALSA info elements for retrieving certain information. Should also   */
@@ -81,7 +85,7 @@ void main()
 
     while (1)
     {
-        // Find next card number. Exit loop if none.
+        // Find next card. Exit loop if none.
         errNum = snd_card_next( &cardNumber );
         if (( errNum < 0 ) || ( cardNumber < 0 )) break;
 
@@ -95,6 +99,7 @@ void main()
         snd_ctl_card_info_alloca( &card );
         errNum = snd_ctl_card_info( ctl, card );
         if (errNum < 0 ) continue;
+
 
         /*********************************************************************/
         /*  Print some card specific info.                                   */
@@ -126,14 +131,15 @@ void main()
         if ( errNum < 0 ) printf( "Error loading mixer.\n" );
 
         // Allocate an invalid simple element ID.
-        snd_mixer_selem_id_alloca( &id );
+        snd_mixer_selem_id_alloca( &sid );
 
         for ( elem = snd_mixer_first_elem( handle );
               elem;
               elem = snd_mixer_elem_next( elem ))
         {
+
             // Get ID of mixer element.
-            snd_mixer_selem_get_id( elem, id );
+            snd_mixer_selem_get_id( elem, sid );
 
             // Get range of values for control.
             errNum = snd_mixer_selem_get_playback_volume_range(
@@ -145,7 +151,7 @@ void main()
                     hasControl = "*";
 
             printf( "\t| %-40s | %s | %+7d | %+7d |\n",
-                    snd_mixer_selem_id_get_name( id ),
+                    snd_mixer_selem_id_get_name( sid ),
                     hasControl,
                     volMin, volMax );
         }

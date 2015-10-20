@@ -36,14 +36,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
-//#include <alsa/mixer.h>
-
-static struct snd_mixer_selem_regopt smixerOptions;
 
 /*****************************************************************************/
-/*                                                                           */
-/* Main routine.                                                             */
-/*                                                                           */
+/*  Main routine.                                                            */
 /*****************************************************************************/
 
 void main()
@@ -70,10 +65,9 @@ void main()
     snd_ctl_elem_id_alloca( &id );
     snd_ctl_elem_info_alloca( &info );
 
-/*****************************************************************************/
-/*    Start card section.                                                    */
-/*****************************************************************************/
-
+    /*************************************************************************/
+    /*  Start card section.                                                  */
+    /*************************************************************************/
     // For each card.
     while (1)
     {
@@ -100,6 +94,18 @@ void main()
             continue;
         }
 
+        /*********************************************************************/
+        /*  Additional information that may be useful.                       */
+        /*********************************************************************/
+//        char *hctlName = snd_ctl_ascii_elem_id_get( id );
+//        printf( "HCTL name = %s.\n", hctlName );
+//        int cardNum = snd_ctl_card_info_get_card( card );
+//        printf( "CTL card number = %i.\n", cardNum );
+//        const char *ctlInfo = snd_ctl_card_info_get_id( card );
+//        printf( "CTL info = %s.\n", ctlInfo );
+
+
+
         // Print header block.
         printf( "\t+----------------------------------------------------------+\n" );
         printf( "\t| Card: %d - %-46s |",
@@ -110,44 +116,34 @@ void main()
         printf( "\t| Device | Type       | Name                               |\n" );
         printf( "\t+--------+------------+------------------------------------+\n" );
 
-/*****************************************************************************/
-/*    Start control section.                                                 */
-/*****************************************************************************/
 
-//        printf( "Opened high level control.\n" );
+        /*********************************************************************/
+        /*  Start control section.                                           */
+        /*********************************************************************/
         // Open an empty high level control.
         errNum = snd_hctl_open( &hctl, deviceID, 0 );
-        if ( errNum < 0 )
-        {
-            printf( "Error opening high level control.\n" );
-        }
-//        printf( "Opened high level control.\n" );
+        if ( errNum < 0 ) printf( "Error opening high level control.\n" );
 
         // Load high level control element.
         errNum = snd_hctl_load( hctl );
-        if ( errNum < 0 )
-        {
-            printf( "Error loading high level control.\n" );
-        }
-//        printf( "Loaded high level control.\n" );
+        if ( errNum < 0 ) printf( "Error loading high level control.\n" );
 
-        // Find number of controls.
-//        int numControls = snd_hctl_get_count( hctl );
-//        int count;
-
-/*****************************************************************************/
-/*    For each control element.                                              */
-/*****************************************************************************/
-
+        /*********************************************************************/
+        /*  For each control element.                                        */
+        /*********************************************************************/
         for ( elem = snd_hctl_first_elem( hctl );
                     elem;
                     elem = snd_hctl_elem_next( elem ))
-
         {
+
             // Get ID of high level control element.
             snd_hctl_elem_get_id( elem, id );
 
-//            printf( "Finding type.\n" );
+
+            /*****************************************************************/
+            /* Determine control type                                        */
+            /*****************************************************************/
+            // Doesn't seem to work !
             type = snd_ctl_elem_info_get_type( info );
             switch ( type )
             {
@@ -176,16 +172,17 @@ void main()
                     controlType = "Not Found";
                     break;
             }
-
             printf( "\t| %-6i | %-10s | %-34s |\n",
                 snd_hctl_elem_get_numid( elem ),
                 controlType,
                 snd_hctl_elem_get_name( elem ));
-
         }
-
         printf( "\t+--------+------------+------------------------------------+\n" );
 
+
+        /*********************************************************************/
+        /*  Tidy up.                                                         */
+        /*********************************************************************/
         snd_hctl_close( hctl );
         snd_ctl_close( ctl );
     }
