@@ -40,7 +40,8 @@
 /*  v2.6 Reworked bounds checking and error trapping.                        */
 /*  v2.7 Added soft volume limits.                                           */
 /*  v2.8 Added push button mute support for keyswitch.                       */
-/*  v2.9 Rewrote encoder routine.                                            */
+/*  v2.9 Rewrote encoder and mute routines.                                  */
+/*  v3.0 Merged linear and shaped vol calcs                                  */
 /*                                                                           */
 /*****************************************************************************/
 
@@ -106,16 +107,19 @@ static int piGPIO[3][23] =
 };
 
 // Encoder state.
-static volatile int encoderDirection;
-static volatile int lastEncoded;
-static volatile int encoded;
-static volatile int busy = false;
+static volatile int volDirection;
+static volatile int lastVolEncoded;
+static volatile int volEncoded;
+static volatile int busyVol = false;
+static volatile int balDirection;
+static volatile int lastBalEncoded;
+static volatile int balEncoded;
+static volatile int busyBal = false;
 
 // Button states.
-static volatile int muteState = 0;
-static volatile int muteStateChanged = 0;
-static volatile int balState = 0;
-static volatile int balStateChanged = 0;
+static volatile int muteState = false;
+static volatile int muteStateChanged = false;
+static volatile int balanceStateSet = false;
 
 // Data structure of command line parameters.
 struct structArgs
@@ -125,20 +129,21 @@ struct structArgs
     int gpioA;      // GPIO pin for vol rotary encoder.
     int gpioB;      // GPIO pin for vol rotary encoder.
     int gpioC;      // GPIO pin for mute button.
-//    int gpioD;      // GPIO pin for bal rotary encoder.
-//    int gpioE;      // GPIO pin for bal rotary encoder.
-//    int gpioF;      // GPIO pin for bal reset button.
+    int gpioD;      // GPIO pin for bal rotary encoder.
+    int gpioE;      // GPIO pin for bal rotary encoder.
+    int gpioF;      // GPIO pin for bal reset button.
     int wPiPinA;    // Mapped wiringPi pin.
     int wPiPinB;    // Mapped wiringPi pin.
     int wPiPinC;    // Mapped wiringPi pin.
-//    int wPiPinD;    // Mapped wiringPi pin.
-//    int wPiPinE;    // Mapped wiringPi pin.
-//    int wPiPinF;    // Mapped wiringPi pin.
+    int wPiPinD;    // Mapped wiringPi pin.
+    int wPiPinE;    // Mapped wiringPi pin.
+    int wPiPinF;    // Mapped wiringPi pin.
     int initVol;    // Initial volume (%).
     int minVol;     // Minimum soft volume (%).
     int maxVol;     // Maximum soft volume (%).
     int incVol;     // No. of increments over volume range.
-    float facVol;   // Volume shaping factor
+    float facVol;   // Volume shaping factor.
+    int balance;    // Volume L/R balance.
     int ticDelay;   // Delay between encoder tics.
     int prOutput;   // Flag to print output.
     int prRanges;   // Flag to print ranges.
@@ -152,6 +157,8 @@ struct boundsStruct
 {
     int volumeLow;
     int volumeHigh;
+    int balanceLow;
+    int balanceHigh;
     float factorLow;
     float factorHigh;
     int incLow;
@@ -169,6 +176,7 @@ struct volStruct
     long softMin;
     long softMax;
     long softRange;
+    int balance;
     long hardMin;
     long hardMax;
     long hardRange;
@@ -176,6 +184,7 @@ struct volStruct
     long shapedVol;
     int muteState;
 };
+
 
 /*****************************************************************************/
 /*  Set default values.                                                      */
@@ -194,9 +203,10 @@ static struct structArgs cmdArgs, defaultArgs =
     .initVol = 0,       // Mute.
     .minVol = 0,        // 0% of Maximum output level.
     .maxVol = 100,      // 100% of Maximum output level.
+    .balance = 0,       // L = R.
     .incVol = 20,       // 20 increments from 0 to 100%.
     .facVol = 1,        // Volume change rate factor.
-    .ticDelay = 100,     // 100 cycles between tics.
+    .ticDelay = 100,    // 100 cycles between tics.
     .prOutput = 0,      // No output printing.
     .prRanges = 0,      // No range printing.
     .prDefaults = 0,    // No defaults printing.
@@ -206,15 +216,245 @@ static struct structArgs cmdArgs, defaultArgs =
 
 static struct boundsStruct paramBounds =
 {
-    .volumeLow = 0,           // Lower bound for initial volume.
-    .volumeHigh = 100,        // Upper bound for initial volume.
-    .factorLow = 0.001,       // Lower bound for volume shaping factor.
-    .factorHigh = 10,         // Upper bound for volume shaping factor.
-    .incLow = 1,              // Lower bound for no. of volume increments.
-    .incHigh = 100,           // Upper bound for no. of volume increments.
-    .delayLow = 50,           // Lower bound for delay between tics.
-    .delayHigh = 1000         // Upper bound for delay between tics.
+    .volumeLow = 0,     // Lower bound for volume.
+    .volumeHigh = 100,  // Upper bound for volume.
+    .balanceLow = -100, // Lower bound for balance.
+    .balanceHigh = 100, // Upper bound for balance.
+    .factorLow = 0.001, // Lower bound for volume shaping factor.
+    .factorHigh = 10,   // Upper bound for volume shaping factor.
+    .incLow = 1,        // Lower bound for no. of volume increments.
+    .incHigh = 100,     // Upper bound for no. of volume increments.
+    .delayLow = 50,     // Lower bound for delay between tics.
+    .delayHigh = 1000   // Upper bound for delay between tics.
 };
+
+
+/*****************************************************************************/
+/*  GPIO interrupt functions.                                                */
+/*****************************************************************************/
+
+    /*********************************************************************/
+    /*  Quadrature encoding for rotary encoder:                          */
+    /*                                                                   */
+    /*      :   :   :   :   :   :   :   :   :                            */
+    /*      :   +-------+   :   +-------+   :     +---+-------+-------+  */
+    /*      :   |   :   |   :   |   :   |   :     | P |  +ve  |  -ve  |  */
+    /*  A   :   |   :   |   :   |   :   |   :     | h +---+---+---+---+  */
+    /*  --------+   :   +-------+   :   +-------  | a | A | B | A | B |  */
+    /*      :   :   :   :   :   :   :   :   :     +---+---+---+---+---+  */
+    /*      :   :   :   :   :   :   :   :   :     | 1 | 0 | 0 | 1 | 0 |  */
+    /*      +-------+   :   +-------+   :   +---  | 2 | 0 | 1 | 1 | 1 |  */
+    /*      |   :   |   :   |   :   |   :   |     | 3 | 1 | 1 | 0 | 1 |  */
+    /*  B   |   :   |   :   |   :   |   :   |     | 4 | 1 | 0 | 0 | 0 |  */
+    /*  ----+   :   +-------+   :   +-------+     +---+---+---+---+---+  */
+    /*      :   :   :   :   :   :   :   :   :                            */
+    /*    1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2   <- Phase               */
+    /*      :   :   :   :   :   :   :   :   :                            */
+    /*                                                                   */
+    /*********************************************************************/
+
+/*****************************************************************************/
+/*  Rotary encoder for volume.                                               */
+/*****************************************************************************/
+
+static void encoderPulseVol()
+{
+    // Check if last interrupt has finished being processed.
+    if (( busyVol ) || ( busyBal )) return;
+    busyVol = true;
+
+    // Read values at pins.
+    unsigned int pinA = digitalRead( cmdArgs.wPiPinA );
+    unsigned int pinB = digitalRead( cmdArgs.wPiPinB );
+
+    // Combine A and B with last readings using bitwise operators.
+    int volEncoded = ( pinA << 1 ) | pinB;
+    int sum = ( lastVolEncoded << 2 ) | volEncoded;
+
+    if ( sum == 0b0001 ||
+         sum == 0b0111 ||
+         sum == 0b1110 ||
+         sum == 0b1000 )
+         volDirection = 1;
+    else
+    if ( sum == 0b1011 ||
+         sum == 0b1101 ||
+         sum == 0b0100 ||
+         sum == 0b0100 )
+         volDirection = -1;
+
+    lastVolEncoded = volEncoded;
+    busyVol = false;
+};
+
+
+/*****************************************************************************/
+/*  GPIO activity call for mute button.                                      */
+/*****************************************************************************/
+
+static void buttonMute()
+{
+    int buttonRead = digitalRead( cmdArgs.wPiPinC );
+    if ( buttonRead ) muteStateChanged = !muteStateChanged;
+};
+
+
+/*****************************************************************************/
+/*  Rotary encoder for volume.                                               */
+/*****************************************************************************/
+
+static void encoderPulseBal()
+{
+    // Check if last interrupt has finished being processed.
+    if (( busyVol ) || ( busyBal )) return;
+    busyBal = true;
+
+    // Read values at pins.
+    unsigned int pinA = digitalRead( cmdArgs.wPiPinD );
+    unsigned int pinB = digitalRead( cmdArgs.wPiPinE );
+
+    // Combine A and B with last readings using bitwise operators.
+    int balEncoded = ( pinA << 1 ) | pinB;
+    int sum = ( lastBalEncoded << 2 ) | balEncoded;
+
+    if ( sum == 0b0001 ||
+         sum == 0b0111 ||
+         sum == 0b1110 ||
+         sum == 0b1000 )
+         balDirection = 1;
+    else
+    if ( sum == 0b1011 ||
+         sum == 0b1101 ||
+         sum == 0b0100 ||
+         sum == 0b0100 )
+         balDirection = -1;
+
+    lastBalEncoded = balEncoded;
+    busyBal = false;
+};
+
+
+/*****************************************************************************/
+/*  GPIO activity call for balance reset button.                             */
+/*****************************************************************************/
+
+static void buttonBalance()
+{
+    int buttonRead = digitalRead( cmdArgs.wPiPinF );
+    if ( buttonRead ) balanceStateSet = true;
+};
+
+
+/*****************************************************************************/
+/* Calculation functions.                                                    */
+/*****************************************************************************/
+
+/*****************************************************************************/
+/*  Get linear volume.                                                       */
+/*****************************************************************************/
+
+static long getLinearVolume( struct volStruct *volParams )
+{
+    long linearVol;
+
+    // Calculate linear volume.
+    linearVol = lroundf(( (float) volParams->index /
+                          (float) volParams->volIncs *
+                          (float) volParams->softRange ) +
+                          (float) volParams->softMin );
+
+    // Check volume is within soft limits.
+    if ( linearVol < volParams->softMin )
+            linearVol = volParams->softMin;
+    else
+    if ( linearVol > volParams->softMax )
+            linearVol = volParams->softMax;
+
+    return linearVol;
+};
+
+
+/*****************************************************************************/
+/*  Get volume based on shape function.                                      */
+/*****************************************************************************/
+
+static long getShapedVolume( struct volStruct *volParams )
+{
+    float base;
+    float power;
+    long shapedVol;
+
+    // Calculate shaped volume.
+    /*********************************************************/
+    /*  As facVol -> 0, volume input is logarithmic.         */
+    /*  As facVol -> 1, volume input is more linear          */
+    /*  As facVol >> 1, volume input is more exponential.    */
+    /*********************************************************/
+    base = (float) volParams->facVol;
+    power = (float) volParams->index / (float) volParams->volIncs;
+    shapedVol = lroundf(( pow( (float) volParams->facVol,
+                          power ) - 1 ) / (
+                          (float) volParams->facVol - 1 ) *
+                          (float) volParams->softRange +
+                          (float) volParams->softMin );
+
+    // Check volume is within soft limits.
+    if ( shapedVol < volParams->softMin )
+                    shapedVol = volParams->softMin;
+    else if ( shapedVol > volParams->softMax )
+                    shapedVol = volParams->softMax;
+
+    return shapedVol;
+};
+
+
+/*****************************************************************************/
+/*  Get soft volume bounds.                                                  */
+/*****************************************************************************/
+
+static long getSoftVol( long paramVol, long hardRange, long hardMin )
+{
+    float softVol;
+    softVol = (float) paramVol / 100 * (float) hardRange + (float) hardMin;
+    return softVol;
+};
+
+
+/*****************************************************************************/
+/*  Get volume index.                                                        */
+/*****************************************************************************/
+
+static long getIndex( struct structArgs *cmdArgs )
+{
+    int index = ( cmdArgs->incVol -
+                ( cmdArgs->maxVol - cmdArgs->initVol ) *
+                  cmdArgs->incVol /
+                ( cmdArgs->maxVol - cmdArgs->minVol ));
+    return index;
+};
+
+
+/*****************************************************************************/
+/*  Map GPIO number to WiringPi number.                                      */
+/*****************************************************************************/
+
+static int getWiringPiNum( int gpio )
+{
+    int loop;
+    int wiringPiNum;
+
+    wiringPiNum = -1;   // Returns -1 if no mapping found.
+
+    for ( loop = 0; loop < numGPIO; loop++ )
+        if ( gpio == piGPIO[0][loop] ) wiringPiNum = piGPIO[1][loop];
+
+    return wiringPiNum;
+};
+
+
+/*****************************************************************************/
+/* Information functions.                                                    */
+/*****************************************************************************/
 
 /*****************************************************************************/
 /*  Print volume output.                                                     */
@@ -258,212 +498,9 @@ static void printOutput( struct volStruct *volParams, int header )
             lroundf( shapedP ));
 };
 
-/*****************************************************************************/
-/*  Get linear volume.                                                       */
-/*****************************************************************************/
-
-static long getLinearVolume( struct volStruct *volParams )
-{
-    long linearVol;
-
-    // Calculate linear volume.
-    linearVol = lroundf(( (float) volParams->index /
-                          (float) volParams->volIncs *
-                          (float) volParams->softRange ) +
-                          (float) volParams->softMin );
-
-    // Check volume is within soft limits.
-    if ( linearVol < volParams->softMin )
-            linearVol = volParams->softMin;
-    else
-    if ( linearVol > volParams->softMax )
-            linearVol = volParams->softMax;
-
-    return linearVol;
-};
 
 /*****************************************************************************/
-/*  Get volume based on shape function.                                      */
-/*****************************************************************************/
-
-static long getShapedVolume( struct volStruct *volParams )
-{
-    float base;
-    float power;
-    long shapedVol;
-
-    // Calculate shaped volume.
-    /*********************************************************/
-    /*  As facVol -> 0, volume input is logarithmic.         */
-    /*  As facVol -> 1, volume input is more linear          */
-    /*  As facVol >> 1, volume input is more exponential.    */
-    /*********************************************************/
-    base = (float) volParams->facVol;
-    power = (float) volParams->index / (float) volParams->volIncs;
-    shapedVol = lroundf(( pow( (float) volParams->facVol,
-                          power ) - 1 ) / (
-                          (float) volParams->facVol - 1 ) *
-                          (float) volParams->softRange +
-                          (float) volParams->softMin );
-
-    // Check volume is within soft limits.
-    if ( shapedVol < volParams->softMin )
-                    shapedVol = volParams->softMin;
-    else if ( shapedVol > volParams->softMax )
-                    shapedVol = volParams->softMax;
-
-    return shapedVol;
-};
-
-/*****************************************************************************/
-/*  Get soft volume bounds.                                                  */
-/*****************************************************************************/
-
-static long getSoftVol( long paramVol, long hardRange, long hardMin )
-{
-    float softVol;
-    softVol = (float) paramVol / 100 * (float) hardRange + (float) hardMin;
-    return softVol;
-};
-
-/*****************************************************************************/
-/*  Get volume index.                                                        */
-/*****************************************************************************/
-
-static long getIndex( struct structArgs *cmdArgs )
-{
-    int index = ( cmdArgs->incVol -
-                ( cmdArgs->maxVol - cmdArgs->initVol ) *
-                  cmdArgs->incVol /
-                ( cmdArgs->maxVol - cmdArgs->minVol ));
-    return index;
-};
-
-/*****************************************************************************/
-/*  GPIO interrupt call for rotary encoder.                                  */
-/*****************************************************************************/
-
-static void encoderPulse()
-{
-    // Check if last interrupt has finished being processed.
-    if ( busy == true ) return;
-    busy = true;
-
-    // Read values at pins.
-    unsigned int pinA = digitalRead( cmdArgs.wPiPinA );
-    unsigned int pinB = digitalRead( cmdArgs.wPiPinB );
-
-    // Combine A and B with last readings using bitwise operators.
-    int encoded = ( pinA << 1 ) | pinB;
-    int sum = ( lastEncoded << 2 ) | encoded;
-
-    /*********************************************************************/
-    /*  Quadrature encoding:                                             */
-    /*                                                                   */
-    /*      :   :   :   :   :   :   :   :   :                            */
-    /*      :   +-------+   :   +-------+   :     +---+-------+-------+  */
-    /*      :   |   :   |   :   |   :   |   :     | P |  +ve  |  -ve  |  */
-    /*  A   :   |   :   |   :   |   :   |   :     | h +---+---+---+---+  */
-    /*  --------+   :   +-------+   :   +-------  | a | A | B | A | B |  */
-    /*      :   :   :   :   :   :   :   :   :     +---+---+---+---+---+  */
-    /*      :   :   :   :   :   :   :   :   :     | 1 | 0 | 0 | 1 | 0 |  */
-    /*      +-------+   :   +-------+   :   +---  | 2 | 0 | 1 | 1 | 1 |  */
-    /*      |   :   |   :   |   :   |   :   |     | 3 | 1 | 1 | 0 | 1 |  */
-    /*  B   |   :   |   :   |   :   |   :   |     | 4 | 1 | 0 | 0 | 0 |  */
-    /*  ----+   :   +-------+   :   +-------+     +---+---+---+---+---+  */
-    /*      :   :   :   :   :   :   :   :   :                            */
-    /*    1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2   <- Phase               */
-    /*      :   :   :   :   :   :   :   :   :                            */
-    /*                                                                   */
-    /*********************************************************************/
-
-    if ( sum == 0b0001 ||
-         sum == 0b0111 ||
-         sum == 0b1110 ||
-         sum == 0b1000 )
-         encoderDirection = 1;
-    else
-    if ( sum == 0b1011 ||
-         sum == 0b1101 ||
-         sum == 0b0100 ||
-         sum == 0b0100 )
-         encoderDirection = -1;
-
-    lastEncoded = encoded;
-    busy = false;
-};
-
-/*****************************************************************************/
-/*  GPIO activity call for mute button.                                      */
-/*****************************************************************************/
-
-static void buttonMute()
-{
-    int buttonRead = digitalRead( cmdArgs.wPiPinC );
-    if ( buttonRead ) muteStateChanged = !muteStateChanged;
-};
-
-/*****************************************************************************/
-/*  Program documentation:                                                   */
-/*****************************************************************************/
-
-const char *argp_program_version = Version;
-const char *argp_program_bug_address = "darren@alidaf.co.uk";
-static const char doc[] = "Raspberry Pi volume control using rotary encoders.";
-static const char args_doc[] = "rotencvol <options>";
-
-/*****************************************************************************/
-/*  Command line argument definitions.                                       */
-/*****************************************************************************/
-
-static struct argp_option options[] =
-{
-    { 0, 0, 0, 0, "ALSA:" },
-    { "card", 'c', "Integer", 0, "ALSA card number" },
-    { "control", 'd', "Integer", 0, "ALSA control number" },
-    { 0, 0, 0, 0, "GPIO:" },
-    { "gpio1", 'A', "Integer", 0, "GPIO pin 1 for encoder." },
-    { "gpio2", 'B', "Integer", 0, "GPIO pin 2 for encoder." },
-    { "gpio3", 'C', "Integer", 0, "GPIO pin for mute." },
-    { 0, 0, 0, 0, "Volume:" },
-    { "init", 'i', "Integer", 0, "Initial volume (% of Maximum)." },
-    { "min", 'j', "Integer", 0, "Minimum volume (% of full output)." },
-    { "max", 'k', "Integer", 0, "Maximum volume (% of full output)." },
-    { "inc", 'l', "Integer", 0, "Volume increments over range." },
-    { "fac", 'f', "Float", 0, "Volume profile factor." },
-    { 0, 0, 0, 0, "Responsiveness:" },
-    { "delay", 't', "Integer", 0, "Delay between encoder tics (mS)." },
-    { 0, 0, 0, 0, "Debugging:" },
-    { "gpiomap", 'm', 0, 0, "Print GPIO/wiringPi map." },
-    { "output", 'p', 0, 0, "Print program output." },
-    { "default", 'q', 0, 0, "Print default parameters." },
-    { "ranges", 'r', 0, 0, "Print parameter ranges." },
-    { "params", 's', 0, 0, "Print set parameters." },
-    { 0 }
-};
-
-/*****************************************************************************/
-/*  Map GPIO number to WiringPi number.                                      */
-/*****************************************************************************/
-
-static int getWiringPiNum( int gpio )
-{
-    int loop;
-    int wiringPiNum;
-
-    wiringPiNum = -1;   // Returns -1 if no mapping found.
-
-    for ( loop = 0; loop < numGPIO; loop++ )
-        if ( gpio == piGPIO[0][loop] ) wiringPiNum = piGPIO[1][loop];
-
-    return wiringPiNum;
-};
-
-/*****************************************************************************/
-/*                                                                           */
-/*  Print list of known GPIO pin mappings with wiringPi.                     */
-/*  See http://wiringpi.com/pins/                                            */
-/*                                                                           */
+/*  Print list of known GPIO pin information.                                */
 /*****************************************************************************/
 
 static void printWiringPiMap()
@@ -489,6 +526,111 @@ static void printWiringPiMap()
     printf( "\t+----------+----------+----------+\n\n" );
     return;
 };
+
+
+/*****************************************************************************/
+/*  Print default or command line set parameters values.                     */
+/*****************************************************************************/
+
+static void printParams ( struct structArgs *printList, int defSet )
+{
+    if ( defSet == 0 ) printf( "\nDefault parameters:\n\n" );
+    else printf ( "\nSet parameters:\n\n" );
+
+    printf( "\tCard number = %i.\n", printList->card );
+    printf( "\tALSA control = %i.\n", printList->control );
+    printf( "\tVolume encoder attached to GPIO pins %i", printList->gpioA );
+    printf( " & %i,\n", printList->gpioB );
+    printf( "\tMapped to WiringPi pin numbers %i", printList->wPiPinA );
+    printf( " & %i.\n", printList->wPiPinB );
+    printf( "\tMute button attached to GPIO pin %i.\n", printList->gpioC );
+    printf( "\tMapped to WiringPi pin number %i.\n", printList->wPiPinC );
+    printf( "\tBalance encoder attached to GPIO pins %i", printList->gpioD );
+    printf( " & %i,\n", printList->gpioE );
+    printf( "\tMapped to WiringPi pin numbers %i", printList->wPiPinD );
+    printf( " & %i.\n", printList->wPiPinE );
+    printf( "\tBalance reset button attached to GPIO pin %d.\n", printList->gpioF );
+    printf( "\tMapped to WiringPi pin number %i.\n", printList->wPiPinF );
+    printf( "\tInitial volume = %i%%.\n", printList->initVol );
+    printf( "\tInitial balance = %i%%.\n", printList->balance );
+    printf( "\tMinimum volume = %i%%.\n", printList->minVol );
+    printf( "\tMaximum volume = %i%%.\n", printList->maxVol );
+    printf( "\tVolume increments = %i.\n", printList->incVol );
+    printf( "\tVolume factor = %g.\n", printList->facVol );
+    printf( "\tTic delay = %i.\n\n", printList->ticDelay );
+};
+
+
+/*****************************************************************************/
+/*  Print command line parameter ranges.                                     */
+/*****************************************************************************/
+
+static void printRanges( struct boundsStruct *paramBounds )
+{
+    printf ( "\nCommand line parameter ranges:\n\n" );
+    printf ( "\tVolume range (-i) = %d to %d.\n",
+                    paramBounds->volumeLow,
+                    paramBounds->volumeHigh );
+    printf ( "\tBalance  range (-b) = %i%% to %i%%.\n",
+                    paramBounds->balanceLow,
+                    paramBounds->balanceHigh );
+    printf ( "\tVolume shaping factor (-f) = %g to %g.\n",
+                    paramBounds->factorLow,
+                    paramBounds->factorHigh );
+    printf ( "\tIncrement range (-e) = %d to %d.\n",
+                    paramBounds->incLow,
+                    paramBounds->incHigh );
+    printf ( "\tDelay range (-d) = %d to %d.\n\n",
+                    paramBounds->delayLow,
+                    paramBounds->delayHigh );
+};
+
+
+/*****************************************************************************/
+/*  Command line argument functions.                                         */
+/*****************************************************************************/
+
+/*****************************************************************************/
+/*  Program documentation:                                                   */
+/*****************************************************************************/
+
+const char *argp_program_version = Version;
+const char *argp_program_bug_address = "darren@alidaf.co.uk";
+static const char doc[] = "Raspberry Pi volume control using rotary encoders.";
+static const char args_doc[] = "rotencvol <options>";
+
+
+/*****************************************************************************/
+/*  Command line argument definitions.                                       */
+/*****************************************************************************/
+
+static struct argp_option options[] =
+{
+    { 0, 0, 0, 0, "ALSA:" },
+    { "card", 'c', "Integer", 0, "ALSA card number" },
+    { "control", 'd', "Integer", 0, "ALSA control number" },
+    { 0, 0, 0, 0, "GPIO:" },
+    { "gpio1", 'A', "Integer", 0, "GPIO pin 1 for encoder." },
+    { "gpio2", 'B', "Integer", 0, "GPIO pin 2 for encoder." },
+    { "gpio3", 'C', "Integer", 0, "GPIO pin for mute." },
+    { 0, 0, 0, 0, "Volume:" },
+    { "init", 'i', "Integer", 0, "Initial volume (% of Maximum)." },
+    { "min", 'j', "Integer", 0, "Minimum volume (% of full output)." },
+    { "max", 'k', "Integer", 0, "Maximum volume (% of full output)." },
+    { "inc", 'l', "Integer", 0, "Volume increments over range." },
+    { "fac", 'f', "Float", 0, "Volume profile factor." },
+    { "bal", 'b', "Integer", 0, "L/R balance -100% to +100%." },
+    { 0, 0, 0, 0, "Responsiveness:" },
+    { "delay", 't', "Integer", 0, "Delay between encoder tics (mS)." },
+    { 0, 0, 0, 0, "Debugging:" },
+    { "gpiomap", 'm', 0, 0, "Print GPIO/wiringPi map." },
+    { "output", 'p', 0, 0, "Print program output." },
+    { "default", 'q', 0, 0, "Print default parameters." },
+    { "ranges", 'r', 0, 0, "Print parameter ranges." },
+    { "params", 's', 0, 0, "Print set parameters." },
+    { 0 }
+};
+
 
 /*****************************************************************************/
 /*  Command line argument parser.                                            */
@@ -516,6 +658,9 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
             break;
         case 'f' :
             cmdArgs->facVol = atof( arg );
+            break;
+        case 'b' :
+            cmdArgs->balance = atoi( arg );
             break;
         case 'i' :
             cmdArgs->initVol = atoi( arg );
@@ -551,6 +696,18 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
     return 0;
 };
 
+
+/*****************************************************************************/
+/*  argp parser parameter structure.                                         */
+/*****************************************************************************/
+
+static struct argp argp = { options, parse_opt, args_doc, doc };
+
+
+/*****************************************************************************/
+/*  Checking functions.                                                      */
+/*****************************************************************************/
+
 /*****************************************************************************/
 /*  Check if a parameter is within bounds.                                   */
 /*****************************************************************************/
@@ -566,7 +723,7 @@ static int checkIfInBounds( float value, float lower, float upper )
 /*****************************************************************************/
 
 static int checkParams ( struct structArgs *cmdArgs,
-                  struct boundsStruct *paramBounds )
+                         struct boundsStruct *paramBounds )
 {
     static int error = 0;
     static int pinA, pinB;
@@ -584,6 +741,9 @@ static int checkParams ( struct structArgs *cmdArgs,
               checkIfInBounds( cmdArgs->initVol,
                                cmdArgs->minVol,
                                cmdArgs->maxVol ) ||
+              checkIfInBounds( cmdArgs->balance,
+                               paramBounds->balanceLow,
+                               paramBounds->balanceHigh ) ||
               checkIfInBounds( cmdArgs->initVol,
                                paramBounds->volumeLow,
                                paramBounds->volumeHigh ) ||
@@ -610,55 +770,6 @@ static int checkParams ( struct structArgs *cmdArgs,
     return error;
 };
 
-/*****************************************************************************/
-/*  Print default or command line set parameters values.                     */
-/*****************************************************************************/
-
-static void printParams ( struct structArgs *printList, int defSet )
-{
-    if ( defSet == 0 ) printf( "\nDefault parameters:\n\n" );
-    else printf ( "\nSet parameters:\n\n" );
-
-    printf ( "\tHardware name = %i.\n", printList->card );
-    printf ( "\tHardware control = %i.\n", printList->control );
-    printf ( "\tRotary encoder attached to GPIO pins %d", printList->gpioA );
-    printf ( " & %d,\n", printList->gpioB );
-    printf ( "\tMapped to WiringPi pin numbers %d", printList->wPiPinA );
-    printf ( " & %d.\n", printList->wPiPinB );
-    printf ( "\tInitial volume = %d%%.\n", printList->initVol );
-    printf ( "\tMinimum volume = %d%%.\n", printList->minVol );
-    printf ( "\tMaximum volume = %d%%.\n", printList->maxVol );
-    printf ( "\tVolume increments = %d.\n", printList->incVol );
-    printf ( "\tVolume factor = %g.\n", printList->facVol );
-    printf ( "\tTic delay = %d.\n\n", printList->ticDelay );
-};
-
-/*****************************************************************************/
-/*  Print command line parameter ranges.                                     */
-/*****************************************************************************/
-
-static void printRanges( struct boundsStruct *paramBounds )
-{
-    printf ( "\nCommand line parameter ranges:\n\n" );
-    printf ( "\tInitial volume range (-i) = %d to %d.\n",
-                    paramBounds->volumeLow,
-                    paramBounds->volumeHigh );
-    printf ( "\tVolume shaping factor (-f) = %g to %g.\n",
-                    paramBounds->factorLow,
-                    paramBounds->factorHigh );
-    printf ( "\tIncrement range (-e) = %d to %d.\n",
-                    paramBounds->incLow,
-                    paramBounds->incHigh );
-    printf ( "\tDelay range (-d) = %d to %d.\n\n",
-                    paramBounds->delayLow,
-                    paramBounds->delayHigh );
-};
-
-/*****************************************************************************/
-/*  argp parser parameter structure.                                         */
-/*****************************************************************************/
-
-static struct argp argp = { options, parse_opt, args_doc, doc };
 
 /*****************************************************************************/
 /*  Main program.                                                            */
@@ -723,7 +834,7 @@ int main( int argc, char *argv[] )
     pullUpDnControl( cmdArgs.wPiPinC, PUD_UP );
 
     // Initialise encoder direction.
-    encoderDirection = 0;
+    volDirection = 0;
 
 
     /*************************************************************************/
@@ -808,8 +919,8 @@ int main( int argc, char *argv[] )
     /*************************************************************************/
     /*  Register interrupt functions.
     /*************************************************************************/
-    wiringPiISR( cmdArgs.wPiPinA, INT_EDGE_BOTH, &encoderPulse );
-    wiringPiISR( cmdArgs.wPiPinB, INT_EDGE_BOTH, &encoderPulse );
+    wiringPiISR( cmdArgs.wPiPinA, INT_EDGE_BOTH, &encoderPulseVol );
+    wiringPiISR( cmdArgs.wPiPinB, INT_EDGE_BOTH, &encoderPulseVol );
     wiringPiISR( cmdArgs.wPiPinC, INT_EDGE_BOTH, &buttonMute );
 
 
@@ -818,10 +929,10 @@ int main( int argc, char *argv[] )
     /*************************************************************************/
     while ( 1 )
     {
-        if (( encoderDirection != 0 ) && ( !volParams.muteState ))
+        if (( volDirection != 0 ) && ( !volParams.muteState ))
         {
             // Volume +.
-            if ( encoderDirection > 0 )
+            if ( volDirection > 0 )
             {
                 volParams.index++;
                 if ( volParams.index >= cmdArgs.incVol + 1 )
@@ -829,12 +940,12 @@ int main( int argc, char *argv[] )
             }
             // Volume -.
             else
-            if ( encoderDirection < 0 )
+            if ( volDirection < 0 )
             {
                 volParams.index--;
                 if ( volParams.index < 0 ) volParams.index = 0;
             }
-            encoderDirection = 0;
+            volDirection = 0;
 
 
             /*****************************************************************/
