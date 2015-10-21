@@ -15,6 +15,7 @@ Command line parameters allow specifying:
 
 * The name of the sound card in case it changes or for add-on cards.
 * The name of the control for sound cards with multiple controls.
+*     Version 3.0 has switched to high level controls so card and control are now set by number. 
 * The initial volume setting as a percentage of max, i.e. low for headphones and high for DAC/phono.
 * The number of volume increments over the full volume range.
 * The shape of the volume request, i.e. logarithmic -> linear -> exponential.
@@ -116,6 +117,8 @@ it with the command:
 * sudo kill <process id>
 
 #### Workaround for IQaudioDAC and possibly for other DACs and add-ons with PiCorePlayer.
+
+Note: This is not needed from version 3.0 onwards as card and control are now set by number.
 
 mount mmcblk0p1 with the command:
 
