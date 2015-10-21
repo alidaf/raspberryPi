@@ -24,7 +24,7 @@
 /*****************************************************************************/
 /*                                                                           */
 /*  Authors:                 D.Faulke                 03/10/2015             */
-/*  Contributors:            G.Garrity                30/08/2015             */
+/*  Contributors:                                                            */
 /*                                                                           */
 /*  Changelog:                                                               */
 /*                                                                           */
@@ -61,12 +61,8 @@
 #include <argp.h>
 #include <wiringPi.h>
 #include <alsa/asoundlib.h>
-//#include <alsa/mixer.h>
 #include <math.h>
 #include <stdbool.h>
-
-// Maximum GPIO pin number
-static const int maxGPIO=35;
 
     /**************************************************/
     /* GPIO mapping - see http://wiringpi.com/pins/   */
@@ -271,21 +267,18 @@ static long getLinearVolume( struct volStruct *volParams )
     long linearVol;
 
     // Calculate linear volume.
-    if ( volParams->muteState ) linearVol = volParams->hardMin;
-    else
-    {
-        linearVol = lroundf(( (float) volParams->index /
-                              (float) volParams->volIncs *
-                              (float) volParams->softRange ) +
-                              (float) volParams->softMin );
+    linearVol = lroundf(( (float) volParams->index /
+                          (float) volParams->volIncs *
+                          (float) volParams->softRange ) +
+                          (float) volParams->softMin );
 
-        // Check volume is within soft limits.
-        if ( linearVol < volParams->softMin )
-                linearVol = volParams->softMin;
-        else
-        if ( linearVol > volParams->softMax )
-                linearVol = volParams->softMax;
-    }
+    // Check volume is within soft limits.
+    if ( linearVol < volParams->softMin )
+            linearVol = volParams->softMin;
+    else
+    if ( linearVol > volParams->softMax )
+            linearVol = volParams->softMax;
+
     return linearVol;
 };
 
@@ -305,23 +298,20 @@ static long getShapedVolume( struct volStruct *volParams )
     /*  As facVol -> 1, volume input is more linear          */
     /*  As facVol >> 1, volume input is more exponential.    */
     /*********************************************************/
-    if ( volParams->muteState ) shapedVol = volParams->hardMin;
-    else
-    {
-        base = (float) volParams->facVol;
-        power = (float) volParams->index / (float) volParams->volIncs;
-        shapedVol = lroundf(( pow( (float) volParams->facVol,
-                              power ) - 1 ) / (
-                              (float) volParams->facVol - 1 ) *
-                              (float) volParams->softRange +
-                              (float) volParams->softMin );
+    base = (float) volParams->facVol;
+    power = (float) volParams->index / (float) volParams->volIncs;
+    shapedVol = lroundf(( pow( (float) volParams->facVol,
+                          power ) - 1 ) / (
+                          (float) volParams->facVol - 1 ) *
+                          (float) volParams->softRange +
+                          (float) volParams->softMin );
 
-        // Check volume is within soft limits.
-        if ( shapedVol < volParams->softMin )
-                        shapedVol = volParams->softMin;
-        else if ( shapedVol > volParams->softMax )
-                        shapedVol = volParams->softMax;
-    }
+    // Check volume is within soft limits.
+    if ( shapedVol < volParams->softMin )
+                    shapedVol = volParams->softMin;
+    else if ( shapedVol > volParams->softMax )
+                    shapedVol = volParams->softMax;
+
     return shapedVol;
 };
 
@@ -410,7 +400,7 @@ static void encoderPulse()
 static void buttonMute()
 {
     int buttonRead = digitalRead( cmdArgs.wPiPinC );
-    if ( buttonRead ) muteState = !muteState;
+    if ( buttonRead ) muteStateChanged = !muteStateChanged;
 };
 
 /*****************************************************************************/
@@ -629,8 +619,8 @@ static void printParams ( struct structArgs *printList, int defSet )
     if ( defSet == 0 ) printf( "\nDefault parameters:\n\n" );
     else printf ( "\nSet parameters:\n\n" );
 
-    printf ( "\tHardware name = %s.\n", printList->card );
-    printf ( "\tHardware control = %s.\n", printList->control );
+    printf ( "\tHardware name = %i.\n", printList->card );
+    printf ( "\tHardware control = %i.\n", printList->control );
     printf ( "\tRotary encoder attached to GPIO pins %d", printList->gpioA );
     printf ( " & %d,\n", printList->gpioB );
     printf ( "\tMapped to WiringPi pin numbers %d", printList->wPiPinA );
@@ -828,10 +818,10 @@ int main( int argc, char *argv[] )
     /*************************************************************************/
     while ( 1 )
     {
-        if ( encoderDirection != 0 )
+        if (( encoderDirection != 0 ) && ( !volParams.muteState ))
         {
             // Volume +.
-            if (( encoderDirection > 0 ) && ( !volParams.muteState ))
+            if ( encoderDirection > 0 )
             {
                 volParams.index++;
                 if ( volParams.index >= cmdArgs.incVol + 1 )
@@ -839,7 +829,7 @@ int main( int argc, char *argv[] )
             }
             // Volume -.
             else
-            if (( encoderDirection < 0 ) && ( !volParams.muteState ))
+            if ( encoderDirection < 0 )
             {
                 volParams.index--;
                 if ( volParams.index < 0 ) volParams.index = 0;
@@ -866,8 +856,10 @@ int main( int argc, char *argv[] )
         /*********************************************************************/
         /*  Check and set mute state.                                        */
         /*********************************************************************/
-        if ( muteStateChanged != muteState )
+        if ( muteStateChanged )
         {
+            volParams.muteState = !volParams.muteState;
+            muteStateChanged = !muteStateChanged;
             if ( volParams.muteState )
             {
                 snd_ctl_elem_value_set_integer(
@@ -887,8 +879,6 @@ int main( int argc, char *argv[] )
             if ( snd_ctl_elem_write( ctl, control ) < 0 )
                 printf( "Error setting R volume." );
 
-            muteStateChanged = !muteStateChanged;
-            volParams.muteState = muteState;
             if ( cmdArgs.prOutput ) printOutput( &volParams, 0 );
         }
         // Tic delay in mS. Adjust according to encoder.
