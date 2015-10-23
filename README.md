@@ -1,31 +1,25 @@
 ## raspberryPi
-RaspberryPi projects
+RaspberryPi projects and utilities.
 
 ###rotencvol:
 
-A program to provide rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi 
-or via the rotary encoder pins on an IQaudioDAC to control volume levels.
+A program to provide rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi or via the rotary encoder pins on an IQaudioDAC to control volume levels.
 
-Originally based on code available at IQaudIO but extended to allow command line input for generic use and allow
-shaped volume adjustments to compensate for, or accentuate the logarithmic response of ALSA. This will allow better 
-control according to the type of use, e.g. headphones need better refinement at low volumes but DACs or line level 
-devices may need better refinement at higher levels.
+Uses ALSA controls to change the volume but incorporates a shaping factor compensate for, or accentuate the logarithmic response of ALSA. This will allow better control according to the type of use, e.g. headphones need better refinement at low volumes but DACs or line level devices may need better refinement at higher levels.
 
 Command line parameters allow specifying:
 
-* The name of the sound card in case it changes or for add-on cards.
-* The name of the control for sound cards with multiple controls.
-*     Version 3.0 has switched to high level controls so card and control are now set by number. 
-* The initial volume setting as a percentage of max, i.e. low for headphones and high for DAC/phono.
-* The number of volume increments over the full volume range.
-* The shape of the volume request, i.e. logarithmic -> linear -> exponential.
-* The GPIO pins to be used (mapped internally to the wiringPi numbers).
-* The delay between tic increments to fine tune responsiveness.
-* Print out a variety of information such as GPIO maps, default or defined settings, ranges and program output.
+* The sound card and control element to adjust.
 * Soft volume limits.
+* Initial settings.
+* Volume refinements.
+* The shape of the volume response, i.e. logarithmic -> linear -> exponential.
+* The GPIO pins to be used.
+* Responsiveness.
+* Useful informational output.
 
 Push button support is now in for rotary encoders that have push-to-switch actions.
-Note: If using any GPIO for the mute that is not I2C, a pull up resistor must be used between the +3.3V and the 
+Note: If using any GPIO that is not I2C, a pull up resistor should be used between the +3.3V and the 
       GPIO pin, e.g.
 
             10k
@@ -33,22 +27,17 @@ Note: If using any GPIO for the mute that is not I2C, a pull up resistor must be
       |            |        |
     +3.3V        GPIO      GND
 
-Hopefully, packages will also be built and supplied to the Tiny Core Linux repository for easier use.
-
 Compile for the Raspberry Pi with the command:
 
 gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -pipe -O3
 
 #### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
 
-At the moment, the package has to be installed by hand until I can get to grips with the package management
-requirements to get it into the repo. These are instructions on how to do it using a command line.
-
 Download the tcz package with the following command:
 
 * wget https://github.com/alidaf/raspberryP...encvol-[ver].tcz
 
-Note: Substitute [ver] with the lastest version number available.
+ Note: Substitute [ver] with the lastest version number available.
 
 and type the following command in a terminal:
 
@@ -79,9 +68,7 @@ This will give you all of the command line options. Some handy switches are:
 
 Pay special attention to the card name and control name switches. You will need to run alsamixer to get these. 
 If you are just running the Pi with no other hardware then the default names should be fine. If you are using 
-anything else then you will need to determine these. For the IQaudioDAC, the control name is 'Digital' 
-(without the apostrophes). For the IQaudioDAC a workaround is needed (given below) to remove the Pi's sound card 
-otherwise both are loaded as default and it doesn't work.
+anything else then you can determine these using some of the other utilities provided here.
 
 Also check which GPIO pins you are using and set these with the -a and -b switches if they are not the defaults, 
 which are 23 and 24.
@@ -94,7 +81,7 @@ increasingly large steps. Values > 1 will exacerbate this but values < 1 will ma
 quickly at the bottom end. Soft limits can also be set if you have a noisy card and want to ignore some of the 
 lower volumes where there is hiss or deafeningly loud high volumes. The starting volume can also be set but be 
 careful that it is within the soft limits. The default starting volume is 0 since I use headphones but a starting 
-volume of 100 (%) may be better for DACs but the choice is there.
+volume of 100 (%) may be better for DACs, but the choice is there.
 
 ctrl-c will stop the program if it is running interactively.
 
@@ -116,28 +103,30 @@ it with the command:
 
 * sudo kill <process id>
 
-#### Workaround for IQaudioDAC and possibly for other DACs and add-ons with PiCorePlayer.
+###listctl:
 
-Note: This is not needed from version 3.0 onwards as card and control are now set by number.
+Use this to print out all available cards and controls for the Raspberry Pi.
 
-mount mmcblk0p1 with the command:
+###listmixer:
 
-* sudo mount mmcblk0p1
+Use this to print out all available cards and mixer controls for the Raspberry Pi. The latest version of rotencvol now uses direct controls rather than mixers so listctl would be better to find out which controls to use for rotencvol.
 
-then edit the file /mnt/mmcblk0p1/config.txt and remove audio=on:
+###volctl:
 
-* sudo nano /mnt/mmcblk0p1/config.txt
+A simple command line program to test adjusting ALSA control elements. Use listctl to find out which control elements can be used.
 
-Find the line with 'audio=on'.
-Get the cursor onto the line and press ctrl-k.
+###volmixer:
 
-This will delete the line.
-Now press ctrl-u twice.
-This will create two copies of the original line.
+A simple command line program to test adjusting ALSA mixer controls. Use listmixer to find out which mixer controls are available.
 
-Put a # in front of one of them to preserve it in case you need to come back and reverse the procedure.
-On the other line, delete the 'options=on'.
+###piPinLayout:
 
-Press ctrl-x and press y and then return to save the file.
+A simple utility to provide version information for the Raspberry Pi and output the relevant GPIO pin information.
 
-Enjoy.
+###GPIOsysfs:
+
+Intended to provide a library of basic GPIO functionality. Still in early development and not currently useful. It will draw in some of the other utilities into a Raspberry Pi GPIO library.
+
+###thx1138:
+
+A collection of ALSA experimentation to learn more and help me develop a spectrum analyser and digital VU metering. Not currently useful.
