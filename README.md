@@ -56,6 +56,7 @@ Intended to provide a library of basic GPIO functionality. Still in early develo
 
 A collection of ALSA experimentation to learn more and help me develop a spectrum analyser and digital VU metering. Not currently useful.
 
+---
 #### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
 
 Download the tcz package with the following command:
