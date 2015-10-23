@@ -25,7 +25,7 @@
 #define Version "Version 0.2"
 
 /*
-//  Authors:    D.Faulke    22/10/15
+//  Authors:    D.Faulke    23/10/15
 //
 //  Changelog:
 //
