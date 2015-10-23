@@ -1,5 +1,6 @@
-/*******************************************************************************
-
+// ****************************************************************************
+// ****************************************************************************
+/*
     piPinLayout:
 
     Test program to return the Raspberry Pi GPIO pin layout based on the
@@ -19,19 +20,25 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-******************************************************************************/
+*/
+// ****************************************************************************
+// ****************************************************************************
 
 #define Version "Version 0.2"
 
-/*
+//  Compilation:
+//
+//  Compile with gcc piPinLayout.c -o piPinLayout
+//  Also use the following flags for Raspberry Pi optimisation:
+//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+//         -ffast-math -pipe -O3
+
 //  Authors:    D.Faulke    23/10/15
 //
 //  Changelog:
 //
 //  v0.1 Initial version.
 //  v0.2 Added printout of GPIO header pins.
-*/
 
 /* Currently known versions.
 
@@ -96,7 +103,6 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-// Can't be sure future revisions will be hex so store as strings.
 #define REVISION  0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,\
                   0x0008, 0x0009, 0x0010, 0x0012, 0x0013, 0x000d,\
                   0x000e, 0x000f, 0xa01041, 0xa21041
@@ -129,10 +135,9 @@
                " GPIO6", "GPIO12", "GPIO13", "GND   ", "GPIO19", "GPIO16",\
                "GPIO26", "GPIO20", "   GND", "GPIO21"
 
-
-//*****************************************************************************
+// ****************************************************************************
 //  Main.
-//*****************************************************************************
+// ****************************************************************************
 
 int main ( void )
 {
@@ -180,7 +185,8 @@ int main ( void )
     printf( "\t+-------+----------+-------+---------+\n" );
     printf( "\t| Index | Revision | Model | Version |\n" );
     printf( "\t+-------+----------+-------+---------+\n" );
-    // Now compare against arrays.
+
+    // Now compare against arrays to find info.
     index = 0;
     for ( loop = 0; loop < sizeof( revision )  / sizeof( int ); loop++ )
     {
@@ -197,6 +203,7 @@ int main ( void )
         else printf ( "\n" );
     }
 
+    // Print GPIO header layout.
     printf( "\t+-------+----------+-------+---------+\n\n" );
     if ( index == 0 )
         printf( "Cannot find your card version from known versions.\n\n" );

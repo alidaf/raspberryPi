@@ -1,45 +1,52 @@
-/*****************************************************************************/
-/*                                                                           */
-/*    Simple test program to list all ALSA cards and devices.                */
-/*                                                                           */
-/*    Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>                 */
-/*                                                                           */
-/*    This program is free software; you can redistribute it and/or modify   */
-/*    it under the terms of the GNU General Public License as published by   */
-/*    the Free Software Foundation, either version 2 of the License, or      */
-/*    (at your option) any later version.                                    */
-/*                                                                           */
-/*    This program is distributed in the hope that it will be useful,        */
-/*    but WITHOUT ANY WARRANTY; without even the implied warranty of         */
-/*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          */
-/*    GNU General Public License for more details.                           */
-/*                                                                           */
-/*    You should have received a copy of the GNU General Public License      */
-/*    along with this program. If not, see <http://www.gnu.org/licenses/>.   */
-/*                                                                           */
-/*****************************************************************************/
+// ****************************************************************************
+// ****************************************************************************
+/*
+    listctl:
+
+    Simple test program to list all ALSA cards and devices.
+
+    Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+// ****************************************************************************
+// ****************************************************************************
 
 #define Version "Version 0.2"
 
-/*****************************************************************************/
-/*                                                                           */
-/*    Authors:            D.Faulke                    19/10/15               */
-/*    Contributors:                                                          */
-/*                                                                           */
-/*    Changelog:                                                             */
-/*                                                                           */
-/*    v0.1 Initial version.                                                  */
-/*    v0.2 Modified output and added control type.                           */
-/*                                                                           */
-/*****************************************************************************/
+//  Compilation:
+//
+//  Compile with gcc listctl.c -o listctl -lasound
+//  Also use the following flags for Raspberry Pi optimisation:
+//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+//         -ffast-math -pipe -O3
+
+//    Authors:     	D.Faulke	19/10/15
+//    Contributors:
+//
+//    Changelog:
+//
+//    v0.1 Initial version.
+//    v0.2 Modified output and added control type.
 
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
 
-/*****************************************************************************/
-/*  Main routine.                                                            */
-/*****************************************************************************/
+// ****************************************************************************
+//  Main routine.
+// ****************************************************************************
 
 void main()
 {
@@ -49,9 +56,9 @@ void main()
     char deviceID[16];
 
 
-    /*************************************************************************/
-    /*  ALSA control elements.                                               */
-    /*************************************************************************/
+    // ************************************************************************
+    //  ALSA control elements.
+    // ************************************************************************
     snd_ctl_t *ctl;                 // Simple control handle.
     snd_ctl_elem_id_t *id;          // Simple control element id.
     snd_ctl_elem_value_t *control;  // Simple control element value.
@@ -62,18 +69,18 @@ void main()
     snd_hctl_elem_t *elem;          // High level control element handle.
 
 
-    /*************************************************************************/
-    /*  Initialise ALSA card and device types.                               */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Initialise ALSA card and device types.
+    // ************************************************************************
     snd_ctl_card_info_alloca( &card );
     snd_ctl_elem_value_alloca( &control );
     snd_ctl_elem_id_alloca( &id );
     snd_ctl_elem_info_alloca( &info );
 
 
-    /*************************************************************************/
-    /*  Start card section.                                                  */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Start card section.
+    // ************************************************************************
     // For each card.
     while (1)
     {
@@ -98,9 +105,9 @@ void main()
             continue;
         }
 
-        /*********************************************************************/
-        /*  Additional information that may be useful.                       */
-        /*********************************************************************/
+        // ********************************************************************
+        //  Additional information that may be useful.
+        // ********************************************************************
 //        char *hctlName = snd_ctl_ascii_elem_id_get( id );
 //        printf( "HCTL name = %s.\n", hctlName );
 //        int cardNum = snd_ctl_card_info_get_card( card );
@@ -109,9 +116,9 @@ void main()
 //        printf( "CTL info = %s.\n", ctlInfo );
 
 
-        /*********************************************************************/
-        /*  Print header block.                                              */
-        /*********************************************************************/
+        // ********************************************************************
+        //  Print header block.
+        // ********************************************************************
         printf( "\t+-----------------------------" );
         printf( "-----------------------------+\n" );
         printf( "\t| Card: %d - %-46s |",
@@ -126,9 +133,9 @@ void main()
         printf( "+------------------------------------+\n" );
 
 
-        /*********************************************************************/
-        /*  Start control section.                                           */
-        /*********************************************************************/
+        // ********************************************************************
+        //  Start control section.
+        // ********************************************************************
         // Open an empty high level control.
         if ( snd_hctl_open( &hctl, deviceID, 0 ) < 0 )
             printf( "Error opening high level control.\n" );
@@ -138,9 +145,9 @@ void main()
             printf( "Error loading high level control.\n" );
 
 
-        /*********************************************************************/
-        /*  For each control element.                                        */
-        /*********************************************************************/
+        // ********************************************************************
+        //  For each control element.
+        // ********************************************************************
         for ( elem = snd_hctl_first_elem( hctl );
                     elem;
                     elem = snd_hctl_elem_next( elem ))
@@ -149,9 +156,9 @@ void main()
             snd_hctl_elem_get_id( elem, id );
 
 
-            /*****************************************************************/
-            /* Determine control type                                        */
-            /*****************************************************************/
+            // ****************************************************************
+            //  Determine control type.
+            // ****************************************************************
             if ( snd_hctl_elem_info( elem, info ) < 0 )
                 printf( "Can't get control information.\n" );
 
@@ -193,9 +200,9 @@ void main()
         printf( "+------------------------------------+\n\n" );
 
 
-        /*********************************************************************/
-        /*  Tidy up.                                                         */
-        /*********************************************************************/
+        // ********************************************************************
+        //  Tidy up.
+        // ********************************************************************
         snd_hctl_close( hctl );
         snd_ctl_close( ctl );
     }

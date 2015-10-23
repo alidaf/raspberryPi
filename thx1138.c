@@ -1,49 +1,44 @@
-/****************************************************************************/
-/*                                                                          */
-/*  ALSA experiments to test feasibility of creating a spectrum analyser     */
-/*  and digital VU meters.                                                   */
-/*                                                                           */
-/*  Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>                   */
-/*                                                                           */
-/*  This program is free software; you can redistribute it and/or modify     */
-/*  it under the terms of the GNU General Public License as published by     */
-/*  the Free Software Foundation, either version 2 of the License, or        */
-/*  (at your option) any later version.                                      */
-/*                                                                           */
-/*  This program is distributed in the hope that it will be useful,          */
-/*  but WITHOUT ANY WARRANTY; without even the implied warranty of           */
-/*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            */
-/*  GNU General Public License for more details.                             */
-/*                                                                           */
-/*  You should have received a copy of the GNU General Public License        */
-/*  along with this program. If not, see <http://www.gnu.org/licenses/>.     */
-/*                                                                           */
-/*****************************************************************************/
+// ****************************************************************************
+// ****************************************************************************
+/*
+    thx1138:
+
+    ALSA experiments to test feasibility of creating a spectrum analyser
+    and digital VU meters.
+
+    Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+// ****************************************************************************
+// ****************************************************************************
 
 #define Version "Version 0.1"
 
-/****************************************************************************/
-/*                                                                          */
-/*  Authors:            D.Faulke                    19/10/15                */
-/*  Contributors:                                                           */
-/*                                                                          */
-/*  Changelog:                                                              */
-/*                                                                          */
-/*  v0.1 Initial version.                                                   */
-/*                                                                          */
-/****************************************************************************/
+//  Compilation:
+//
+//  Compile with gcc volctl.c -o volctl -lasound
+//  Also use the following flags for Raspberry Pi optimisation:
+//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+//         -ffast-math -pipe -O3
 
-/*****************************************************************************/
-/*                                                                           */
-/*  Compilation:                                                             */
-/*                                                                           */
-/*  Uses alsa libraries.                                                     */
-/*  Compile with gcc rotencvol.c -o rotencvol -lasound -lm                   */
-/*  Also use the following flags for Raspberry Pi:                           */
-/*      -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp          */
-/*      -ffast-math -pipe -O3                                                */
-/*                                                                           */
-/*****************************************************************************/
+//    Authors:     	D.Faulke	19/10/15
+//    Contributors:
+//
+//    Changelog:
+//
+//    v0.1 Initial version.
 
 #include <stdio.h>
 #include <string.h>
@@ -58,11 +53,9 @@ struct pcmStruct
     int sampleRate;
 };
 
-/*****************************************************************************/
-/*                                                                           */
-/*  Main program.                                                            */
-/*                                                                           */
-/*****************************************************************************/
+// ****************************************************************************
+//  Main section.
+// ****************************************************************************
 
 int main()
 {

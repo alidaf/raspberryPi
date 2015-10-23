@@ -1,61 +1,48 @@
-/****************************************************************************/
-/*                                                                          */
-/*  Rotary encoder control app for the Raspberry Pi.                        */
-/*                                                                          */
-/*  Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>                  */
-/*                                                                          */
-/*  This program is free software; you can redistribute it and/or modify    */
-/*  it under the terms of the GNU General Public License as published by    */
-/*  the Free Software Foundation, either version 2 of the License, or       */
-/*  (at your option) any later version.                                     */
-/*                                                                          */
-/*  This program is distributed in the hope that it will be useful,         */
-/*  but WITHOUT ANY WARRANTY; without even the implied warranty of          */
-/*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           */
-/*  GNU General Public License for more details.                            */
-/*                                                                          */
-/*  You should have received a copy of the GNU General Public License       */
-/*  along with this program. If not, see <http://www.gnu.org/licenses/>.    */
-/*                                                                          */
-/****************************************************************************/
+// ****************************************************************************
+// ****************************************************************************
+/*
+    rotencvol:
 
-#define Version "Version 2.9"
+    Rotary encoder control app for the Raspberry Pi.
 
-/*****************************************************************************/
-/*                                                                           */
-/*  Authors:                 D.Faulke                 03/10/2015             */
-/*  Contributors:                                                            */
-/*                                                                           */
-/*  Changelog:                                                               */
-/*                                                                           */
-/*  v1.0 Forked from iqaudio.                                                */
-/*  v1.5 Changed hard encoded values for card name and control.              */
-/*  v2.0 Modified to accept command line parameters and created data         */
-/*       structures for easier conversion to other uses.                     */
-/*  v2.1 Additional command line parameters.                                 */
-/*  v2.2 Changed volume control to allow shaping of profile via factor.      */
-/*  v2.3 Tweaked default parameters.                                         */
-/*  v2.4 Modified getWiringPiNum routine for efficiency.                     */
-/*  v2.5 Split info parameters and added some helpful output.                */
-/*  v2.6 Reworked bounds checking and error trapping.                        */
-/*  v2.7 Added soft volume limits.                                           */
-/*  v2.8 Added push button mute support for keyswitch.                       */
-/*  v2.9 Rewrote encoder and mute routines.                                  */
-/*  v3.0 Merged linear and shaped vol calcs                                  */
-/*                                                                           */
-/*****************************************************************************/
+    Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
 
-/*****************************************************************************/
-/*                                                                           */
-/*  Compilation:                                                             */
-/*                                                                           */
-/*  Uses wiringPi, alsa and math libraries.                                  */
-/*  Compile with gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm        */
-/*  Also use the following flags for Raspberry Pi:                           */
-/*         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp       */
-/*         -ffast-math -pipe -O3                                             */
-/*                                                                           */
-/*****************************************************************************/
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+// ****************************************************************************
+// ****************************************************************************
+
+#define Version "Version 0.6"
+
+//  Compilation:
+//
+//  Compile with gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm
+//  Also use the following flags for Raspberry Pi optimisation:
+//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+//         -ffast-math -pipe -O3
+
+//  Authors:        D.Faulke    03/10/2015
+//  Contributors:
+//
+//  Changelog:
+//
+//  v0.1 Initial version.
+//  v0.2 Changed volume control to allow shaping of profile via factor.
+//  v0.3 Added soft volume limits.
+//  v0.4 Added push button mute support for keyswitch.
+//  v0.5 Rewrote encoder and mute routines.
+//  v0.6 Added 2nd rotary encoder for balance.
 
 #include <stdio.h>
 #include <string.h>
@@ -65,38 +52,36 @@
 #include <math.h>
 #include <stdbool.h>
 
-    /**************************************************/
-    /* GPIO mapping - see http://wiringpi.com/pins/   */
-    /*                                                */
-    /*      +----------+----------+----------+        */
-    /*      | GPIO pin | WiringPi |  Board   |        */
-    /*      +----------+----------+----------+        */
-    /*      |     0    |     8    |  Rev 1   |        */
-    /*      |     1    |     9    |  Rev 1   |        */
-    /*      |     2    |     8    |  Rev 2   |        */
-    /*      |     3    |     9    |  Rev 2   |        */
-    /*      |     4    |     7    |          |        */
-    /*      |     7    |    11    |          |        */
-    /*      |     8    |    10    |          |        */
-    /*      |     9    |    13    |          |        */
-    /*      |    10    |    12    |          |        */
-    /*      |    11    |    14    |          |        */
-    /*      |    14    |    15    |          |        */
-    /*      |    15    |    16    |          |        */
-    /*      |    17    |     0    |          |        */
-    /*      |    21    |     2    |  Rev 1   |        */
-    /*      |    22    |     3    |          |        */
-    /*      |    23    |     4    |          |        */
-    /*      |    24    |     5    |          |        */
-    /*      |    25    |     6    |          |        */
-    /*      |    27    |     2    |  Rev 2   |        */
-    /*      |    28    |    17    |  Rev 2   |        */
-    /*      |    29    |    18    |  Rev 2   |        */
-    /*      |    30    |    19    |  Rev 2   |        */
-    /*      |    31    |    20    |  Rev 2   |        */
-    /*      +----------+----------+----------+        */
-    /*                                                */
-    /**************************************************/
+// GPIO mapping - see http://wiringpi.com/pins/
+/*
+         +----------+----------+----------+
+          | GPIO pin | WiringPi |  Board   |
+          +----------+----------+----------+
+          |     0    |     8    |  Rev 1   |
+          |     1    |     9    |  Rev 1   |
+          |     2    |     8    |  Rev 2   |
+          |     3    |     9    |  Rev 2   |
+          |     4    |     7    |          |
+          |     7    |    11    |          |
+          |     8    |    10    |          |
+          |     9    |    13    |          |
+          |    10    |    12    |          |
+          |    11    |    14    |          |
+          |    14    |    15    |          |
+          |    15    |    16    |          |
+          |    17    |     0    |          |
+          |    21    |     2    |  Rev 1   |
+          |    22    |     3    |          |
+          |    23    |     4    |          |
+          |    24    |     5    |          |
+          |    25    |     6    |          |
+          |    27    |     2    |  Rev 2   |
+          |    28    |    17    |  Rev 2   |
+          |    29    |    18    |  Rev 2   |
+          |    30    |    19    |  Rev 2   |
+          |    31    |    20    |  Rev 2   |
+          +----------+----------+----------+
+*/
 
 static const int numGPIO = 23; // No of GPIO pins in array.
 static int piGPIO[3][23] =
@@ -186,9 +171,9 @@ struct volStruct
 };
 
 
-/*****************************************************************************/
-/*  Set default values.                                                      */
-/*****************************************************************************/
+// ****************************************************************************
+//  Set default values.
+// ****************************************************************************
 
 static struct structArgs cmdArgs, defaultArgs =
 {
@@ -229,33 +214,31 @@ static struct boundsStruct paramBounds =
 };
 
 
-/*****************************************************************************/
-/*  GPIO interrupt functions.                                                */
-/*****************************************************************************/
+// ****************************************************************************
+//  GPIO interrupt functions.
+// ****************************************************************************
+/*
+      Quadrature encoding for rotary encoder:
 
-    /*********************************************************************/
-    /*  Quadrature encoding for rotary encoder:                          */
-    /*                                                                   */
-    /*      :   :   :   :   :   :   :   :   :                            */
-    /*      :   +-------+   :   +-------+   :     +---+-------+-------+  */
-    /*      :   |   :   |   :   |   :   |   :     | P |  +ve  |  -ve  |  */
-    /*  A   :   |   :   |   :   |   :   |   :     | h +---+---+---+---+  */
-    /*  --------+   :   +-------+   :   +-------  | a | A | B | A | B |  */
-    /*      :   :   :   :   :   :   :   :   :     +---+---+---+---+---+  */
-    /*      :   :   :   :   :   :   :   :   :     | 1 | 0 | 0 | 1 | 0 |  */
-    /*      +-------+   :   +-------+   :   +---  | 2 | 0 | 1 | 1 | 1 |  */
-    /*      |   :   |   :   |   :   |   :   |     | 3 | 1 | 1 | 0 | 1 |  */
-    /*  B   |   :   |   :   |   :   |   :   |     | 4 | 1 | 0 | 0 | 0 |  */
-    /*  ----+   :   +-------+   :   +-------+     +---+---+---+---+---+  */
-    /*      :   :   :   :   :   :   :   :   :                            */
-    /*    1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2   <- Phase               */
-    /*      :   :   :   :   :   :   :   :   :                            */
-    /*                                                                   */
-    /*********************************************************************/
+          :   :   :   :   :   :   :   :   :
+          :   +-------+   :   +-------+   :         +---+-------+-------+
+          :   |   :   |   :   |   :   |   :         | P |  +ve  |  -ve  |
+      A   :   |   :   |   :   |   :   |   :         | h +---+---+---+---+
+      --------+   :   +-------+   :   +-------      | a | A | B | A | B |
+          :   :   :   :   :   :   :   :   :         +---+---+---+---+---+
+          :   :   :   :   :   :   :   :   :         | 1 | 0 | 0 | 1 | 0 |
+          +-------+   :   +-------+   :   +---      | 2 | 0 | 1 | 1 | 1 |
+          |   :   |   :   |   :   |   :   |         | 3 | 1 | 1 | 0 | 1 |
+      B   |   :   |   :   |   :   |   :   |         | 4 | 1 | 0 | 0 | 0 |
+      ----+   :   +-------+   :   +-------+         +---+---+---+---+---+
+          :   :   :   :   :   :   :   :   :
+        1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2   <- Phase
+          :   :   :   :   :   :   :   :   :
+*/
 
-/*****************************************************************************/
-/*  Rotary encoder for volume.                                               */
-/*****************************************************************************/
+// ****************************************************************************
+//  Rotary encoder for volume.
+// ****************************************************************************
 
 static void encoderPulseVol()
 {
@@ -288,9 +271,9 @@ static void encoderPulseVol()
 };
 
 
-/*****************************************************************************/
-/*  GPIO activity call for mute button.                                      */
-/*****************************************************************************/
+// ****************************************************************************
+//  GPIO activity call for mute button.
+// ****************************************************************************
 
 static void buttonMute()
 {
@@ -299,9 +282,9 @@ static void buttonMute()
 };
 
 
-/*****************************************************************************/
-/*  Rotary encoder for volume.                                               */
-/*****************************************************************************/
+// ****************************************************************************
+//  Rotary encoder for volume.
+// ****************************************************************************
 
 static void encoderPulseBal()
 {
@@ -334,9 +317,9 @@ static void encoderPulseBal()
 };
 
 
-/*****************************************************************************/
-/*  GPIO activity call for balance reset button.                             */
-/*****************************************************************************/
+// ****************************************************************************
+//  GPIO activity call for balance reset button.
+// ****************************************************************************
 
 static void buttonBalance()
 {
@@ -345,13 +328,13 @@ static void buttonBalance()
 };
 
 
-/*****************************************************************************/
-/* Calculation functions.                                                    */
-/*****************************************************************************/
+// ****************************************************************************
+//  Calculation functions.
+// ****************************************************************************
 
-/*****************************************************************************/
-/*  Get linear volume.                                                       */
-/*****************************************************************************/
+// ****************************************************************************
+//  Get linear volume.
+// ****************************************************************************
 
 static long getLinearVolume( struct volStruct *volParams )
 {
@@ -374,9 +357,9 @@ static long getLinearVolume( struct volStruct *volParams )
 };
 
 
-/*****************************************************************************/
-/*  Get volume based on shape function.                                      */
-/*****************************************************************************/
+// ****************************************************************************
+//  Return shaped volume.
+// ****************************************************************************
 
 static long getShapedVolume( struct volStruct *volParams )
 {
@@ -384,12 +367,9 @@ static long getShapedVolume( struct volStruct *volParams )
     float power;
     long shapedVol;
 
-    // Calculate shaped volume.
-    /*********************************************************/
-    /*  As facVol -> 0, volume input is logarithmic.         */
-    /*  As facVol -> 1, volume input is more linear          */
-    /*  As facVol >> 1, volume input is more exponential.    */
-    /*********************************************************/
+    //  As facVol -> 0, volume input is logarithmic.
+    //  As facVol -> 1, volume input is more linear.
+    //  As facVol >> 1, volume input is more exponential.
     base = (float) volParams->facVol;
     power = (float) volParams->index / (float) volParams->volIncs;
     shapedVol = lroundf(( pow( (float) volParams->facVol,
@@ -408,9 +388,9 @@ static long getShapedVolume( struct volStruct *volParams )
 };
 
 
-/*****************************************************************************/
-/*  Get soft volume bounds.                                                  */
-/*****************************************************************************/
+// ****************************************************************************
+//  Return softs volume bounds.
+// ****************************************************************************
 
 static long getSoftVol( long paramVol, long hardRange, long hardMin )
 {
@@ -420,9 +400,9 @@ static long getSoftVol( long paramVol, long hardRange, long hardMin )
 };
 
 
-/*****************************************************************************/
-/*  Get volume index.                                                        */
-/*****************************************************************************/
+// ****************************************************************************
+//  Returns volume index.
+// ****************************************************************************
 
 static long getIndex( struct structArgs *cmdArgs )
 {
@@ -434,9 +414,9 @@ static long getIndex( struct structArgs *cmdArgs )
 };
 
 
-/*****************************************************************************/
-/*  Map GPIO number to WiringPi number.                                      */
-/*****************************************************************************/
+// ****************************************************************************
+//  Returns WiringPi number for given GPIO number.
+// ****************************************************************************
 
 static int getWiringPiNum( int gpio )
 {
@@ -452,13 +432,13 @@ static int getWiringPiNum( int gpio )
 };
 
 
-/*****************************************************************************/
-/* Information functions.                                                    */
-/*****************************************************************************/
+// ****************************************************************************
+//  Information functions.
+// ****************************************************************************
 
-/*****************************************************************************/
-/*  Print volume output.                                                     */
-/*****************************************************************************/
+// ****************************************************************************
+//  Prints informational output.
+// ****************************************************************************
 
 static void printOutput( struct volStruct *volParams, int header )
 {
@@ -499,9 +479,9 @@ static void printOutput( struct volStruct *volParams, int header )
 };
 
 
-/*****************************************************************************/
-/*  Print list of known GPIO pin information.                                */
-/*****************************************************************************/
+// ****************************************************************************
+//  Prints list of known GPIO pin information.
+// ****************************************************************************
 
 static void printWiringPiMap()
 {
@@ -528,9 +508,9 @@ static void printWiringPiMap()
 };
 
 
-/*****************************************************************************/
-/*  Print default or command line set parameters values.                     */
-/*****************************************************************************/
+// ****************************************************************************
+//  Prints default or command line set parameters values.
+// ****************************************************************************
 
 static void printParams ( struct structArgs *printList, int defSet )
 {
@@ -561,9 +541,9 @@ static void printParams ( struct structArgs *printList, int defSet )
 };
 
 
-/*****************************************************************************/
-/*  Print command line parameter ranges.                                     */
-/*****************************************************************************/
+// ****************************************************************************
+//  Prints command line parameter ranges.
+// ****************************************************************************
 
 static void printRanges( struct boundsStruct *paramBounds )
 {
@@ -586,13 +566,13 @@ static void printRanges( struct boundsStruct *paramBounds )
 };
 
 
-/*****************************************************************************/
-/*  Command line argument functions.                                         */
-/*****************************************************************************/
+// ****************************************************************************
+//  Command line argument functions.
+// ****************************************************************************
 
-/*****************************************************************************/
-/*  Program documentation:                                                   */
-/*****************************************************************************/
+// ****************************************************************************
+//  argp documentation.
+// ****************************************************************************
 
 const char *argp_program_version = Version;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
@@ -600,9 +580,9 @@ static const char doc[] = "Raspberry Pi volume control using rotary encoders.";
 static const char args_doc[] = "rotencvol <options>";
 
 
-/*****************************************************************************/
-/*  Command line argument definitions.                                       */
-/*****************************************************************************/
+// ****************************************************************************
+//  Command line argument definitions.
+// ****************************************************************************
 
 static struct argp_option options[] =
 {
@@ -632,9 +612,9 @@ static struct argp_option options[] =
 };
 
 
-/*****************************************************************************/
-/*  Command line argument parser.                                            */
-/*****************************************************************************/
+// ****************************************************************************
+//  Command line argument parser.
+// ****************************************************************************
 
 static int parse_opt( int param, char *arg, struct argp_state *state )
 {
@@ -697,20 +677,20 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
 };
 
 
-/*****************************************************************************/
-/*  argp parser parameter structure.                                         */
-/*****************************************************************************/
+// ****************************************************************************
+//  argp parser parameter structure.
+// ****************************************************************************
 
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
 
-/*****************************************************************************/
-/*  Checking functions.                                                      */
-/*****************************************************************************/
+// ****************************************************************************
+//  Checking functions.
+// ****************************************************************************
 
-/*****************************************************************************/
-/*  Check if a parameter is within bounds.                                   */
-/*****************************************************************************/
+// ****************************************************************************
+//  Checks if a parameter is within bounds.
+// ****************************************************************************
 
 static int checkIfInBounds( float value, float lower, float upper )
 {
@@ -718,9 +698,9 @@ static int checkIfInBounds( float value, float lower, float upper )
         else return 0;
 };
 
-/*****************************************************************************/
-/*  Command line parameter validity checks.                                  */
-/*****************************************************************************/
+// ****************************************************************************
+//  Command line parameter validity checks.
+// ****************************************************************************
 
 static int checkParams ( struct structArgs *cmdArgs,
                          struct boundsStruct *paramBounds )
@@ -771,9 +751,9 @@ static int checkParams ( struct structArgs *cmdArgs,
 };
 
 
-/*****************************************************************************/
-/*  Main program.                                                            */
-/*****************************************************************************/
+// ****************************************************************************
+//  Main program.
+// ****************************************************************************
 
 int main( int argc, char *argv[] )
 {
@@ -785,9 +765,9 @@ int main( int argc, char *argv[] )
     cmdArgs = defaultArgs;  // Set command line arguments to default.
 
 
-    /*************************************************************************/
-    /*  ALSA control elements.
-    /*************************************************************************/
+    // ************************************************************************
+    //  ALSA control elements.
+    // ************************************************************************
     snd_ctl_t *ctl;                 // Simple control handle.
     snd_ctl_elem_id_t *id;          // Simple control element ID.
     snd_ctl_elem_value_t *control;  // Simple control element value.
@@ -795,17 +775,17 @@ int main( int argc, char *argv[] )
     snd_ctl_elem_info_t *info;      // Simple control info container.
 
 
-    /*************************************************************************/
-    /*  Get command line arguments and check within bounds.                  */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Get command line arguments and check within bounds.
+    // ************************************************************************
     argp_parse( &argp, argc, argv, 0, 0, &cmdArgs );
     error = checkParams( &cmdArgs, &paramBounds );
     if ( error ) return 0;
 
 
-    /*************************************************************************/
-    /*  Print out any information requested on command line.                 */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Print out any information requested on command line.
+    // ************************************************************************
     if ( cmdArgs.prMapping ) printWiringPiMap();
     if ( cmdArgs.prRanges ) printRanges( &paramBounds );
     if ( cmdArgs.prDefaults ) printParams( &defaultArgs, 0 );
@@ -818,9 +798,9 @@ int main( int argc, char *argv[] )
         ( cmdArgs.prRanges )) return 0;
 
 
-    /*************************************************************************/
-    /*  Initialise wiringPi.                                                 */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Initialise wiringPi.
+    // ************************************************************************
     wiringPiSetup ();
 
     // Set encoder pin mode.
@@ -837,9 +817,9 @@ int main( int argc, char *argv[] )
     volDirection = 0;
 
 
-    /*************************************************************************/
-    /*  Set up ALSA control.                                                 */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Set up ALSA control.
+    // ************************************************************************
     sprintf( cardID, "hw:%i", cmdArgs.card );
     if ( snd_ctl_open( &ctl, cardID, 1 ) < 0 )
     {
@@ -866,23 +846,23 @@ int main( int argc, char *argv[] )
     }
 
 
-    /*************************************************************************/
-    /*  Get some information for selected control.                           */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Get some information for selected control.
+    // ************************************************************************
     volParams.hardMin = snd_ctl_elem_info_get_min( info );
     volParams.hardMax = snd_ctl_elem_info_get_max( info );
 
 
-    /*************************************************************************/
-    /*  Initialise the control element value container.                      */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Initialise the control element value container.
+    // ************************************************************************
     snd_ctl_elem_value_alloca( &control );
     snd_ctl_elem_value_set_id( control, id );
 
 
-    /*************************************************************************/
-    /*  Set up volume data structure.                                        */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Set up volume data structure.
+    // ************************************************************************
     volParams.volIncs = cmdArgs.incVol;
     volParams.facVol = cmdArgs.facVol;
     volParams.hardRange = volParams.hardMax - volParams.hardMin;
@@ -897,9 +877,9 @@ int main( int argc, char *argv[] )
     volParams.muteState = 0;
 
 
-    /*************************************************************************/
-    /*  Calculate and set initial volume.                                    */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Calculate and set initial volume.
+    // ************************************************************************
     volParams.linearVol = getLinearVolume( &volParams );
     if ( volParams.facVol == 1 ) volParams.shapedVol = volParams.linearVol;
     else volParams.shapedVol = getShapedVolume( &volParams );
@@ -916,17 +896,17 @@ int main( int argc, char *argv[] )
     if ( cmdArgs.prOutput ) printOutput( &volParams, 1 );
 
 
-    /*************************************************************************/
-    /*  Register interrupt functions.
-    /*************************************************************************/
+    // ************************************************************************
+    //  Register interrupt functions.
+    // ************************************************************************
     wiringPiISR( cmdArgs.wPiPinA, INT_EDGE_BOTH, &encoderPulseVol );
     wiringPiISR( cmdArgs.wPiPinB, INT_EDGE_BOTH, &encoderPulseVol );
     wiringPiISR( cmdArgs.wPiPinC, INT_EDGE_BOTH, &buttonMute );
 
 
-    /*************************************************************************/
-    /*  Wait for GPIO activity.                                              */
-    /*************************************************************************/
+    // ************************************************************************
+    //  Wait for GPIO activity.
+    // ************************************************************************
     while ( 1 )
     {
         if (( volDirection != 0 ) && ( !volParams.muteState ))
@@ -948,9 +928,9 @@ int main( int argc, char *argv[] )
             volDirection = 0;
 
 
-            /*****************************************************************/
-            /*  Calculate and set volume.                                    */
-            /*****************************************************************/
+            // ****************************************************************
+            //  Calculate and set volume.
+            // ****************************************************************
             volParams.linearVol = getLinearVolume( &volParams );
             if ( volParams.facVol == 1 ) volParams.shapedVol = volParams.linearVol;
             else volParams.shapedVol = getShapedVolume( &volParams );
@@ -964,9 +944,9 @@ int main( int argc, char *argv[] )
             if ( cmdArgs.prOutput ) printOutput( &volParams, 0 );
         }
 
-        /*********************************************************************/
-        /*  Check and set mute state.                                        */
-        /*********************************************************************/
+        // ********************************************************************
+        //  Check and set mute state.
+        // ********************************************************************
         if ( muteStateChanged )
         {
             volParams.muteState = !volParams.muteState;
