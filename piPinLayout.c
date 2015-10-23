@@ -22,14 +22,15 @@
 
 ******************************************************************************/
 
-#define Version "Version 0.1"
+#define Version "Version 0.2"
 
 /*
-//  Authors:    D.Faulke    19/10/15
+//  Authors:    D.Faulke    22/10/15
 //
 //  Changelog:
 //
 //  v0.1 Initial version.
+//  v0.2 Added printout of GPIO header pins.
 */
 
 /* Currently known versions.
@@ -96,18 +97,38 @@
 #include <stdlib.h>
 
 // Can't be sure future revisions will be hex so store as strings.
-#define REVISION    0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,\
-                    0x0008, 0x0009, 0x0010, 0x0012, 0x0013, 0x000d,\
-                    0x000e, 0x000f, 0xa01041, 0xa21041
-#define MODEL       "B", "B", "B", "B", "B", "A",\
-                    "A", "A", "B+", "A+", "B+", "B",\
-                    "B", "B", "2B", "2B"
-#define VERSION     1.0, 1.0, 2.0, 2.0, 2.0, 2.0,\
-                    2.0, 2.0, 1.0, 1.0, 1.2, 2.0,\
-                    2.0, 2.0, 1.1, 1.1
-#define LAYOUT      1, 1, 2, 2, 2, 2,\
-                    2, 2, 3, 3, 3, 2,\
-                    2, 2, 3, 3
+#define REVISION  0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,\
+                  0x0008, 0x0009, 0x0010, 0x0012, 0x0013, 0x000d,\
+                  0x000e, 0x000f, 0xa01041, 0xa21041
+#define MODEL     "B", "B", "B", "B", "B", "A",\
+                  "A", "A", "B+", "A+", "B+", "B",\
+                  "B", "B", "2B", "2B"
+#define VERSION   1.0, 1.0, 2.0, 2.0, 2.0, 2.0,\
+                  2.0, 2.0, 1.0, 1.0, 1.2, 2.0,\
+                  2.0, 2.0, 1.1, 1.1
+#define LAYOUT    1, 1, 2, 2, 2, 2,\
+                  2, 2, 3, 3, 3, 2,\
+                  2, 2, 3, 3
+
+// GPIO pin layouts - preformatted to make the printout routine easier.
+#define PINS1  " +3.3V", "+5V   ", " GPIO0", "+5V   ", " GPIO1", "GND   ",\
+               " GPIO4", "GPIO14",    "GND", "GPIO15", "GPIO17", "GPIO18",\
+               "GPIO21", "GND   ", "GPIO22", "GPIO23", "  3.3V", "GPIO24",\
+               "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
+               "   GND", "GPIO7 "
+#define PINS2  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
+               " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
+               "GPIO21", "GND   ", "GPIO22", "GPIO23",   "3.3V", "GPIO24",\
+               "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
+               "   GND", "GPIO7 "
+#define PINS3  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
+               " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
+               "GPIO21", "GND   ", "GPIO22", "GPIO23", " +3.3V", "GPIO24",\
+               "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
+               "   GND", "GPIO7 ", "   DNC", "DNC   ", " GPIO5", "GND   ",\
+               " GPIO6", "GPIO12", "GPIO13", "GND   ", "GPIO19", "GPIO16",\
+               "GPIO26", "GPIO20", "   GND", "GPIO21"
+
 
 //*****************************************************************************
 //  Main.
@@ -115,13 +136,17 @@
 
 int main ( void )
 {
-    int revision[] = {REVISION};
-    char *model[] = {MODEL};
-    float version[] = {VERSION};
-    int layout[] = {LAYOUT};
+    int revision[] = { REVISION };
+    char *model[] = { MODEL };
+    float version[] = { VERSION };
+    int layout[] = { LAYOUT };
+
+    char *pins1[] = { PINS1 };
+    char *pins2[] = { PINS2 };
+    char *pins3[] = { PINS3 };
 
     FILE *pFile;        // File to read in and search.
-    char line[512];     // Storage for each line read in.
+    char line[ 512 ];   // Storage for each line read in.
     char term;          // Storage for end of line character.
     static int rev;     // Revision in hex format.
     static int loop;    // Loop incrementer.
@@ -150,33 +175,65 @@ int main ( void )
             }
         }
     }
-    printf( "Revision = 0x%0.6x.\n", rev );
+    printf( "\nKnown revisions:\n\n", rev );
     fclose ( pFile ) ;
-    printf( "\t+-------+----------+-------+---------+--------+\n" );
-    printf( "\t| Index | Revision | Model | Version | Layout |\n" );
-    printf( "\t+-------+----------+-------+---------+--------+\n" );
+    printf( "\t+-------+----------+-------+---------+\n" );
+    printf( "\t| Index | Revision | Model | Version |\n" );
+    printf( "\t+-------+----------+-------+---------+\n" );
     // Now compare against arrays.
     index = 0;
     for ( loop = 0; loop < sizeof( revision )  / sizeof( int ); loop++ )
     {
-        printf( "\t|    %2i | 0x%0.6x |   %-2s  |   %3.1f   |    %1i   |",
+        printf( "\t|    %2i | 0x%0.6x |   %-2s  |   %3.1f   |",
                 loop,
                 revision[ loop ],
                 model[ loop ],
-                version[ loop ],
-                layout[ loop ]);
+                version[ loop ]);
         if ( rev == revision[ loop ] )
         {
             index = loop;
-            printf( "<-\n" );
+            printf( "<-This Pi\n" );
         }
         else printf ( "\n" );
     }
-    printf( "\t+-------+----------+-------+---------+--------+\n\n" );
-    printf( "Revision = 0x%0.6x.\n", revision[ index ]);
-    printf( "Model = %s.\n", model[ index ]);
-    printf( "Version = %3.1f.\n", version[ index ]);
-    printf( "GPIO layout = %1i.\n\n", layout[ index ]);
+
+    printf( "\t+-------+----------+-------+---------+\n\n" );
+    if ( index == 0 )
+        printf( "Cannot find your card version from known versions.\n\n" );
+    else
+    {
+        printf( "Raspberry Pi information:\n" );
+        printf( "\tRevision = 0x%0.6x.\n", revision[ index ]);
+        printf( "\tModel = %s (ver %3.1f).\n",
+                        model[ index ],
+                        version[ index ]);
+
+        printf( "\t+--------+-----++-----+--------+\n" );
+        printf( "\t|  GPIO  | pin || pin |  GPIO  |\n" );
+        printf( "\t+--------+-----++-----+--------+\n" );
+        switch ( layout[ index ] )
+        {
+            case 1 :
+                for ( loop = 0; loop < sizeof( pins1 ) /
+                            ( 4 * sizeof( char )); loop = loop + 2 )
+                    printf( "\t| %6s | %3i || %3i | %6s |\n",
+                         pins1[ loop ], loop + 1, loop + 2, pins1[ loop + 1 ]);
+                break;
+            case 2 :
+                for ( loop = 0; loop < sizeof( pins2 ) /
+                            ( 4 * sizeof( char )); loop = loop + 2 )
+                    printf( "\t| %6s | %3i || %3i | %6s |\n",
+                         pins2[ loop ], loop + 1, loop + 2, pins2[ loop + 1 ]);
+                break;
+            case 3 :
+                for ( loop = 0; loop < sizeof( pins3 ) /
+                            ( 4 * sizeof( char )); loop = loop + 2 )
+                    printf( "\t| %6s | %3i || %3i | %6s |\n",
+                         pins3[ loop ], loop + 1, loop + 2, pins3[ loop + 1 ]);
+                break;
+        }
+        printf( "\t+--------+-----++-----+--------+\n\n" );
+    }
 
     return 0;
 }
