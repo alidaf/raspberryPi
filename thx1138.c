@@ -3,8 +3,8 @@
 /*
     thx1138:
 
-    ALSA experiments to test feasibility of creating a spectrum analyser
-    and digital VU meters.
+    ALSA experiments to test using PCM streams and the feasibility of creating
+    a spectrum analyser and digital VU meters.
 
     Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>
 
@@ -28,7 +28,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc volctl.c -o volctl -lasound
+//  Compile with gcc thx1138.c -o thx1138 -lasound
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -43,7 +43,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
-#include <alsa/mixer.h>
+#include <argp.h>
+
+// ****************************************************************************
+//  Data definitions.
+// ****************************************************************************
 
 // Data structure for PCM stream.
 struct pcmStruct
@@ -54,66 +58,149 @@ struct pcmStruct
 };
 
 // ****************************************************************************
+//  argp documentation.
+// ****************************************************************************
+
+const char *argp_program_version = Version;
+const char *argp_program_bug_address = "darren@alidaf.co.uk";
+static char doc[] = "A short program to test using ALSA PCM streams";
+static char args_doc[] = "thx1138 <options>";
+
+// ****************************************************************************
+//  Data definitions.
+// ****************************************************************************
+
+// Data structure to hold command line arguments.
+struct structArgs
+{
+    int card;
+    int control;
+    char deviceID[8];
+};
+
+// ****************************************************************************
+//  Command line argument definitions.
+// ****************************************************************************
+
+static struct argp_option options[] =
+{
+    { 0, 0, 0, 0, "Card information:" },
+    { "card", 'c', "<n>", 0, "Card ID number." },
+    { "control", 'd', "<n>", 0, "Control ID number." },
+    { 0 }
+};
+
+// ****************************************************************************
+//  Command line argument parser.
+// ****************************************************************************
+
+static int parse_opt( int param, char *arg, struct argp_state *state )
+{
+    char *str;
+    char *token;
+    const char delimiter[] = ",";
+    struct structArgs *cmdArgs = state->input;
+
+    switch( param )
+    {
+        case 'c' :
+            cmdArgs->card = atoi( arg );
+            break;
+        case 'd' :
+            cmdArgs->control = atoi( arg );
+            break;
+    }
+    return 0;
+};
+
+// ****************************************************************************
+//  argp parser parameter structure.
+// ****************************************************************************
+
+static struct argp argp = { options, parse_opt, args_doc, doc };
+
+
+// ****************************************************************************
 //  Main section.
 // ****************************************************************************
 
-int main()
+int main( int argc, char *argv[] )
 {
+    struct structArgs cmdArgs;
+	unsigned int val, val2;
+	int dir;
+    int errNum;
+	cmdArgs.card = 0;		// Default card.
+	cmdArgs.control = 1;	// Default control.
 
-    int rc;
-    snd_pcm_t *handle;
+
+    // ************************************************************************
+    //  ALSA control elements.
+    // ************************************************************************
+    snd_pcm_t *pcmp;
     snd_pcm_hw_params_t *params;
+//	snd_pcm_stream_t stream = SND_PCM_STREAM_PLAYBACK;
+	snd_pcm_stream_t stream = SND_PCM_STREAM_CAPTURE;
     snd_pcm_uframes_t frames;
 
-    unsigned int val, val2;
-    int dir;
 
-    /* Open PCM device for playback. */
-    rc = snd_pcm_open( &handle, "default", SND_PCM_STREAM_PLAYBACK, 0 );
-    if ( rc < 0 )
-    {
-        fprintf( stderr, "unable to open pcm device: %s\n",
-            snd_strerror( rc ));
-        exit( 1 );
-    }
+    // ************************************************************************
+    //  Get command line parameters.
+    // ************************************************************************
+    argp_parse( &argp, argc, argv, 0, 0, &cmdArgs );
+
+    printf( "Card = %i\n", cmdArgs.card );
+    printf( "Control = %i\n", cmdArgs.control );
+    sprintf( cmdArgs.deviceID, "hw:%i,%i", cmdArgs.card, cmdArgs.control );
+	printf( "Using device %s :", cmdArgs.deviceID );
 
     /* Allocate a hardware parameters object. */
-    snd_pcm_hw_params_alloca( &params );
-
+    if ( snd_pcm_hw_params_alloca( &params ) < 0 )
+    {
+    	fprintf( stderr, "Unable to allocate.\n" );
+    	return -1;
+   	}
+    /* Open PCM device for playback. */
+//    if ( snd_pcm_open( &pcmp, cmdArgs.deviceID, stream, 0 ) < 0 )
+//    {
+//        fprintf( stderr, "Unable to open pcm device.\n" );
+//    	return -1;
+//    }
     /* Fill it in with default values. */
-    snd_pcm_hw_params_any( handle, params );
-
-    /* Set the desired hardware parameters. */
-
+//    if ( snd_pcm_hw_params_any( pcmp, params ) < 0
+//    {
+//    	fprintf( stderr, "Unable to set default values.\n" );
+//    	return -1;
+//    }
     /* Interleaved mode */
-    snd_pcm_hw_params_set_access( handle, params,
-        SND_PCM_ACCESS_RW_INTERLEAVED );
+//    snd_pcm_hw_params_set_access( pcmp, params,
+//    		SND_PCM_ACCESS_RW_INTERLEAVED );
 
     /* Signed 16-bit little-endian format */
-    snd_pcm_hw_params_set_format( handle, params,
-        SND_PCM_FORMAT_S16_LE );
+    snd_pcm_hw_params_set_format( pcmp, params,
+        	SND_PCM_FORMAT_S16_LE );
 
     /* Two channels (stereo) */
-    snd_pcm_hw_params_set_channels( handle, params, 2 );
+    snd_pcm_hw_params_set_channels( pcmp, params, 2 );
 
     /* 44100 bits/second sampling rate (CD quality) */
     val = 44100;
-    snd_pcm_hw_params_set_rate_near( handle, params, &val, &dir );
+    snd_pcm_hw_params_set_rate_near( pcmp, params, &val, &dir );
 
     /* Write the parameters to the driver */
-    rc = snd_pcm_hw_params( handle, params );
-    if ( rc < 0 )
+    errNum = snd_pcm_hw_params( pcmp, params );
+    if ( errNum < 0 )
     {
         fprintf(stderr, "unable to set hw parameters: %s\n",
-            snd_strerror( rc ));
+            snd_strerror( errNum ));
         exit( 1 );
     }
 
     /* Display information about the PCM interface */
 
-    printf( "PCM handle name = '%s'\n", snd_pcm_name( handle ));
+    printf( "PCM handle name = '%s'\n", snd_pcm_name( pcmp ));
 
-    printf("PCM state = %s\n", snd_pcm_state_name( snd_pcm_state( handle )));
+    printf("PCM state = %s\n", snd_pcm_state_name( snd_pcm_state( pcmp )));
 
     snd_pcm_hw_params_get_access( params, ( snd_pcm_access_t * ) &val );
     printf( "access type = %s\n",
@@ -191,7 +278,7 @@ int main()
 
     val = snd_pcm_hw_params_can_sync_start( params );
     printf( "can sync start = %d\n", val );
-    snd_pcm_close( handle );
+    snd_pcm_close( pcmp );
 
     return 0;
 }
