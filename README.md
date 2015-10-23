@@ -19,89 +19,14 @@ Command line parameters allow specifying:
 * Useful informational output.
 
 Push button support is now in for rotary encoders that have push-to-switch actions.
-Note: If using any GPIO that is not I2C, a pull up resistor should be used between the +3.3V and the 
-      GPIO pin, e.g.
+Note: If using any GPIO that is not I2C, a pull up resistor should be used between the +3.3V and the GPIO pin, e.g.
 
             10k
       +----/\/\/---+---< \--+
       |            |        |
     +3.3V        GPIO      GND
 
-Compile for the Raspberry Pi with the command:
-
-gcc rotencvol.c -o rotencvol -lwiringPi -lasound -lm -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp -ffast-math -pipe -O3
-
-#### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
-
-Download the tcz package with the following command:
-
-* wget https://github.com/alidaf/raspberryP...encvol-[ver].tcz
-
- Note: Substitute [ver] with the lastest version number available.
-
-and type the following command in a terminal:
-
-* cp rotencvol-[ver].tcz /mnt/mmcblk0p2/tce/optional/
-
-This copies the package to the optional packages area.
-
-Now edit /mnt/mmcblk0p2/tce/onboot.lst and add rotencvol-[ver].tcz at the bottom to make it persistent after 
-a reboot.
-
-I use nano so the command would be:
-
-* sudo nano /mnt/mmcblk0p2/tce/onboot.lst
-
-Add the line, then press ctrl-x, press y and then return to save the file.
-
-Now load the package:
-
-* tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-[ver].tcz
-
-To run, until I can sort out a startup script run:
-
-* sudo /bin/rotencvol -?
-
-This will give you all of the command line options. Some handy switches are:
-  -q will print the default settings. 
-  -m will print out the GPIO map.
-
-Pay special attention to the card name and control name switches. You will need to run alsamixer to get these. 
-If you are just running the Pi with no other hardware then the default names should be fine. If you are using 
-anything else then you can determine these using some of the other utilities provided here.
-
-Also check which GPIO pins you are using and set these with the -a and -b switches if they are not the defaults, 
-which are 23 and 24.
-
-Try running with output on by using the -p switch and messing around with some of the other parameters such 
-as -f <num>. Some switches that produce informational output will terminate the program. The switch -f num 
-shapes the volume profile to overcome the logarithmic output of alsa. Try a value of around 0.1 - 0.05 to get a 
-more linear response. The default value of one will increment volume up from 0 very slowly at first and then in 
-increasingly large steps. Values > 1 will exacerbate this but values < 1 will make the volume increase more 
-quickly at the bottom end. Soft limits can also be set if you have a noisy card and want to ignore some of the 
-lower volumes where there is hiss or deafeningly loud high volumes. The starting volume can also be set but be 
-careful that it is within the soft limits. The default starting volume is 0 since I use headphones but a starting 
-volume of 100 (%) may be better for DACs, but the choice is there.
-
-ctrl-c will stop the program if it is running interactively.
-
-Once you are happy run the command with the '&' character at the end of the line. This will force it to the 
-background and free up your prompt. E.g.
-
-* sudo /bin/rotencvol -i 20 -p -a 2 -b 3 &
-  Note the file in /bin is rotencvol, not rotencvol-[ver]!
-
-Press return to get your prompt back.
-
-You should see the process running with the following command:
-
-* ps aux | grep rotencvol
-
-You will get a list of command that are running that contain the word ‘rotencvol’. One of them should be the 
-command you just typed with the process id at the start of the line. To stop the program running you have to kill 
-it with the command:
-
-* sudo kill <process id>
+Instructions for installing the rotencvol tcz package in Tiny Core Linux and derivatives is provided at the end of this file.
 
 ###listctl:
 
@@ -130,3 +55,75 @@ Intended to provide a library of basic GPIO functionality. Still in early develo
 ###thx1138:
 
 A collection of ALSA experimentation to learn more and help me develop a spectrum analyser and digital VU metering. Not currently useful.
+
+#### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
+
+Download the tcz package with the following command:
+
+      wget https://github.com/alidaf/raspberryP...encvol-[ver].tcz
+
+ Note: Substitute [ver] with the lastest version number available.
+
+and type the following command in a terminal:
+
+      cp rotencvol-[ver].tcz /mnt/mmcblk0p2/tce/optional/
+
+This copies the package to the optional packages area.
+
+Now edit /mnt/mmcblk0p2/tce/onboot.lst and add rotencvol-[ver].tcz at the bottom to make it persistent after 
+a reboot.
+
+I use nano so the command would be:
+
+      sudo nano /mnt/mmcblk0p2/tce/onboot.lst
+
+Add the line, then press ctrl-x, press y and then return to save the file.
+
+Now load the package:
+
+      tce-load -i /mnt/mmcblk0p2/tce/optional/rotencvol-[ver].tcz
+
+To run, until I can sort out a startup script run:
+
+      sudo /bin/rotencvol -?
+
+This will give you all of the command line options. Some handy switches are:
+  -q will print the default settings. 
+  -m will print out the GPIO map.
+
+Pay special attention to the card name and control name switches. You will need to run alsamixer to get these. 
+If you are just running the Pi with no other hardware then the default names should be fine. If you are using 
+anything else then you can determine these using some of the other utilities provided here.
+
+Also check which GPIO pins you are using and set these with the -a and -b switches if they are not the defaults, 
+which are 23 and 24.
+
+Try running with output on by using the -p switch and messing around with some of the other parameters such 
+as -f <num>. Some switches that produce informational output will terminate the program. The switch -f num 
+shapes the volume profile to overcome the logarithmic output of alsa. Try a value of around 0.1 - 0.05 to get a 
+more linear response. The default value of one will increment volume up from 0 very slowly at first and then in 
+increasingly large steps. Values > 1 will exacerbate this but values < 1 will make the volume increase more 
+quickly at the bottom end. Soft limits can also be set if you have a noisy card and want to ignore some of the 
+lower volumes where there is hiss or deafeningly loud high volumes. The starting volume can also be set but be 
+careful that it is within the soft limits. The default starting volume is 0 since I use headphones but a starting 
+volume of 100 (%) may be better for DACs, but the choice is there.
+
+ctrl-c will stop the program if it is running interactively.
+
+Once you are happy run the command with the '&' character at the end of the line. This will force it to the 
+background and free up your prompt. E.g.
+
+      sudo /bin/rotencvol -i 20 -p -a 2 -b 3 &
+  Note the file in /bin is rotencvol, not rotencvol-[ver]!
+
+Press return to get your prompt back.
+
+You should see the process running with the following command:
+
+      ps aux | grep rotencvol
+
+You will get a list of command that are running that contain the word ‘rotencvol’. One of them should be the 
+command you just typed with the process id at the start of the line. To stop the program running you have to kill 
+it with the command:
+
+      sudo kill <process id>
