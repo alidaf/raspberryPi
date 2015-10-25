@@ -1,7 +1,7 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    piPinLayout:
+    piPins:
 
     Test program to return the Raspberry Pi GPIO pin layout based on the
     model revision.
@@ -28,7 +28,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc piPinLayout.c -o piPinLayout
+//  Compile with gcc piPins.c -o piPins
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -139,7 +139,7 @@
 //  Main.
 // ****************************************************************************
 
-int main ( void )
+int piPins ( unsigned int prOut )
 {
     int revision[] = { REVISION };
     char *model[] = { MODEL };
@@ -182,65 +182,80 @@ int main ( void )
     }
     printf( "\nKnown revisions:\n\n", rev );
     fclose ( pFile ) ;
-    printf( "\t+-------+----------+-------+---------+\n" );
-    printf( "\t| Index | Revision | Model | Version |\n" );
-    printf( "\t+-------+----------+-------+---------+\n" );
 
+    if ( prOut )
+    {
+    	printf( "\t+-------+----------+-------+---------+\n" );
+    	printf( "\t| Index | Revision | Model | Version |\n" );
+    	printf( "\t+-------+----------+-------+---------+\n" );
+    }
     // Now compare against arrays to find info.
     index = 0;
     for ( loop = 0; loop < sizeof( revision )  / sizeof( int ); loop++ )
+    {
+    if ( prOut )
     {
         printf( "\t|    %2i | 0x%0.6x |   %-2s  |   %3.1f   |",
                 loop,
                 revision[ loop ],
                 model[ loop ],
                 version[ loop ]);
+    }
         if ( rev == revision[ loop ] )
         {
             index = loop;
-            printf( "<-This Pi\n" );
+            if ( prOut ) printf( "<-This Pi\n" );
         }
-        else printf ( "\n" );
+        else
+            if ( prOut ) printf ( "\n" );
     }
 
     // Print GPIO header layout.
-    printf( "\t+-------+----------+-------+---------+\n\n" );
+    if (prOut )
+        printf( "\t+-------+----------+-------+---------+\n\n" );
     if ( index == 0 )
-        printf( "Cannot find your card version from known versions.\n\n" );
+    {
+        if ( prOut )
+            printf( "Cannot find your card version from known versions.\n\n" );
+        return -1;
+    }
     else
     {
-        printf( "Raspberry Pi information:\n" );
-        printf( "\tRevision = 0x%0.6x.\n", revision[ index ]);
-        printf( "\tModel = %s (ver %3.1f).\n",
-                        model[ index ],
-                        version[ index ]);
-
-        printf( "\t+--------+-----++-----+--------+\n" );
-        printf( "\t|  GPIO  | pin || pin |  GPIO  |\n" );
-        printf( "\t+--------+-----++-----+--------+\n" );
-        switch ( layout[ index ] )
+        if ( prOut )
         {
-            case 1 :
-                for ( loop = 0; loop < sizeof( pins1 ) /
-                            ( 4 * sizeof( char )); loop = loop + 2 )
-                    printf( "\t| %6s | %3i || %3i | %6s |\n",
-                         pins1[ loop ], loop + 1, loop + 2, pins1[ loop + 1 ]);
-                break;
-            case 2 :
-                for ( loop = 0; loop < sizeof( pins2 ) /
-                            ( 4 * sizeof( char )); loop = loop + 2 )
-                    printf( "\t| %6s | %3i || %3i | %6s |\n",
-                         pins2[ loop ], loop + 1, loop + 2, pins2[ loop + 1 ]);
-                break;
-            case 3 :
-                for ( loop = 0; loop < sizeof( pins3 ) /
-                            ( 4 * sizeof( char )); loop = loop + 2 )
-                    printf( "\t| %6s | %3i || %3i | %6s |\n",
-                         pins3[ loop ], loop + 1, loop + 2, pins3[ loop + 1 ]);
-                break;
+            printf( "Raspberry Pi information:\n" );
+            printf( "\tRevision = 0x%0.6x.\n", revision[ index ]);
+            printf( "\tModel = %s (ver %3.1f).\n",
+                            model[ index ],
+                            version[ index ]);
+
+            printf( "\t+--------+-----++-----+--------+\n" );
+            printf( "\t|  GPIO  | pin || pin |  GPIO  |\n" );
+            printf( "\t+--------+-----++-----+--------+\n" );
+            switch ( layout[ index ] )
+            {
+                case 1 :
+                    for ( loop = 0; loop < sizeof( pins1 ) /
+                                ( 4 * sizeof( char )); loop = loop + 2 )
+                        printf( "\t| %6s | %3i || %3i | %6s |\n",
+                            pins1[ loop ], loop + 1, loop + 2, pins1[ loop + 1 ]);
+                    break;
+                case 2 :
+                    for ( loop = 0; loop < sizeof( pins2 ) /
+                                ( 4 * sizeof( char )); loop = loop + 2 )
+                        printf( "\t| %6s | %3i || %3i | %6s |\n",
+                             pins2[ loop ], loop + 1, loop + 2, pins2[ loop + 1 ]);
+                    break;
+                case 3 :
+                    for ( loop = 0; loop < sizeof( pins3 ) /
+                                ( 4 * sizeof( char )); loop = loop + 2 )
+                        printf( "\t| %6s | %3i || %3i | %6s |\n",
+                             pins3[ loop ], loop + 1, loop + 2, pins3[ loop + 1 ]);
+                    break;
+            }
+            printf( "\t+--------+-----++-----+--------+\n\n" );
         }
-        printf( "\t+--------+-----++-----+--------+\n\n" );
     }
 
-    return 0;
+    return layout[ index ];
 }
