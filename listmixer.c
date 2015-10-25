@@ -23,7 +23,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.3"
+#define Version "Version 0.4"
 
 //  Compilation:
 //
@@ -40,24 +40,26 @@
 //    v0.1 Initial version.
 //    v0.2 Modified output and added control type.
 //    v0.3 Rewrite from scratch.
+//    v0.4 Added number of channels to output.
+//
 
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
 #include <alsa/mixer.h>
 
-//****************************************************************************/
+// ***************************************************************************/
 //  Main routine.
-//****************************************************************************/
+// ***************************************************************************/
 
 void main()
 {
 
     int cardNumber = -1;
     int mixerNumber = -1;
-    const char *cardName = "";
-    const char *mixerName = "";
     char deviceID[8];
+    char channelStr[3];
+    unsigned int channels;
     long volMin, volMax;
 
     int errNum;
@@ -82,6 +84,11 @@ void main()
     //  be avoided for 'safe' ALSA.
     snd_ctl_card_info_t *card;      //  Control card info container.
 
+    printf( "\nKey:" );
+    printf( "\tVol = Volume Control.\n" );
+    printf( "\t0/1 = Playback switch.\n" );
+    printf( "\tChn = Number of channels.\n\n" );
+
     while (1)
     {
         // Find next card. Exit loop if none.
@@ -105,11 +112,11 @@ void main()
         // ********************************************************************
         printf( "Card: %s.\n", snd_ctl_card_info_get_name( card ));
         printf( "\t+------------------------------------------" );
-        printf( "+---+---------+---------+\n" );
+        printf( "+---+---+---+-------+-------+\n" );
         printf( "\t| Control ID%-30s ", "" );
-        printf( "| * |   Min   |   Max   |\n" );
+        printf( "|Vol|0/1|Chn|  Min  |  Max  |\n" );
         printf( "\t+------------------------------------------" );
-        printf( "+---+---------+---------+\n" );
+        printf( "+---+---+---+-------+-------+\n" );
 
 
         // ********************************************************************
@@ -155,18 +162,65 @@ void main()
                             elem, &volMin, &volMax );
 
             // Check whether element has volume control.
-            char *hasControl = "-";
+            char *hasVolume = "-";
+            char *hasSwitch = "-";
             if ( snd_mixer_selem_has_playback_volume( elem ))
-                    hasControl = "*";
+                    hasVolume = "*";
+            if ( snd_mixer_selem_has_playback_switch( elem ))
+                    hasSwitch = "*";
 
-            printf( "\t| %-40s | %s | %+7d | %+7d |\n",
+            // Check which channels the mixer has.
+            channels = 0;
+            if ( snd_mixer_selem_has_playback_channel( elem,
+                        SND_MIXER_SCHN_MONO ) &&
+                 snd_mixer_selem_has_playback_channel( elem,
+                        SND_MIXER_SCHN_FRONT_LEFT ) &&
+                !snd_mixer_selem_has_playback_channel( elem,
+                        SND_MIXER_SCHN_FRONT_RIGHT ))
+                sprintf( channelStr, " 1 " );
+            else
+            {
+
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_FRONT_LEFT ))
+                    channels++;
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_FRONT_CENTER ))
+                    channels++;
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_FRONT_RIGHT ))
+                    channels++;
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_SIDE_LEFT ))
+                    channels++;
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_SIDE_RIGHT ))
+                    channels++;
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_REAR_LEFT ))
+                    channels++;
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_REAR_CENTER ))
+                    channels++;
+                if ( snd_mixer_selem_has_playback_channel( elem,
+                            SND_MIXER_SCHN_REAR_RIGHT ))
+                    channels++;
+
+                sprintf( channelStr, "%i.%i",
+                         channels,
+                         snd_mixer_selem_has_playback_channel( elem,
+                             SND_MIXER_SCHN_WOOFER ));
+            }
+
+            printf( "\t| %-40s | %s | %s |%s|%+7d|%+7d|\n",
                     snd_mixer_selem_id_get_name( sid ),
-                    hasControl,
+                    hasVolume,
+                    hasSwitch,
+                    channelStr,
                     volMin, volMax );
         }
         printf( "\t+------------------------------------------" );
-        printf( "+---+---------+---------+\n" );
-        printf( "Mixers elements marked with '*' have volume control.\n\n" );
+        printf( "+---+---+---+-------+-------+\n\n" );
     }
 
     snd_mixer_close( handle );
