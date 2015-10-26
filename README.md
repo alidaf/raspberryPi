@@ -28,25 +28,29 @@ Note: If using any GPIO that is not I2C, a pull up resistor should be used betwe
 
 Instructions for installing the rotencvol tcz package in Tiny Core Linux and derivatives is provided at the end of this file.
 
-###listctl:
+###piListControls:
 
-Use this to print out all available cards and controls for the Raspberry Pi.
+Use this to print out the ALSA controls for all available cards.
 
-###listmixer:
+###piListMixers:
 
-Use this to print out all available cards and mixer controls for the Raspberry Pi. The latest version of rotencvol now uses direct controls rather than mixers so listctl would be better to find out which controls to use for rotencvol.
+Use this to print out the mixer controls for all available cards.
 
-###volctl:
+###piSetVolControl:
 
-A simple command line program to test adjusting ALSA control elements. Use listctl to find out which control elements can be used.
+A simple command line program to test adjusting ALSA control elements. Use piListControls to find out which control elements can be used.
 
-###volmixer:
+###piSetVolMixer:
 
-A simple command line program to test adjusting ALSA mixer controls. Use listmixer to find out which mixer controls are available.
+A simple command line program to test adjusting ALSA mixer controls. Use piListMixers to find out which mixer controls are available.
 
-###piPinLayout:
+###piALSA:
 
-A simple utility to provide version information for the Raspberry Pi and output the relevant GPIO pin information.
+This is a static library for the above functions.
+
+###piInfo:
+
+A library to provide functions that print out or return hardware information such as GPIO layout and mapping of GPIO numbers to the internal Broadcom numbers.
 
 ###GPIOsysfs:
 
