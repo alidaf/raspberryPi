@@ -24,11 +24,11 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.2"
+#define Version "Version 0.3"
 
 //  Compilation:
 //
-//  Compile with gcc piPins.c -o piPins
+//  Compile with gcc -c piInfo.c
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -39,6 +39,8 @@
 //
 //  v0.1 Initial version.
 //  v0.2 Added printout of GPIO header pins.
+//  v0.3 Added pin mapping functions.
+//
 
 /* Currently known versions.
 
@@ -103,6 +105,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+// Known revision numbers and corresponding models and board versions.
 #define REVISION  0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,\
                   0x0008, 0x0009, 0x0010, 0x0012, 0x0013, 0x000d,\
                   0x000e, 0x000f, 0xa01041, 0xa21041
@@ -115,40 +118,66 @@
 #define LAYOUT    1, 1, 2, 2, 2, 2,\
                   2, 2, 3, 3, 3, 2,\
                   2, 2, 3, 3
+#define NUMLAYOUTS 3
 
 // GPIO pin layouts - preformatted to make the printout routine easier.
-#define PINS1  " +3.3V", "+5V   ", " GPIO0", "+5V   ", " GPIO1", "GND   ",\
-               " GPIO4", "GPIO14",    "GND", "GPIO15", "GPIO17", "GPIO18",\
-               "GPIO21", "GND   ", "GPIO22", "GPIO23", "  3.3V", "GPIO24",\
-               "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-               "   GND", "GPIO7 "
-#define PINS2  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
-               " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
-               "GPIO21", "GND   ", "GPIO22", "GPIO23",   "3.3V", "GPIO24",\
-               "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-               "   GND", "GPIO7 "
-#define PINS3  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
-               " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
-               "GPIO21", "GND   ", "GPIO22", "GPIO23", " +3.3V", "GPIO24",\
-               "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-               "   GND", "GPIO7 ", "   DNC", "DNC   ", " GPIO5", "GND   ",\
-               " GPIO6", "GPIO12", "GPIO13", "GND   ", "GPIO19", "GPIO16",\
-               "GPIO26", "GPIO20", "   GND", "GPIO21"
+#define LABELS1  " +3.3V", "+5V   ", " GPIO0", "+5V   ", " GPIO1", "GND   ",\
+                 " GPIO4", "GPIO14",    "GND", "GPIO15", "GPIO17", "GPIO18",\
+                 "GPIO21", "GND   ", "GPIO22", "GPIO23", "  3.3V", "GPIO24",\
+                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
+                 "   GND", "GPIO7 "
+#define LABELS2  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
+                 " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
+                 "GPIO21", "GND   ", "GPIO22", "GPIO23",   "3.3V", "GPIO24",\
+                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
+                 "   GND", "GPIO7 "
+#define LABELS3  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
+                 " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
+                 "GPIO21", "GND   ", "GPIO22", "GPIO23", " +3.3V", "GPIO24",\
+                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
+                 "   GND", "GPIO7 ", "   DNC", "DNC   ", " GPIO5", "GND   ",\
+                 " GPIO6", "GPIO12", "GPIO13", "GND   ", "GPIO19", "GPIO16",\
+                 "GPIO26", "GPIO20", "   GND", "GPIO21"
+
+// Header pin, Broadcom pin (GPIO) and wiringPi pin numbers for each board revision.
+#define HEAD_PINS1  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
+        		   19, 21, 22, 23, 24, 26
+#define BCOM_GPIO1  0,  1,  4, 14, 15, 17, 18, 21, 22, 23, 24,\
+		           10,  9, 25, 11,  8,  7
+#define WIPI_PINS1  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
+        		   12, 13,  6, 14, 10, 11
+
+#define HEAD_PINS2  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
+		           19, 21, 22, 23, 24, 26
+#define BCOM_GPIO2  2,  3,  4, 14, 15, 17, 18, 27, 22, 23, 24,\
+	        	   10,  9, 25, 11,  8,  7
+#define WIPI_PINS2  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
+		           12, 13,  6, 14, 10, 11
+
+#define HEAD_PINS3  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
+                   19, 21, 22, 23, 24, 26, 29, 31, 32, 33, 35,\
+                   36, 37, 38, 40
+#define BCOM_GPIO3  2,  3,  4, 14, 15, 17, 18, 27, 22, 23, 24,\
+                   10,  9, 25, 11,  8,  7,  5,  6, 12, 13, 19,\
+		           16, 26, 20, 21
+#define WIPI_PINS3  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
+		           12, 13,  6, 14, 10, 11, 21, 22, 26, 23, 24,\
+		           27, 25, 28, 29
 
 // ****************************************************************************
-//  Main.
+//  Returns GPIO layout by querying /proc/cpuinfo.
 // ****************************************************************************
 
-int piPins ( unsigned int prOut )
+int piInfoLayout( unsigned int prOut )
 {
     int revision[] = { REVISION };
     char *model[] = { MODEL };
     float version[] = { VERSION };
     int layout[] = { LAYOUT };
 
-    char *pins1[] = { PINS1 };
-    char *pins2[] = { PINS2 };
-    char *pins3[] = { PINS3 };
+    char *labels1[] = { LABELS1 };
+    char *labels2[] = { LABELS2 };
+    char *labels3[] = { LABELS3 };
 
     FILE *pFile;        // File to read in and search.
     char line[ 512 ];   // Storage for each line read in.
@@ -180,11 +209,11 @@ int piPins ( unsigned int prOut )
             }
         }
     }
-    printf( "\nKnown revisions:\n\n", rev );
     fclose ( pFile ) ;
 
     if ( prOut )
     {
+        printf( "\nKnown revisions:\n\n" );
     	printf( "\t+-------+----------+-------+---------+\n" );
     	printf( "\t| Index | Revision | Model | Version |\n" );
     	printf( "\t+-------+----------+-------+---------+\n" );
@@ -235,22 +264,22 @@ int piPins ( unsigned int prOut )
             switch ( layout[ index ] )
             {
                 case 1 :
-                    for ( loop = 0; loop < sizeof( pins1 ) /
+                    for ( loop = 0; loop < sizeof( labels1 ) /
                                 ( 4 * sizeof( char )); loop = loop + 2 )
                         printf( "\t| %6s | %3i || %3i | %6s |\n",
-                            pins1[ loop ], loop + 1, loop + 2, pins1[ loop + 1 ]);
+                            labels1[ loop ], loop + 1, loop + 2, labels1[ loop + 1 ]);
                     break;
                 case 2 :
-                    for ( loop = 0; loop < sizeof( pins2 ) /
+                    for ( loop = 0; loop < sizeof( labels2 ) /
                                 ( 4 * sizeof( char )); loop = loop + 2 )
                         printf( "\t| %6s | %3i || %3i | %6s |\n",
-                             pins2[ loop ], loop + 1, loop + 2, pins2[ loop + 1 ]);
+                             labels2[ loop ], loop + 1, loop + 2, labels2[ loop + 1 ]);
                     break;
                 case 3 :
-                    for ( loop = 0; loop < sizeof( pins3 ) /
+                    for ( loop = 0; loop < sizeof( labels3 ) /
                                 ( 4 * sizeof( char )); loop = loop + 2 )
                         printf( "\t| %6s | %3i || %3i | %6s |\n",
-                             pins3[ loop ], loop + 1, loop + 2, pins3[ loop + 1 ]);
+                             labels3[ loop ], loop + 1, loop + 2, labels3[ loop + 1 ]);
                     break;
             }
             printf( "\t+--------+-----++-----+--------+\n\n" );
@@ -258,4 +287,111 @@ int piPins ( unsigned int prOut )
     }
 
     return layout[ index ];
+}
+
+// ****************************************************************************
+//  Returns Broadcom GPIO number from Pi header pin number.
+// ****************************************************************************
+
+int piInfoGetGPIOHead( unsigned int piPin )
+{
+    unsigned int headPins1[] = { HEAD_PINS1 };
+    unsigned int headPins2[] = { HEAD_PINS2 };
+    unsigned int headPins3[] = { HEAD_PINS3 };
+    unsigned int bcomGPIO1[] = { BCOM_GPIO1 };
+    unsigned int bcomGPIO2[] = { BCOM_GPIO2 };
+    unsigned int bcomGPIO3[] = { BCOM_GPIO3 };
+
+    int layout = piInfoLayout( 0 );
+    unsigned int loop;
+    int retCode = -1;
+
+    if ( layout == 1 )
+    {
+        for ( loop = 0; loop < sizeof( headPins1 ) / sizeof( int ); loop++ )
+            if ( piPin == headPins1[ loop ]) retCode = bcomGPIO1[ loop ];
+    }
+    else if ( layout == 2 )
+    {
+        for ( loop = 0; loop < sizeof( headPins2 ) / sizeof( int ); loop++ )
+            if ( piPin == headPins2[ loop ]) retCode = bcomGPIO2[ loop ];
+    }
+    else if ( layout == 3 )
+    {
+        for ( loop = 0; loop < sizeof( headPins3 ) / sizeof( int ); loop++ )
+            if ( piPin == headPins3[ loop ]) retCode = bcomGPIO3[ loop ];
+    }
+    return retCode;
+}
+
+// ****************************************************************************
+//  Returns wiringPi number from Pi header pin number.
+// ****************************************************************************
+
+int piInfoGetWPiHead( unsigned int piPin )
+{
+
+    unsigned int headPins1[] = { HEAD_PINS1 };
+    unsigned int headPins2[] = { HEAD_PINS2 };
+    unsigned int headPins3[] = { HEAD_PINS3 };
+    unsigned int wiPiPins1[] = { WIPI_PINS1 };
+    unsigned int wiPiPins2[] = { WIPI_PINS2 };
+    unsigned int wiPiPins3[] = { WIPI_PINS3 };
+
+    int layout = piInfoLayout( 0 );
+    unsigned int loop;
+    int retCode = -1;
+
+    if ( layout == 1 )
+    {
+        for ( loop = 0; loop < sizeof( headPins1 ) / sizeof( int ); loop++ )
+            if ( piPin == headPins1[ loop ]) retCode = wiPiPins1[ loop ];
+    }
+    else if ( layout == 2 )
+    {
+        for ( loop = 0; loop < sizeof( headPins2) / sizeof( int ); loop++ )
+            if ( piPin == headPins2[ loop ]) retCode = wiPiPins2[ loop ];
+    }
+    else if ( layout == 3 )
+    {
+        for ( loop = 0; loop < sizeof( headPins3) / sizeof( int ); loop++ )
+            if ( piPin == headPins3[ loop ]) retCode = wiPiPins3[ loop ];
+    }
+    return retCode;
+}
+
+// ****************************************************************************
+//  Returns wiringPi number from GPIO number.
+// ****************************************************************************
+
+int piInfoGetWPiGPIO( unsigned int piGPIO )
+{
+
+    unsigned int bcomGPIO1[] = { BCOM_GPIO1 };
+    unsigned int bcomGPIO2[] = { BCOM_GPIO2 };
+    unsigned int bcomGPIO3[] = { BCOM_GPIO3 };
+    unsigned int wiPiPins1[] = { WIPI_PINS1 };
+    unsigned int wiPiPins2[] = { WIPI_PINS2 };
+    unsigned int wiPiPins3[] = { WIPI_PINS3 };
+
+    int layout = piInfoLayout( 0 );
+    unsigned int loop;
+    int retCode = -1;
+
+    if ( layout == 1 )
+    {
+        for ( loop = 0; loop < sizeof( bcomGPIO1 ) / sizeof( int ); loop++ )
+            if ( piGPIO == bcomGPIO1[ loop ]) retCode = wiPiPins1[ loop ];
+    }
+    else if ( layout == 2 )
+    {
+        for ( loop = 0; loop < sizeof( bcomGPIO2) / sizeof( int ); loop++ )
+            if ( piGPIO == bcomGPIO2[ loop ]) retCode = wiPiPins2[ loop ];
+    }
+    else if ( layout == 3 )
+    {
+        for ( loop = 0; loop < sizeof( bcomGPIO3) / sizeof( int ); loop++ )
+            if ( piGPIO == bcomGPIO3[ loop ]) retCode = wiPiPins3[ loop ];
+    }
+    return retCode;
 }
