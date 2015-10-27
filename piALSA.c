@@ -4,19 +4,6 @@
     piALSA:
 
     ALSA library for Raspberry Pi.
-    provides the following functions:
-        void listControls();
-            // List ALSA controls for all available cards.
-        void listmixers();
-            // List ALSA mixers for all available cards.
-        int setVolControl( int card, int control,
-                           unsigned int volLeft,
-                           unsigned int volRight );
-            // Set volume using ALSA control elements.
-        int setVolMixer( int card, int control,
-                         unsigned int volLeft,
-                         unsigned int volRight );
-            // Set volume using ALSA mixer elements.
 
     Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>
 
@@ -51,6 +38,7 @@
 //    Changelog:
 //
 //    v0.1 Initial version - merged mutliple utility apps.
+//
 
 #include <stdio.h>
 #include <string.h>
@@ -80,7 +68,7 @@ snd_mixer_elem_t *mixerElem;        // Mixer element handle.
 //  List ALSA controls for all available cards.
 // ****************************************************************************
 
-int listControls()
+int listAllControls()
 {
     int cardNumber = -1;
     int errNum;
@@ -223,7 +211,7 @@ int listControls()
 //  Lists ALSA mixers for all available cards.
 // ****************************************************************************
 
-int listMixers()
+int listAllMixers()
 {
 
     int cardNumber = -1;
@@ -374,6 +362,95 @@ int listMixers()
 
     return 0;
 }
+
+// ****************************************************************************
+//  Return info for selected mixers.
+// ****************************************************************************
+
+int mixerInfo( char *card, char *mixer )
+{
+
+    int cardNumber = -1;
+    int mixerNumber = -1;
+    char deviceID[8];
+    char channelStr[3];
+
+    int errNum;
+    int body = 1;
+
+
+    // ************************************************************************
+    //  Set up ALSA mixer.
+    // ************************************************************************
+    snd_mixer_open( &mixerHandle, 0 );
+    snd_mixer_attach( mixerHandle, card );
+    snd_mixer_load( mixerHandle );
+    snd_mixer_selem_register( mixerHandle, NULL, NULL );
+
+    snd_mixer_selem_id_alloca( &mixerId );
+    snd_mixer_selem_id_set_name( mixerId, mixer );
+    mixerElem = snd_mixer_find_selem( mixerHandle, mixerId );
+    snd_mixer_selem_get_id( mixerElem, mixerId ); // Added.
+
+
+    // ************************************************************************
+    //  Print information for selected mixer.
+    // ************************************************************************
+    long volMin, volMax;
+    long dBMin, dBMax;
+    long voldBL, voldBR;
+    int switchL, switchR;
+
+    printf( "Mixer element name = %s.\n",
+        snd_mixer_selem_get_name( mixerElem ));
+    printf( "Mixer element index = %i.\n",
+        snd_mixer_selem_get_index( mixerElem ));
+    printf( "Mixer element ID name = %s.\n",
+        snd_mixer_selem_id_get_name( mixerId ));
+    printf( "Mixer element ID index = %i.\n",
+        snd_mixer_selem_id_get_index( mixerId ));
+    if ( snd_mixer_selem_is_active )
+        printf( "Mixer is active.\n" );
+    else
+        printf( "Mixer is inactive.\n" );
+
+    if ( snd_mixer_selem_has_playback_channel( mixerElem,
+                    SND_MIXER_SCHN_FRONT_LEFT ) &&
+         snd_mixer_selem_has_playback_channel( mixerElem,
+                    SND_MIXER_SCHN_FRONT_RIGHT ))
+    {
+        printf( "Mixer has stereo channels.\n" );
+
+        snd_mixer_selem_get_playback_volume_range( mixerElem,
+                &volMin, &volMax );
+        snd_mixer_selem_get_playback_dB_range( mixerElem, &dBMin, &dBMax );
+        printf( "Minimum volume = %d (%ddB).\n", volMin, dBMin );
+        printf( "Maximum volume = %d (%ddB).\n", volMax, dBMax );
+
+        snd_mixer_selem_get_playback_dB( mixerElem,
+                SND_MIXER_SCHN_FRONT_LEFT, &voldBL );
+        snd_mixer_selem_get_playback_dB( mixerElem,
+                SND_MIXER_SCHN_FRONT_RIGHT, &voldBR );
+        printf( "Playback volume = L%idB, R%dB.\n", voldBL, voldBR );
+
+        snd_mixer_selem_get_playback_switch( mixerElem,
+                SND_MIXER_SCHN_FRONT_LEFT, &switchL );
+        snd_mixer_selem_get_playback_switch( mixerElem,
+                SND_MIXER_SCHN_FRONT_RIGHT, &switchR );
+        printf( "Playback switch controls are %i (L) and %i (R).\n",
+                switchL, switchR );
+    }
+
+
+    // ************************************************************************
+    //  Clean up.
+    // ************************************************************************
+    snd_mixer_detach( mixerHandle, card );
+    snd_mixer_close( mixerHandle );
+
+    return 0;
+}
+
 
 // ****************************************************************************
 //  Set volume using ALSA controls.
