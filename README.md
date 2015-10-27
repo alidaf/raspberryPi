@@ -1,7 +1,7 @@
 ## raspberryPi
 RaspberryPi projects and utilities.
 
-###rotencvol:
+###piRotEnc:
 
 A program to provide rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi or via the rotary encoder pins on an IQaudioDAC to control volume levels.
 
@@ -60,6 +60,9 @@ Intended to provide a library of basic GPIO functionality. Still in early develo
 
 A collection of ALSA experimentation to learn more and help me develop a spectrum analyser and digital VU metering. Not currently useful.
 
+###testPiALSA and testPiInfo
+
+Programs to test the piALSA and piInfo libraries.
 ---
 #### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
 
