@@ -1,9 +1,9 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    volctl:
+    piSetVolControl:
 
-    Simple test set volume using ALSA controls.
+    Simple app to set volume using ALSA controls.
 
     Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>
 
@@ -27,7 +27,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc volctl.c -o volctl -lasound
+//  Compile with gcc piSetVolControl.c -o piSetVolControl -lasound
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -39,6 +39,7 @@
 //
 //    v0.1 Initial version.
 //    v0.2 Added command line parameters.
+//
 
 #include <stdio.h>
 #include <string.h>

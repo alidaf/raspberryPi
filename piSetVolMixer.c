@@ -1,9 +1,9 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    volmixer:
+    piSetVolMixer:
 
-    Simple test set volume using ALSA mixer controls.
+    Simple app to set volume using ALSA mixer controls.
 
     Copyright  2015 by Darren Faulke <darren@alidaf.co.uk>
 
@@ -27,7 +27,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc volmixer.c -o volmixer -lasound
+//  Compile with gcc piSetVolMixer.c -o piSetVolMixer -lasound
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3

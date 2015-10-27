@@ -37,7 +37,8 @@
 //
 //  Changelog:
 //
-//  v0.1 Rewrite of rotencvol.c
+//  v0.1 Original version - rewrite of rotencvol.c.
+//  v0.2 Moved some information functions to library.
 
 #include <stdio.h>
 #include <string.h>
@@ -46,8 +47,8 @@
 #include <alsa/asoundlib.h>
 #include <math.h>
 #include <stdbool.h>
-#include <piListAlsa.h>
-#include <piInfo.h>
+#include "include/piInfo.h"
+//#include "include/piALSA.h"
 
 // Use external libraries to list mixers and find Pi version etc.
 //  - listmixer, listctl, piPins.
@@ -66,45 +67,6 @@
 
 
 
-
-// GPIO mapping - see http://wiringpi.com/pins/
-/*
-         +----------+----------+----------+
-          | GPIO pin | WiringPi |  Board   |
-          +----------+----------+----------+
-          |     0    |     8    |  Rev 1   |
-          |     1    |     9    |  Rev 1   |
-          |     2    |     8    |  Rev 2   |
-          |     3    |     9    |  Rev 2   |
-          |     4    |     7    |          |
-          |     7    |    11    |          |
-          |     8    |    10    |          |
-          |     9    |    13    |          |
-          |    10    |    12    |          |
-          |    11    |    14    |          |
-          |    14    |    15    |          |
-          |    15    |    16    |          |
-          |    17    |     0    |          |
-          |    21    |     2    |  Rev 1   |
-          |    22    |     3    |          |
-          |    23    |     4    |          |
-          |    24    |     5    |          |
-          |    25    |     6    |          |
-          |    27    |     2    |  Rev 2   |
-          |    28    |    17    |  Rev 2   |
-          |    29    |    18    |  Rev 2   |
-          |    30    |    19    |  Rev 2   |
-          |    31    |    20    |  Rev 2   |
-          +----------+----------+----------+
-*/
-
-static const int numGPIO = 23; // No of GPIO pins in array.
-static int piGPIO[3][23] =
-{
-    { 0, 1, 2, 3, 4, 7, 8, 9,10,11,14,15,17,21,22,23,24,25,27,28,29,30,31 },
-    { 8, 9, 8, 9, 7,11,10,13,12,14,15,16, 0, 2, 3, 4, 5, 6, 2,17,18,19,20 },
-    { 1, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2, 2, 2, 2, 2 }
-};
 
 // Encoder state.
 static volatile int volDirection;
@@ -430,24 +392,6 @@ static long getIndex( struct structArgs *cmdArgs )
 
 
 // ****************************************************************************
-//  Returns WiringPi number for given GPIO number.
-// ****************************************************************************
-
-static int getWiringPiNum( int gpio )
-{
-    int loop;
-    int wiringPiNum;
-
-    wiringPiNum = -1;   // Returns -1 if no mapping found.
-
-    for ( loop = 0; loop < numGPIO; loop++ )
-        if ( gpio == piGPIO[0][loop] ) wiringPiNum = piGPIO[1][loop];
-
-    return wiringPiNum;
-};
-
-
-// ****************************************************************************
 //  Information functions.
 // ****************************************************************************
 
@@ -491,35 +435,6 @@ static void printOutput( struct volStruct *volParams, int header )
             lroundf( linearP ),
             volParams->shapedVol,
             lroundf( shapedP ));
-};
-
-
-// ****************************************************************************
-//  Prints list of known GPIO pin information.
-// ****************************************************************************
-
-static void printWiringPiMap()
-{
-    int loop;
-    int pin;
-
-    printf( "\nKnown GPIO pins and wiringPi mapping:\n\n" );
-    printf( "\t+----------+----------+----------+\n" );
-    printf( "\t| GPIO pin | WiringPi | Pi ver.  |\n" );
-    printf( "\t+----------+----------+----------+\n" );
-
-    for ( loop = 0; loop < numGPIO; loop++ )
-    {
-        printf( "\t|    %2d    |    %2d    ",
-                piGPIO[0][loop],
-                piGPIO[1][loop] );
-        if ( piGPIO[2][loop] == 0 )
-                printf( "|          |\n");
-        else
-                printf( "|    %2d    |\n", piGPIO[2][loop] );
-    }
-    printf( "\t+----------+----------+----------+\n\n" );
-    return;
 };
 
 
@@ -723,8 +638,8 @@ static int checkParams ( struct structArgs *cmdArgs,
     static int error = 0;
     static int pinA, pinB;
 
-    pinA = getWiringPiNum( cmdArgs->gpioA );
-    pinB = getWiringPiNum( cmdArgs->gpioB );
+    pinA = piInfoGetWPiGPIO( cmdArgs->gpioA );
+    pinB = piInfoGetWPiGPIO( cmdArgs->gpioB );
 
     if (( pinA == -1 ) || ( pinB == -1 )) error = 1;
     else
@@ -801,7 +716,7 @@ int main( int argc, char *argv[] )
     // ************************************************************************
     //  Print out any information requested on command line.
     // ************************************************************************
-    if ( cmdArgs.prMapping ) printWiringPiMap();
+    if ( cmdArgs.prMapping ) piInfoLayout( 1 );
     if ( cmdArgs.prRanges ) printRanges( &paramBounds );
     if ( cmdArgs.prDefaults ) printParams( &defaultArgs, 0 );
     if ( cmdArgs.prSet ) printParams ( &cmdArgs, 1 );
