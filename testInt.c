@@ -3,7 +3,7 @@
 /*
     testInt:
 
-    Program to test sysfs GPIO access.
+    Program to test wiringPi interrupt calls.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
 
@@ -80,16 +80,14 @@ struct encoderStruct
     unsigned int busy;
 };
 
-
+// Default values.
 static volatile struct encoderStruct test =
 {
-    .pinA = 14,
-    .pinB = 15,
+    .pinA = 4,
+    .pinB = 5,
     .lastCode = 0,
     .busy = false
 };
-
-
 
 
 // ****************************************************************************
@@ -98,15 +96,14 @@ static volatile struct encoderStruct test =
 static int getEncoderDirection( volatile struct encoderStruct *pulse )
 {
     int direction = 0;
-
     unsigned int pinA = digitalRead( pulse->pinA );
     unsigned int pinB = digitalRead( pulse->pinB );
     // Shift pin A and combine with pin B.
     unsigned int code = ( pinA << 1 ) | pinB;
-    printf( "Current pulse code = %b.\n", code );
+    printf( "Current pulse code = %i.\n", code );
     // Shift and combine with previous readings.
-    unsigned int sumCode = ( pulse->lastCode ) | code;
-    printf( "Combined pulse code = %b.\n", sumCode );
+    unsigned int sumCode = ( pulse->lastCode << 2 ) | code;
+    printf( "Combined pulse code = %i.\n", sumCode );
 
     if ( sumCode == 0b0001 ||
          sumCode == 0b0111 ||
@@ -117,10 +114,10 @@ static int getEncoderDirection( volatile struct encoderStruct *pulse )
     if ( sumCode == 0b1011 ||
          sumCode == 0b1101 ||
          sumCode == 0b0100 ||
-         sumCode == 0b0100 )
+         sumCode == 0b0010 )
          direction = -1;
 
-    printf( "Direction = %i.", direction );
+    printf( "Direction = %i.\n", direction );
     pulse->lastCode = code;
     return direction;
 }
@@ -135,6 +132,7 @@ static void encoderPulse()
     test.busy = true;
     // Read values at pins.
     int direction = getEncoderDirection( &test );
+    test.busy = false;
 };
 
 
@@ -148,19 +146,19 @@ int main()
     // ************************************************************************
     //  Initialise wiringPi.
     // ************************************************************************
-//    wiringPiSetup ();
-//    pinMode( encoderPinA, INPUT );
-//    pullUpDnControl( encoderPinA, PUD_UP );
-//    pinMode( encoderPinB, INPUT );
-//    pullUpDnControl( encoderPinB, PUD_UP );
+    wiringPiSetup ();
+    pinMode( test.pinA, INPUT );
+    pullUpDnControl( test.pinA, PUD_UP );
+    pinMode( test.pinB, INPUT );
+    pullUpDnControl( test.pinB, PUD_UP );
 
 
     // ************************************************************************
     //  Register interrupt functions.
     // ************************************************************************
     // Are both needed since both pins should trigger at the same time.
-//    wiringPiISR( encoderPinA, INT_EDGE_BOTH, &encoderPulse );
-    // wiringPiISR( encoderPinB, INT_EDGE_BOTH, &encoderPulse );
+    wiringPiISR( test.pinA, INT_EDGE_BOTH, &encoderPulse );
+    wiringPiISR( test.pinB, INT_EDGE_BOTH, &encoderPulse );
 
 
     // ************************************************************************
@@ -168,6 +166,7 @@ int main()
     // ************************************************************************
     while ( 1 )
     {
+        delay( 1000 );
     }
     return 0;
 }
