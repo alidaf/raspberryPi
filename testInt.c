@@ -45,9 +45,40 @@
 #include <string.h>
 #include <wiringPi.h>
 #include <stdbool.h>
+//#include <pthread.h>
+
+struct encoderStruct
+{
+    unsigned int pinA;
+    unsigned int pinB;
+    unsigned int lastCode;
+    unsigned int busy;
+    unsigned int count;
+    int direction;
+};
+
+// Default values.
+static volatile struct encoderStruct test =
+{
+    .pinA = 8,  // GPIO2.
+    .pinB = 9,  // GPIO3.
+    .lastCode = 0,
+    .busy = false,
+    .direction = 0
+};
 
 // ****************************************************************************
-//  GPIO interrupt functions.
+//  Returns the equivalent string for a binary nibble.
+// ****************************************************************************
+static void getBinaryString( unsigned int nibble, char *binary )
+{
+    static unsigned int loop;
+    for ( loop = 0; loop < 4; loop++ )
+        sprintf( binary, "%s%d", binary, !!(( nibble << loop ) & 0x8 ));
+}
+
+// ****************************************************************************
+//  Rotary encoder functions.
 // ****************************************************************************
 /*
       Quadrature encoding for rotary encoder:
@@ -68,58 +99,38 @@
           :   :   :   :   :   :   :   :   :
 */
 
-// Encoder states.
-static volatile int lastPulse;
-static volatile int encoderDirection;
-
-struct encoderStruct
-{
-    unsigned int pinA;
-    unsigned int pinB;
-    unsigned int lastCode;
-    unsigned int busy;
-};
-
-// Default values.
-static volatile struct encoderStruct test =
-{
-    .pinA = 4,
-    .pinB = 5,
-    .lastCode = 0,
-    .busy = false
-};
-
-
 // ****************************************************************************
 //  Returns encoder direction.
 // ****************************************************************************
 static int getEncoderDirection( volatile struct encoderStruct *pulse )
 {
-    int direction = 0;
     unsigned int pinA = digitalRead( pulse->pinA );
     unsigned int pinB = digitalRead( pulse->pinB );
     // Shift pin A and combine with pin B.
     unsigned int code = ( pinA << 1 ) | pinB;
-    printf( "Current pulse code = %i.\n", code );
     // Shift and combine with previous readings.
     unsigned int sumCode = ( pulse->lastCode << 2 ) | code;
-    printf( "Combined pulse code = %i.\n", sumCode );
 
     if ( sumCode == 0b0001 ||
          sumCode == 0b0111 ||
          sumCode == 0b1110 ||
          sumCode == 0b1000 )
-         direction = 1;
+         pulse->direction = 1;
     else
     if ( sumCode == 0b1011 ||
          sumCode == 0b1101 ||
          sumCode == 0b0100 ||
          sumCode == 0b0010 )
-         direction = -1;
-
-    printf( "Direction = %i.\n", direction );
+         pulse->direction = -1;
+    else pulse->direction = 0;
     pulse->lastCode = code;
-    return direction;
+    pulse->count++;
+
+    char binary[5] = {""};
+    getBinaryString( sumCode, binary );
+//    printf( "Summed code = %s, ", binary );
+
+    return 0;
 }
 
 
@@ -130,11 +141,10 @@ static void encoderPulse()
 {
     if ( test.busy ) return;
     test.busy = true;
-    // Read values at pins.
-    int direction = getEncoderDirection( &test );
+    getEncoderDirection( &test );
+//    printf( "Direction = %+i.\n", test.direction );
     test.busy = false;
 };
-
 
 // ****************************************************************************
 //  Main section.
@@ -156,9 +166,9 @@ int main()
     // ************************************************************************
     //  Register interrupt functions.
     // ************************************************************************
-    // Are both needed since both pins should trigger at the same time.
-    wiringPiISR( test.pinA, INT_EDGE_BOTH, &encoderPulse );
-    wiringPiISR( test.pinB, INT_EDGE_BOTH, &encoderPulse );
+    // Are both needed since both pins should trigger at the same time?
+    wiringPiISR( test.pinA, INT_EDGE_FALLING, &encoderPulse );
+    wiringPiISR( test.pinB, INT_EDGE_FALLING, &encoderPulse );
 
 
     // ************************************************************************
@@ -166,7 +176,24 @@ int main()
     // ************************************************************************
     while ( 1 )
     {
-        delay( 1000 );
+
+//        unsigned static int i;
+//        for ( i = 0; i < 16; i++ )
+//            printf( "Binary for %i = %s.\n", i, getBinaryString( i ));
+//        unsigned static int i;
+//        for ( i = 0; i < 16; i++ )
+//        {
+//            char binary[5] = {""};
+//            getBinaryString( i, binary );
+//            printf( "Binary for %i = %s.\n", i, binary );
+//        }
+        if ( !test.busy & ( test.direction != 0 ))
+        {
+            printf( "Direction = %i.\n", test.direction );
+            test.direction = 0;
+        }
     }
+
+
     return 0;
 }
