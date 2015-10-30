@@ -1,11 +1,15 @@
 ## raspberryPi
 RaspberryPi projects and utilities.
 
+###rotencvol:
+
+The original rotary encoder program that was used to create the Tiny Core Linux packages. The binaries have been removed but I will create a tcz package for anyone that requests it. This is essentially deprecated by piRotEnc.
+
 ###piRotEnc:
 
-A program to provide rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi or via the rotary encoder pins on an IQaudioDAC to control volume levels.
+A program to provide rotary encoder support for the Raspberry Pi via GPIO pins on either the Raspberry Pi or via the rotary encoder pins on an IQaudioDAC to control volume levels. Tiny Core Linux packages can be created on request, until I can have the project accepted into the repository.
 
-Uses ALSA controls to change the volume but incorporates a shaping factor compensate for, or accentuate the logarithmic response of ALSA. This will allow better control according to the type of use, e.g. headphones need better refinement at low volumes but DACs or line level devices may need better refinement at higher levels.
+Uses ALSA controls to change the volume but incorporates a shaping factor to compensate for, or accentuate the logarithmic response of ALSA. This will allow better control according to the type of use, e.g. headphones need better refinement at low volumes but DACs or line level devices may need better refinement at higher levels.
 
 Command line parameters allow specifying:
 
