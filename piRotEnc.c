@@ -6,6 +6,7 @@
     Rotary encoder control app for the Raspberry Pi.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
+    Portions based on IQ_rot, copyright 2015 Gordon Garrity.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -32,7 +33,8 @@
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-//  Authors:        D.Faulke    24/10/2015
+//  Authors:        G.Garrity   30/08/2015
+//                  D.Faulke    24/10/2015
 //  Contributors:
 //
 //  Changelog:
