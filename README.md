@@ -48,14 +48,6 @@ A simple command line program to test adjusting ALSA control elements. Use piLis
 
 A simple command line program to test adjusting ALSA mixer controls. Use piListMixers to find out which mixer controls are available.
 
-###piALSA:
-
-This is a static library for the above functions.
-
-###piInfo:
-
-A library to provide functions that print out or return hardware information such as GPIO layout and mapping of GPIO numbers to the internal Broadcom numbers.
-
 ###GPIOsysfs:
 
 Intended to provide a library of basic GPIO functionality. Still in early development and not currently useful. It will draw in some of the other utilities into a Raspberry Pi GPIO library.
