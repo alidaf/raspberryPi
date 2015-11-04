@@ -1,11 +1,12 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    testInt:
+    testTab:
 
     Program to test rotary encoder using a state table.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
+    Based on algorithm by Ben Buxton - see http://www.buxtronix.net
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,7 +24,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.1"
+#define Version "Version 0.2"
 
 //  Compilation:
 //
@@ -46,32 +47,14 @@
 #include <wiringPi.h>
 #include <stdbool.h>
 
-struct rotStruct
+struct encoderStruct
 {
-    unsigned int pinA;
-    unsigned int pinB;
+    unsigned int gpio1;
+    unsigned int gpio2;
     unsigned char state;
-    int dir;
+    int direction;
 };
 
-static struct rotStruct rotEnc =
-{
-    .pinA = 8,
-    .pinB = 9,
-    .state = 0,
-    .dir = 0
-};
-
-
-// ****************************************************************************
-//  Returns the equivalent string for a binary nibble.
-// ****************************************************************************
-static void getBinaryString( unsigned int nibble, char *binary )
-{
-    static unsigned int loop;
-    for ( loop = 0; loop < 4; loop++ )
-        sprintf( binary, "%s%d", binary, !!(( nibble << loop ) & 0x8 ));
-}
 
 // ****************************************************************************
 //  Rotary encoder functions.
@@ -96,7 +79,24 @@ static void getBinaryString( unsigned int nibble, char *binary )
 */
 
 
-const unsigned char encStates[7][4] =
+// ****************************************************************************
+//  State table for full step mode.
+// ****************************************************************************
+/*
+    +---------+---------+---------+---------+
+    | AB = 00 | AB = 01 | AB = 10 | AB = 11 |
+    +---------+---------+---------+---------+
+    | START   | C/W 1   | A/C 1   | START   |
+    | C/W +   | START   | C/W X   | C/W DIR |
+    | C/W +   | C/W 1   | START   | START   |
+    | C/W +   | C/W 1   | C/W X   | START   |
+    | A/C +   | START   | A/C 1   | START   |
+    | A/C +   | A/C X   | START   | A/C DIR |
+    | A/C +   | A/C X   | A/C 1   | START   |
+    +---------+---------+---------+---------+
+*/
+
+const unsigned char encoderStates[7][4] =
     {{ 0x0, 0x2, 0x4, 0x0 },
      { 0x3, 0x0, 0x1, 0x10 },
      { 0x3, 0x2, 0x0, 0x0 },
@@ -105,21 +105,22 @@ const unsigned char encStates[7][4] =
      { 0x6, 0x5, 0x0, 0x20 },
      { 0x6, 0x5, 0x4, 0x0 }};
 
-// ****************************************************************************
-//  Interrupt function.
-// ****************************************************************************
-static void getPulse( void )
-{
-    unsigned char code = ( digitalRead( rotEnc.pinB ) << 1 ) |
-                           digitalRead( rotEnc.pinA );
 
-    rotEnc.state = encStates[ rotEnc.state & 0xf ][ code ];
-    unsigned char direction = rotEnc.state & 0x30;
+// ****************************************************************************
+//  Returns encoder direction in rotEnc struct.
+// ****************************************************************************
+static void encoderFunction( struct encoderStruct *encoder )
+{
+    unsigned char code = ( digitalRead( encoder->gpio2 ) << 1 ) |
+                           digitalRead( encoder->gpio1 );
+
+    encoder->state = encoderStates[ encoder->state & 0xf ][ code ];
+    unsigned char direction = encoder->state & 0x30;
 
     if ( direction )
-        rotEnc.dir = ( direction == 0x10 ? -1 : 1 );
+        encoder->direction = ( direction == 0x10 ? -1 : 1 );
     else
-        rotEnc.dir = 0;
+        encoder->direction = 0;
 
     return;
 };
@@ -130,22 +131,36 @@ static void getPulse( void )
 // ****************************************************************************
 int main()
 {
+    static struct encoderStruct encoder =
+    {
+        .gpio1 = 8,
+        .gpio2 = 9,
+        .state = 0,
+        .direction = 0
+    };
 
 
     // ************************************************************************
     //  Initialise wiringPi.
     // ************************************************************************
-    wiringPiSetup ();
-    pinMode( rotEnc.pinA, INPUT );
-    pinMode( rotEnc.pinB, INPUT );
-    pullUpDnControl( rotEnc.pinA, PUD_UP );
-    pullUpDnControl( rotEnc.pinB, PUD_UP );
+    wiringPiSetup();
+    pinMode( encoder.gpio1, INPUT );
+    pinMode( encoder.gpio2, INPUT );
+    pullUpDnControl( encoder.gpio1, PUD_UP );
+    pullUpDnControl( encoder.gpio2, PUD_UP );
 
 
     // ************************************************************************
     //  Register interrupt functions.
     // ************************************************************************
-    // Are both needed since both rotEnc. should trigger at the same time?
+    /*
+        Calling via wiringPi interrupt produces strange behaviour.
+        Rotary encoder has multiple pulses on both pins that may fire AB or BA.
+        Also, bouncing can produce random interrupts.
+        Multiple interrupt calls create race conditions.
+        May be better to use threads.
+    */
+
 //    wiringPiISR( rotEnc.numA, INT_EDGE_BOTH, &getPulse );
 //    wiringPiISR( rotEnc.numB, INT_EDGE_FALLING, &getPulse );
 
@@ -155,32 +170,11 @@ int main()
     // ************************************************************************
     while ( 1 )
     {
-
-        getPulse();
-        if ( rotEnc.dir != 0 )
-            printf( "Direction = %i.\n", rotEnc.dir );
-
-//        unsigned static int i;
-//        for ( i = 0; i < 16; i++ )
-//            printf( "Binary for %i = %s.\n", i, getBinaryString( i ));
-//        unsigned static int i;
-//        for ( i = 0; i < 16; i++ )
-//        {
-//            char binary[5] = {""};
-//            getBinaryString( i, binary );
-//            printf( "Binary for %i = %s.\n", i, binary );
-//        }
-
-//        if ( test.encodedA & ( test.encodedB ))
-//        {
-//            combinecode( &test );
-//            char binary[5] = {""};
-//            getBinaryString( test.currentCode, binary );
-//            printf( "Code = %i.\n", binary );
-//            test.encodedA = test.encodedB = false;
-//        }
+        // Check for a change in the direction.
+        encoderFunction( &encoder );
+        if ( encoder.direction != 0 )
+            printf( "Direction = %i.\n", encoder.direction );
     }
-
 
     return 0;
 }
