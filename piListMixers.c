@@ -212,13 +212,12 @@ void main()
                              SND_MIXER_SCHN_WOOFER ));
             }
 
-            printf( "\t| %-40s | %s | %s |%s|%+7d|%+7d|%i\n",
+            printf( "\t| %-40s | %s | %s |%s|%+7d|%+7d|\n",
                     snd_mixer_selem_id_get_name( sid ),
                     hasVolume,
                     hasSwitch,
                     channelStr,
-                    volMin, volMax,
-                    snd_mixer_selem_get_index( elem ));
+                    volMin, volMax );
         }
         printf( "\t+------------------------------------------" );
         printf( "+---+---+---+-------+-------+\n\n" );
