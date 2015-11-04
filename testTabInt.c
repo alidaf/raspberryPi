@@ -6,7 +6,7 @@
     Program to test rotary encoder using a state table and interrupts.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
-    Based on algorithm by Ben Buxton - see http://www.buxtronix.net
+    Based on an algorithm by Ben Buxton - see http://www.buxtronix.net
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc testInt.c -o testTab -lwiringPi
+//  Compile with gcc testTabInt.c -o testTabInt -lwiringPi
 //  Also use the following flags for Raspberry Pi optimisation:
 //     -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //     -ffast-math -pipe -O3
@@ -56,6 +56,8 @@ struct encoderStruct
     bool busy;
 };
 
+
+// Need global variables for interrupt - yuck!
 static struct encoderStruct encoder =
 {
     .gpio1 = 8,
@@ -152,16 +154,16 @@ int main()
     // ************************************************************************
     //  Register interrupt functions.
     // ************************************************************************
-    /*
-        Calling via wiringPi interrupt produces strange behaviour.
-        Rotary encoder has multiple pulses on both pins that may fire AB or BA.
-        Also, bouncing can produce random interrupts.
-        Multiple interrupt calls create race conditions.
-        May be better to use threads.
-    */
-
     wiringPiISR( encoder.gpio1, INT_EDGE_BOTH, &encoderFunction );
     wiringPiISR( encoder.gpio2, INT_EDGE_BOTH, &encoderFunction );
+
+    /*
+        To Do:
+        Try and use void casting to pass parameters rather than use global
+        variables. The wiringPi library may not allow this as it handles the
+        threads itself so may need to look at either modifying the library
+        or writing alternative interrupt routines.
+    */
 
 
     // ************************************************************************

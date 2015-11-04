@@ -6,7 +6,7 @@
     Program to test rotary encoder using a state table and simple polling.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
-    Based on algorithm by Ben Buxton - see http://www.buxtronix.net
+    Based on an algorithm by Ben Buxton - see http://www.buxtronix.net
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc testInt.c -o testTab -lwiringPi
+//  Compile with gcc testTab.c -o testTab -lwiringPi
 //  Also use the following flags for Raspberry Pi optimisation:
 //     -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //     -ffast-math -pipe -O3
@@ -151,7 +151,7 @@ int main()
 
     while ( 1 )
     {
-        // Check for a change in the direction.
+        // Simple polling - will consume lots of cpu.
         encoderFunction( &encoder );
         if ( encoder.direction != 0 )
             printf( "Direction = %i.\n", encoder.direction );
