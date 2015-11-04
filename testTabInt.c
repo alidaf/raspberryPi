@@ -1,11 +1,12 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    testInt:
+    testTabInt:
 
-    Program to test wiringPi interrupt calls.
+    Program to test rotary encoder using a state table and interrupts.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
+    Based on algorithm by Ben Buxton - see http://www.buxtronix.net
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -27,12 +28,12 @@
 
 //  Compilation:
 //
-//  Compile with gcc testInt.c -o testInt -lwiringPi
+//  Compile with gcc testInt.c -o testTab -lwiringPi
 //  Also use the following flags for Raspberry Pi optimisation:
 //     -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //     -ffast-math -pipe -O3
 
-//  Authors:    D.Faulke    28/10/2015
+//  Authors:    D.Faulke    03/11/2015
 //  Contributors:
 //
 //  Changelog:
@@ -45,37 +46,25 @@
 #include <string.h>
 #include <wiringPi.h>
 #include <stdbool.h>
-//#include <pthread.h>
 
 struct encoderStruct
 {
-    unsigned int pinA;
-    unsigned int pinB;
-    unsigned int lastCode;
-    unsigned int busy;
-    unsigned int count;
+    unsigned int gpio1;
+    unsigned int gpio2;
+    unsigned char state;
     int direction;
+    bool busy;
 };
 
-// Default values.
-static volatile struct encoderStruct test =
+static struct encoderStruct encoder =
 {
-    .pinA = 8,  // GPIO2.
-    .pinB = 9,  // GPIO3.
-    .lastCode = 0,
-    .busy = false,
-    .direction = 0
+    .gpio1 = 8,
+    .gpio2 = 9,
+    .state = 0,
+    .direction = 0,
+    .busy = false
 };
 
-// ****************************************************************************
-//  Returns the equivalent string for a binary nibble.
-// ****************************************************************************
-static void getBinaryString( unsigned int nibble, char *binary )
-{
-    static unsigned int loop;
-    for ( loop = 0; loop < 4; loop++ )
-        sprintf( binary, "%s%d", binary, !!(( nibble << loop ) & 0x8 ));
-}
 
 // ****************************************************************************
 //  Rotary encoder functions.
@@ -99,52 +88,50 @@ static void getBinaryString( unsigned int nibble, char *binary )
           :   :   :   :   :   :   :   :   :
 */
 
-// ****************************************************************************
-//  Returns encoder direction.
-// ****************************************************************************
-static int getEncoderDirection( volatile struct encoderStruct *pulse )
-{
-    unsigned int pinA = digitalRead( pulse->pinA );
-    unsigned int pinB = digitalRead( pulse->pinB );
-    // Shift pin A and combine with pin B.
-    unsigned int code = ( pinA << 1 ) | pinB;
-    // Shift and combine with previous readings.
-    unsigned int sumCode = ( pulse->lastCode << 2 ) | code;
 
-    if ( sumCode == 0b0001 ||
-         sumCode == 0b0111 ||
-         sumCode == 0b1110 ||
-         sumCode == 0b1000 )
-         pulse->direction = 1;
+// ****************************************************************************
+//  State table for full step mode.
+// ****************************************************************************
+/*
+    +---------+---------+---------+---------+
+    | AB = 00 | AB = 01 | AB = 10 | AB = 11 |
+    +---------+---------+---------+---------+
+    | START   | C/W 1   | A/C 1   | START   |
+    | C/W +   | START   | C/W X   | C/W DIR |
+    | C/W +   | C/W 1   | START   | START   |
+    | C/W +   | C/W 1   | C/W X   | START   |
+    | A/C +   | START   | A/C 1   | START   |
+    | A/C +   | A/C X   | START   | A/C DIR |
+    | A/C +   | A/C X   | A/C 1   | START   |
+    +---------+---------+---------+---------+
+*/
+
+const unsigned char stateTable[7][4] =
+    {{ 0x0, 0x2, 0x4, 0x0 },
+     { 0x3, 0x0, 0x1, 0x10 },
+     { 0x3, 0x2, 0x0, 0x0 },
+     { 0x3, 0x2, 0x1, 0x0 },
+     { 0x6, 0x0, 0x4, 0x0 },
+     { 0x6, 0x5, 0x0, 0x20 },
+     { 0x6, 0x5, 0x4, 0x0 }};
+
+
+// ****************************************************************************
+//  Returns encoder direction in rotEnc struct.
+// ****************************************************************************
+static void encoderFunction()
+{
+    unsigned char code = ( digitalRead( encoder.gpio2 ) << 1 ) |
+                           digitalRead( encoder.gpio1 );
+    encoder.state = stateTable[ encoder.state & 0xf ][ code ];
+    unsigned char direction = encoder.state & 0x30;
+    if ( direction )
+        encoder.direction = ( direction == 0x10 ? -1 : 1 );
     else
-    if ( sumCode == 0b1011 ||
-         sumCode == 0b1101 ||
-         sumCode == 0b0100 ||
-         sumCode == 0b0010 )
-         pulse->direction = -1;
-    else pulse->direction = 0;
-    pulse->lastCode = code;
-    pulse->count++;
-
-    char binary[5] = {""};
-    getBinaryString( sumCode, binary );
-//    printf( "Summed code = %s, ", binary );
-
-    return 0;
-}
-
-
-// ****************************************************************************
-//  Rotary encoder pulse.
-// ****************************************************************************
-static void encoderPulse()
-{
-    if ( test.busy ) return;
-    test.busy = true;
-    getEncoderDirection( &test );
-//    printf( "Direction = %+i.\n", test.direction );
-    test.busy = false;
+        encoder.direction = 0;
+    return;
 };
+
 
 // ****************************************************************************
 //  Main section.
@@ -152,23 +139,29 @@ static void encoderPulse()
 int main()
 {
 
-
     // ************************************************************************
     //  Initialise wiringPi.
     // ************************************************************************
-    wiringPiSetup ();
-    pinMode( test.pinA, INPUT );
-    pullUpDnControl( test.pinA, PUD_UP );
-    pinMode( test.pinB, INPUT );
-    pullUpDnControl( test.pinB, PUD_UP );
+    wiringPiSetup();
+    pinMode( encoder.gpio1, INPUT );
+    pinMode( encoder.gpio2, INPUT );
+    pullUpDnControl( encoder.gpio1, PUD_UP );
+    pullUpDnControl( encoder.gpio2, PUD_UP );
 
 
     // ************************************************************************
     //  Register interrupt functions.
     // ************************************************************************
-    // Are both needed since both pins should trigger at the same time?
-    wiringPiISR( test.pinA, INT_EDGE_FALLING, &encoderPulse );
-    wiringPiISR( test.pinB, INT_EDGE_FALLING, &encoderPulse );
+    /*
+        Calling via wiringPi interrupt produces strange behaviour.
+        Rotary encoder has multiple pulses on both pins that may fire AB or BA.
+        Also, bouncing can produce random interrupts.
+        Multiple interrupt calls create race conditions.
+        May be better to use threads.
+    */
+
+    wiringPiISR( encoder.gpio1, INT_EDGE_BOTH, &encoderFunction );
+    wiringPiISR( encoder.gpio2, INT_EDGE_BOTH, &encoderFunction );
 
 
     // ************************************************************************
@@ -176,24 +169,13 @@ int main()
     // ************************************************************************
     while ( 1 )
     {
-
-//        unsigned static int i;
-//        for ( i = 0; i < 16; i++ )
-//            printf( "Binary for %i = %s.\n", i, getBinaryString( i ));
-//        unsigned static int i;
-//        for ( i = 0; i < 16; i++ )
-//        {
-//            char binary[5] = {""};
-//            getBinaryString( i, binary );
-//            printf( "Binary for %i = %s.\n", i, binary );
-//        }
-        if ( !test.busy & ( test.direction != 0 ))
-        {
-            printf( "Direction = %i.\n", test.direction );
-            test.direction = 0;
-        }
+        // Check for a change in the direction.
+//        encoderFunction( &encoder );
+        if ( encoder.direction != 0 )
+            printf( "Direction = %i.\n", encoder.direction );
+        encoder.direction = 0;
+        delay( 1 );
     }
-
 
     return 0;
 }

@@ -3,7 +3,7 @@
 /*
     testTab:
 
-    Program to test rotary encoder using a state table.
+    Program to test rotary encoder using a state table and simple polling.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
     Based on algorithm by Ben Buxton - see http://www.buxtronix.net
@@ -24,7 +24,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.2"
+#define Version "Version 0.1"
 
 //  Compilation:
 //
@@ -149,25 +149,6 @@ int main()
     pullUpDnControl( encoder.gpio1, PUD_UP );
     pullUpDnControl( encoder.gpio2, PUD_UP );
 
-
-    // ************************************************************************
-    //  Register interrupt functions.
-    // ************************************************************************
-    /*
-        Calling via wiringPi interrupt produces strange behaviour.
-        Rotary encoder has multiple pulses on both pins that may fire AB or BA.
-        Also, bouncing can produce random interrupts.
-        Multiple interrupt calls create race conditions.
-        May be better to use threads.
-    */
-
-//    wiringPiISR( rotEnc.numA, INT_EDGE_BOTH, &getPulse );
-//    wiringPiISR( rotEnc.numB, INT_EDGE_FALLING, &getPulse );
-
-
-    // ************************************************************************
-    //  Wait for GPIO activity.
-    // ************************************************************************
     while ( 1 )
     {
         // Check for a change in the direction.
