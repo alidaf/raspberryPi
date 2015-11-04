@@ -48,13 +48,18 @@ A simple command line program to test adjusting ALSA control elements. Use piLis
 
 A simple command line program to test adjusting ALSA mixer controls. Use piListMixers to find out which mixer controls are available.
 
-###GPIOsysfs:
+###testTab:
 
-Intended to provide a library of basic GPIO functionality. Still in early development and not currently useful. It will draw in some of the other utilities into a Raspberry Pi GPIO library.
+A test of an alternative rotary encoder routine using a state machine and simple polling. 
+Consumes CPU!
+
+###testTabInt:
+
+A test of an alternative rotary encoder routine using a state machine and interrupts. 
 
 ###thx1138:
 
-A collection of ALSA experimentation to learn more and help me develop a spectrum analyser and digital VU metering. Not currently useful.
+ALSA experimentation to test analysing streams and help me develop a spectrum analyser and digital VU metering. Not currently useful.
 
 ---
 #### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
