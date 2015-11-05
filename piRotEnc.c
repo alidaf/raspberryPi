@@ -94,7 +94,7 @@ struct boundsStruct
     unsigned char volumeLow;
     unsigned char volumeHigh;
     char balanceLow;
-    char balanceHigh;
+    unsigned char balanceHigh;
     float factorLow;
     float factorHigh;
     unsigned char incLow;
@@ -176,7 +176,7 @@ static struct boundsStruct paramBounds =
     .balanceHigh = 100, // Upper bound for balance.
     .factorLow = 0.001, // Lower bound for volume shaping factor.
     .factorHigh = 10,   // Upper bound for volume shaping factor.
-    .incLow = 1,        // Lower bound for no. of volume increments.
+    .incLow = 10,       // Lower bound for no. of volume increments.
     .incHigh = 100,     // Upper bound for no. of volume increments.
     .delayLow = 1,      // Lower bound for delay between tics.
     .delayHigh = 100    // Upper bound for delay between tics.
@@ -433,24 +433,27 @@ static void buttonResetInterrupt()
 // ============================================================================
 //  Prints default or command line set parameters values.
 // ============================================================================
-static void printParams ( struct cmdOptionsStruct cmdOptions )
+static void printOptions( struct cmdOptionsStruct cmdOptions )
 {
-    printf( "\nSet options:\n\n" );
-    printf( "\tCard name = %s.\n", cmdOptions.card );
-    printf( "\tMixer name = %s.\n", cmdOptions.mixer );
-    printf( "\tVolume encoder attached to GPIOs %i", cmdOptions.volumeGPIO1 );
-    printf( " & %i,\n", cmdOptions.volumeGPIO2 );
-    printf( "\tMute button attached to GPIO %i.\n", cmdOptions.volMuteGPIO );
-    printf( "\tBalance encoder attached to GPIOs %i", cmdOptions.balanceGPIO1 );
-    printf( " & %i,\n", cmdOptions.balanceGPIO2 );
-    printf( "\tBalance reset attached to GPIO %d.\n", cmdOptions.balResetGPIO );
-    printf( "\tInitial volume = %i%%.\n", cmdOptions.volume );
-    printf( "\tVolume increments = %i.\n", cmdOptions.increments );
-    printf( "\tInitial balance = %i%%.\n", cmdOptions.balance );
-    printf( "\tMinimum volume = %i%%.\n", cmdOptions.minimum );
-    printf( "\tMaximum volume = %i%%.\n", cmdOptions.maximum );
-    printf( "\tVolume factor = %g.\n", cmdOptions.factor );
-    printf( "\tTic delay = %i.\n\n", cmdOptions.delay );
+    printf( "\n\t+-----------------+-----------------+\n" );
+    printf( "\t| Option          | Value(s)        |\n" );
+    printf( "\t+-----------------+-----------------+\n" );
+    printf( "\t| Card name       | %-15s |\n", cmdOptions.card );
+    printf( "\t| Mixer name      | %-15s |\n", cmdOptions.mixer );
+    printf( "\t| Volume encoder  | GPIO%-2i", cmdOptions.volumeGPIO1 );
+    printf( " & GPIO%-2i |\n", cmdOptions.volumeGPIO2 );
+    printf( "\t| Balance encoder | GPIO%-2i", cmdOptions.balanceGPIO1 );
+    printf( " & GPIO%i |\n", cmdOptions.balanceGPIO2 );
+    printf( "\t| Mute button     | GPIO%-11i |\n", cmdOptions.volMuteGPIO );
+    printf( "\t| Reset button    | GPIO%-11i |\n", cmdOptions.balResetGPIO );
+    printf( "\t| Volume          | %3i%% %10s |\n", cmdOptions.volume, "" );
+    printf( "\t| Increments      | %3i %11s |\n", cmdOptions.increments, "" );
+    printf( "\t| Balance         | %3i%% %10s |\n", cmdOptions.balance, "" );
+    printf( "\t| Minimum         | %3i%% %10s |\n", cmdOptions.minimum, "" );
+    printf( "\t| Maximum         | %3i%% %10s |\n", cmdOptions.maximum, "" );
+    printf( "\t| Factor          | %7.3f %7s |\n", cmdOptions.factor, "" );
+    printf( "\t| Interrupt delay | %3i %11s |\n", cmdOptions.delay, "" );
+    printf( "\t+-----------------+-----------------+\n\n" );
 };
 
 
@@ -459,22 +462,21 @@ static void printParams ( struct cmdOptionsStruct cmdOptions )
 // ============================================================================
 static void printRanges( struct boundsStruct paramBounds )
 {
-    printf ( "\nCommand line parameter ranges:\n\n" );
-    printf ( "\tVolume range (-i) = %d to %d.\n",
-                    paramBounds.volumeLow,
-                    paramBounds.volumeHigh );
-    printf ( "\tBalance  range (-b) = %i%% to %i%%.\n",
-                    paramBounds.balanceLow,
-                    paramBounds.balanceHigh );
-    printf ( "\tVolume shaping factor (-f) = %g to %g.\n",
-                    paramBounds.factorLow,
-                    paramBounds.factorHigh );
-    printf ( "\tIncrement range (-e) = %d to %d.\n",
-                    paramBounds.incLow,
-                    paramBounds.incHigh );
-    printf ( "\tDelay range (-d) = %d to %d.\n\n",
-                    paramBounds.delayLow,
-                    paramBounds.delayHigh );
+    printf( "\nCommand line option ranges:\n\n" );
+    printf( "\t+------------+--------+-------+-------+\n" );
+    printf( "\t| Parameter  | Switch |  min  |  max  |\n" );
+    printf( "\t+------------+--------+-------+-------+\n" );
+    printf( "\t| %-10s |   %2s   |  %3i  |  %3i  |\n",
+            "Volume", "-v", paramBounds.volumeLow, paramBounds.volumeHigh );
+    printf( "\t| %-10s |   %2s   |  %3i  |  %3i  |\n",
+            "Balance", "-b", paramBounds.balanceLow, paramBounds.balanceHigh );
+    printf( "\t| %-10s |   %2s   | %5.3f | %5.2f |\n",
+            "Factor", "-f", paramBounds.factorLow, paramBounds.factorHigh );
+    printf( "\t| %-10s |   %2s   |  %3i  |  %3i  |\n",
+            "Increments", "-i", paramBounds.incLow, paramBounds.incHigh );
+    printf( "\t| %-10s |   %2s   |  %3i  |  %3i  |\n",
+            "Response", "-d", paramBounds.delayLow, paramBounds.delayHigh );
+    printf( "\t+------------+--------+-------+-------+\n\n" );
 };
 
 
@@ -497,27 +499,26 @@ static const char args_doc[] = "piRotEnc <options>";
 static struct argp_option options[] =
 {
     { 0, 0, 0, 0, "ALSA:" },
-    { "card", 'c', "<string>", 0, "ALSA card name" },
-    { "mixer", 'm', "<string>", 0, "ALSA mixer name" },
+    { "card",      'c', "<string>",    0, "ALSA card name" },
+    { "mixer",     'm', "<string>",    0, "ALSA mixer name" },
     { 0, 0, 0, 0, "GPIO:" },
-    { "gpiovol", 'A', "<int>,<int>", 0, "GPIO pins for volume encoder." },
-    { "gpiobal", 'B', "<int>,<int>", 0, "GPIO pins for balance encoder." },
-    { "gpiomut", 'C', "<int>", 0, "GPIO pin for mute button." },
-    { "gpiores", 'D', "<int>", 0, "GPIO pin for balance reset button." },
+    { "gpiovol",   'A', "<int>,<int>", 0, "GPIOs for volume encoder." },
+    { "gpiobal",   'B', "<int>,<int>", 0, "GPIOs for balance encoder." },
+    { "gpiomut",   'C', "<int>",       0, "GPIO for mute button." },
+    { "gpiores",   'D', "<int>",       0, "GPIO for balance reset button." },
     { 0, 0, 0, 0, "Volume:" },
-    { "vol", 'v', "<int>", 0, "Initial volume (%)." },
-    { "bal", 'b', "<int>", 0, "Initial L/R balance -100% to +100%." },
-    { "min", 'j', "<int>", 0, "Minimum volume (% of full output)." },
-    { "max", 'k', "<int>", 0, "Maximum volume (% of full output)." },
-    { "inc", 'i', "<int>", 0, "Volume increments over range." },
-    { "fac", 'f', "<float>", 0, "Volume profile factor." },
+    { "vol",       'v', "<int>",       0, "Initial volume (%)." },
+    { "bal",       'b', "<int>",       0, "Initial L/R balance (%)." },
+    { "min",       'j', "<int>",       0, "Minimum volume (%)." },
+    { "max",       'k', "<int>",       0, "Maximum volume (%)." },
+    { "inc",       'i', "<int>",       0, "Volume increments." },
+    { "fac",       'f', "<float>",     0, "Volume profile factor." },
     { 0, 0, 0, 0, "Responsiveness:" },
-    { "delay", 'r', "<int>", 0, "Interrupt delay (mS)." },
+    { "delay",     'r', "<int>",       0, "Interrupt delay (mS)." },
     { 0, 0, 0, 0, "Debugging:" },
-    { "printoutput", 'P', 0, 0, "Print program output." },
-    { "printdefault", 'Q', 0, 0, "Print default parameters." },
-    { "printranges", 'R', 0, 0, "Print parameter ranges." },
-    { "printset", 'S', 0, 0, "Print set parameters." },
+    { "proutput",  'P',       0,       0, "Print output while running." },
+    { "proptions", 'O',       0,       0, "Print all command options." },
+    { "prranges",  'R',       0,       0, "Print parameter ranges." },
     { 0 }
 };
 
@@ -607,49 +608,49 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 // ============================================================================
 //  Checks if a parameter is within bounds.
 // ============================================================================
-static int checkIfInBounds( float value, float lower, float upper )
+static bool checkIfInBounds( float value, float lower, float upper )
 {
-        if (( value < lower ) || ( value > upper )) return 1;
-        else return 0;
+        if (( value < lower ) || ( value > upper )) return false;
+        else return true;
 };
 
 // ============================================================================
 //  Command line parameter validity checks.
 // ============================================================================
-static int checkParams ( struct cmdOptionsStruct *cmdOptions,
-                         struct boundsStruct *paramBounds )
+static int checkParams ( struct cmdOptionsStruct cmdOptions,
+                         struct boundsStruct paramBounds )
 {
-    static char error = 0;
-    error = ( checkIfInBounds( cmdOptions->volume,
-                               cmdOptions->minimum,
-                               cmdOptions->maximum ) ||
-              checkIfInBounds( cmdOptions->balance,
-                               paramBounds->balanceLow,
-                               paramBounds->balanceHigh ) ||
-              checkIfInBounds( cmdOptions->volume,
-                               paramBounds->volumeLow,
-                               paramBounds->volumeHigh ) ||
-              checkIfInBounds( cmdOptions->minimum,
-                               paramBounds->volumeLow,
-                               paramBounds->volumeHigh ) ||
-              checkIfInBounds( cmdOptions->maximum,
-                               paramBounds->volumeLow,
-                               paramBounds->volumeHigh ) ||
-              checkIfInBounds( cmdOptions->increments,
-                               paramBounds->incLow,
-                               paramBounds->incHigh ) ||
-              checkIfInBounds( cmdOptions->factor,
-                               paramBounds->factorLow,
-                               paramBounds->factorHigh ) ||
-              checkIfInBounds( cmdOptions->delay,
-                               paramBounds->delayLow,
-                               paramBounds->delayHigh ));
-    if ( error )
+    static bool inBounds;
+    inBounds = ( checkIfInBounds( cmdOptions.volume,
+                                  cmdOptions.minimum,
+                                  cmdOptions.maximum ) ||
+                 checkIfInBounds( cmdOptions.balance,
+                                  paramBounds.balanceLow,
+                                  paramBounds.balanceHigh ) ||
+                 checkIfInBounds( cmdOptions.volume,
+                                  paramBounds.volumeLow,
+                                  paramBounds.volumeHigh ) ||
+                 checkIfInBounds( cmdOptions.minimum,
+                                  paramBounds.volumeLow,
+                                  paramBounds.volumeHigh ) ||
+                 checkIfInBounds( cmdOptions.maximum,
+                                  paramBounds.volumeLow,
+                                  paramBounds.volumeHigh ) ||
+                 checkIfInBounds( cmdOptions.increments,
+                                  paramBounds.incLow,
+                                  paramBounds.incHigh ) ||
+                 checkIfInBounds( cmdOptions.factor,
+                                  paramBounds.factorLow,
+                                  paramBounds.factorHigh ) ||
+                 checkIfInBounds( cmdOptions.delay,
+                                  paramBounds.delayLow,
+                                  paramBounds.delayHigh ));
+    if ( !inBounds )
     {
         printf( "\nThere is something wrong with the set parameters.\n" );
-        printf( "Use the -m -p -q -r -s flags to check values.\n\n" );
+        printf( "Use the -O -P -R flags to check values.\n\n" );
     }
-    return error;
+    return inBounds;
 };
 
 
@@ -664,14 +665,14 @@ char main( int argc, char *argv[] )
     //  Get command line arguments and check within bounds.
     // ------------------------------------------------------------------------
     argp_parse( &argp, argc, argv, 0, 0, &cmdOptions );
-    if ( checkParams( &cmdOptions, &paramBounds ) != 0 ) return -1;
+    if ( !checkParams( cmdOptions, paramBounds )) return -1;
 
 
     // ------------------------------------------------------------------------
     //  Print out any information requested on command line.
     // ------------------------------------------------------------------------
     if ( cmdOptions.printRanges ) printRanges( paramBounds );
-    if ( cmdOptions.printOptions ) printParams( cmdOptions );
+    if ( cmdOptions.printOptions ) printOptions( cmdOptions );
 
     // exit program for all information except program output.
     if (( cmdOptions.printOptions ) || ( cmdOptions.printRanges )) return 0;
