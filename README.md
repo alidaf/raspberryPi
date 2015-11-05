@@ -3,7 +3,10 @@ RaspberryPi projects and utilities.
 
 ###rotencvol:
 
-The original rotary encoder program that was used to create the Tiny Core Linux packages. The binaries have been removed but I will create a tcz package for anyone that requests it. This is essentially deprecated by piRotEnc.
+The original, working rotary encoder program that was used to create the Tiny Core Linux 
+packages. 
+The binaries have been removed but I will create a tcz package for anyone that requests it. 
+This will eventually be deprecated in favour of piRotEnc.
 
 ###piRotEnc:
 
