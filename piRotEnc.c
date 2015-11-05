@@ -5,8 +5,13 @@
 
     Rotary encoder control app for the Raspberry Pi.
 
-    Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
-    Portions based on IQ_rot.c, copyright 2015 Gordon Garrity.
+    Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
+        Originally based on IQ_rot, 2015 Gordon Garrity.
+            - see https://github.com/iqaudio/tools/IQ_rot.c.
+        Rotary encoder state machine based on algorithm by Ben Buxton.
+            - see http://www.buxtronix.net.
+        ALSA routines based on amixer, 2000 Jaroslev Kysela.
+            - see http://www.alsa-project.org.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -41,6 +46,17 @@
 //
 //  v0.1 Original version - rewrite of rotencvol.c.
 //  v0.2 Changed rotary encoder routine to use state table.
+//
+
+//  To Do:
+//      Test balance encoder and buttons.
+//      Add proper muting rather than set volume to 0, and set mute when 0.
+//          - look at playback switch mechanism.
+//      Improve bounds checking by using arrays for each parameter.
+//      Add routine to check validity of GPIOs.
+//      Improve error trapping and return codes for all functions.
+//      Write GPIO and interrupt routines to replace wiringPi.
+//      Remove all global variables.
 //
 
 #include <stdio.h>
@@ -128,7 +144,7 @@ struct encoderStruct
     unsigned char gpio1;
     unsigned char gpio2;
     unsigned char state;
-    char direction;
+    int direction;
     char position;
 };
 
@@ -188,32 +204,46 @@ static struct boundsStruct paramBounds =
 // ****************************************************************************
 
 // ============================================================================
-//  Returns mapped volume from linear volume based on shaping factor.
+//  Returns mapped volume based on shaping factor.
 // ============================================================================
 /*
-    mappedVolume = ( base^fraction - 1 ) / ( base - 1 )
+    mappedVolume = ( factor^fraction - 1 ) / ( base - 1 )
     fraction = linear volume / volume range.
 
     factor << 1, logarithmic.
     factor == 1, linear.
     factor >> 1, exponential.
 */
-static long mapVolume( long linear, long range, long min, float factor )
+static long getMappedVolume( float index, float increments,
+                             float range, float minimum, float factor )
 {
-    float base;
-    long mapped;
+    long mappedVolume;
 
-    if ( factor == 1 ) mapped = linear;
-    else mapped = lroundf((( pow( factor, (float) linear / range ) - 1 ) /
-                             ( factor - 1 ) * range + min ));
-    return mapped;
+    if ( factor == 1 )
+         mappedVolume = lroundf(( index / increments * range ) + minimum );
+    else mappedVolume = lroundf((( pow( factor, index / increments ) - 1 ) /
+                                ( factor - 1 ) * range + minimum ));
+    return mappedVolume;
 };
+
+
+// ============================================================================
+//  Returns linear volume for ALSA.
+// ============================================================================
+/*
+    Simple calculation but avoids typecasting.
+*/
+long getSoftValue( float volume, float min, float max )
+{
+    long softValue = ( volume * ( max - min ) / 100 + min );
+    return softValue;
+}
 
 
 // ============================================================================
 //  Set volume using ALSA mixers.
 // ============================================================================
-static void setVolumeMixer( struct volumeStruct volume )
+static void setVolumeMixer( struct volumeStruct volume, char body )
 {
     snd_ctl_t *ctlHandle;               // Simple control handle.
     snd_ctl_elem_id_t *ctlId;           // Simple control element id.
@@ -240,7 +270,6 @@ static void setVolumeMixer( struct volumeStruct volume )
     mixerElem = snd_mixer_find_selem( mixerHandle, mixerId );
     snd_mixer_selem_get_id( mixerElem, mixerId );
 
-
     // ------------------------------------------------------------------------
     //  Get some information for selected mixer.
     // ------------------------------------------------------------------------
@@ -250,9 +279,10 @@ static void setVolumeMixer( struct volumeStruct volume )
     long hardRange = hardMax - hardMin;
 
     // Soft volume limits.
-    long softMin = ( volume.minimum * ( hardMax - hardMin )) / 100;
-    long softMax = ( volume.maximum * ( hardMax - hardMin )) / 100;
+    long softMin = getSoftValue( volume.minimum, hardMin, hardMax );
+    long softMax = getSoftValue( volume.maximum, hardMin, hardMax );
     long softRange = softMax - softMin;
+
 
     // ------------------------------------------------------------------------
     //  Calculate volume and check bounds.
@@ -280,16 +310,17 @@ static void setVolumeMixer( struct volumeStruct volume )
         indexLeft = indexRight = volume.index;
 
     // Calculate linear volume for left and right channels.
-    long linearLeft = (( indexLeft * softRange ) /
-                          volume.increments ) + softMin;
-    long linearRight = (( indexRight * softRange ) /
-                          volume.increments ) + softMin;
+    long linearLeft, linearRight;
+    linearLeft = getMappedVolume( indexLeft, volume.increments,
+                                  softRange, softMin, 1 );
+    linearRight = getMappedVolume( indexRight, volume.increments,
+                                   softRange, softMin, 1 );
 
     // Calculate mapped volumes.
-    long mappedLeft = mapVolume( linearLeft, softRange,
-                                 softMin, volume.factor );
-    long mappedRight = mapVolume( linearRight, softRange,
-                                 softMin, volume.factor );
+    long mappedLeft = getMappedVolume( indexLeft, volume.increments,
+                                       softRange, softMin, volume.factor );
+    long mappedRight = getMappedVolume( indexRight, volume.increments,
+                                        softRange, softMin, volume.factor );
 
     // ------------------------------------------------------------------------
     //  Set volume.
@@ -306,9 +337,26 @@ static void setVolumeMixer( struct volumeStruct volume )
     // ------------------------------------------------------------------------
     if ( volume.print )
     {
-        printf( " %10d | %10d | %10d | %10d |\n",
-                linearLeft, linearRight,
-                mappedLeft, mappedRight );
+        if ( body == 0 )
+        {
+            printf( "\n" );
+            printf( "\t+-----------+-----------------+-----------------+\n" );
+            printf( "\t| indices   | Linear Volume   | Mapped Volume   |\n" );
+            printf( "\t+-----+-----+--------+--------+--------+--------+\n" );
+            printf( "\t| L   | R   | L      | R      | L      | R      |\n" );
+            printf( "\t+-----+-----+--------+--------+--------+--------+\n" );
+            printf( "\t| %3i | %3i | %6d | %6d | %6d | %6d |\n",
+                    indexLeft, indexRight,
+                    linearLeft, linearRight,
+                    mappedLeft, mappedRight );
+        }
+        else
+        {
+            printf( "\t| %3i | %3i | %6d | %6d | %6d | %6d |\n",
+                    indexLeft, indexRight,
+                    linearLeft, linearRight,
+                    mappedLeft, mappedRight );
+        }
     }
 
 
@@ -682,18 +730,22 @@ char main( int argc, char *argv[] )
     //  Set up volume data structure.
     // ------------------------------------------------------------------------
     static struct volumeStruct volume;
-    volume.card = cmdOptions.card,
-    volume.mixer = cmdOptions.mixer,
-    volume.factor = cmdOptions.factor,
-    volume.mute = false,
-    volume.print = cmdOptions.printOutput,
+    volume.card = cmdOptions.card;
+    volume.mixer = cmdOptions.mixer;
+    volume.factor = cmdOptions.factor;
+    volume.mute = false;
+    volume.increments = cmdOptions.increments;
+    volume.print = cmdOptions.printOutput;
+    volume.minimum = cmdOptions.minimum;
+    volume.maximum = cmdOptions.maximum;
 
-        // Get closest volume index for starting volume.
+    // Get closest volume index for starting volume.
     volume.index = ( cmdOptions.increments -
                    ( cmdOptions.maximum - cmdOptions.volume ) *
                      cmdOptions.increments /
-                   ( cmdOptions.maximum - cmdOptions.minimum )),
-        // Get closest balance index for starting balance.
+                   ( cmdOptions.maximum - cmdOptions.minimum ));
+
+    // Get closest balance index for starting balance.
     volume.balance = ( cmdOptions.balance * cmdOptions.increments ) / 100;
 
     // ------------------------------------------------------------------------
@@ -743,7 +795,7 @@ char main( int argc, char *argv[] )
     // ------------------------------------------------------------------------
     //  Set initial volume.
     // ------------------------------------------------------------------------
-    setVolumeMixer( volume );
+    setVolumeMixer( volume, 0 );
 
 
     // ------------------------------------------------------------------------
@@ -776,7 +828,7 @@ char main( int argc, char *argv[] )
                 ( volume.index > 0 )) volume.index--;
 
             encoderVolume.direction = 0;
-            setVolumeMixer( volume );
+            setVolumeMixer( volume, 1 );
         }
         // --------------------------------------------------------------------
         //  Balance.
@@ -792,7 +844,7 @@ char main( int argc, char *argv[] )
                 ( volume.balance > -volume.increments )) volume.balance--;
 
             encoderBalance.direction = 0;
-            setVolumeMixer( volume );
+            setVolumeMixer( volume, 1 );
 
         }
         // --------------------------------------------------------------------
@@ -802,7 +854,7 @@ char main( int argc, char *argv[] )
         {
             volume.mute = true;
             buttonMute.state = false;
-            setVolumeMixer( volume );  // May be better to use playback switch.
+            setVolumeMixer( volume, 1 );  // May be better to use playback switch.
         }
         // --------------------------------------------------------------------
         //  Balance reset.
@@ -811,7 +863,7 @@ char main( int argc, char *argv[] )
         {
             volume.balance = 0;
             buttonReset.state = false;
-            setVolumeMixer( volume );
+            setVolumeMixer( volume, 1 );
         }
 
         // Responsiveness - small delay to allow interrupts to finish.
