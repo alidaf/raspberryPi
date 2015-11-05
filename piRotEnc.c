@@ -24,7 +24,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.1"
+#define Version "Version 0.2"
 
 //  Compilation:
 //
@@ -46,153 +46,110 @@
 #include <stdio.h>
 #include <string.h>
 #include <argp.h>
+#include <alsa/asoundlib.h>
+#include <alsa/mixer.h>
 #include <wiringPi.h>
 #include <math.h>
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
 
+// ============================================================================
+// Data structures
+// ============================================================================
+
+/*
+    Note: char is the smallest integer size (usually 8 bit) and is used to
+          keep the memory footprint as low as possible.
+*/
+
 // ----------------------------------------------------------------------------
-//  Pi header information. Placed here for easier updating.
+// Data structures for command line arguments and bounds checking.
 // ----------------------------------------------------------------------------
-
-// Known Pi revision numbers, corresponding models and board versions.
-#define REVISION  0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,\
-                  0x0008, 0x0009, 0x0010, 0x0012, 0x0013, 0x000d,\
-                  0x000e, 0x000f, 0xa01041, 0xa21041
-#define MODEL     "B", "B", "B", "B", "B", "A",\
-                  "A", "A", "B+", "A+", "B+", "B",\
-                  "B", "B", "2B", "2B"
-#define VERSION   1.0, 1.0, 2.0, 2.0, 2.0, 2.0,\
-                  2.0, 2.0, 1.0, 1.0, 1.2, 2.0,\
-                  2.0, 2.0, 1.1, 1.1
-#define LAYOUT    1, 1, 2, 2, 2, 2,\
-                  2, 2, 3, 3, 3, 2,\
-                  2, 2, 3, 3
-#define NUMLAYOUTS 3
-
-// GPIO pin layouts - preformatted to make the printout routine easier.
-#define LABELS1  " +3.3V", "+5V   ", " GPIO0", "+5V   ", " GPIO1", "GND   ",\
-                 " GPIO4", "GPIO14",    "GND", "GPIO15", "GPIO17", "GPIO18",\
-                 "GPIO21", "GND   ", "GPIO22", "GPIO23", "  3.3V", "GPIO24",\
-                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-                 "   GND", "GPIO7 "
-#define LABELS2  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
-                 " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
-                 "GPIO21", "GND   ", "GPIO22", "GPIO23",   "3.3V", "GPIO24",\
-                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-                 "   GND", "GPIO7 "
-#define LABELS3  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
-                 " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
-                 "GPIO21", "GND   ", "GPIO22", "GPIO23", " +3.3V", "GPIO24",\
-                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-                 "   GND", "GPIO7 ", "   DNC", "DNC   ", " GPIO5", "GND   ",\
-                 " GPIO6", "GPIO12", "GPIO13", "GND   ", "GPIO19", "GPIO16",\
-                 "GPIO26", "GPIO20", "   GND", "GPIO21"
-
-// Header pin, Broadcom GPIO and wiringPi pin numbers for each board revision.
-#define HEAD_PINS1  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
-        		   19, 21, 22, 23, 24, 26
-#define BCOM_GPIO1  0,  1,  4, 14, 15, 17, 18, 21, 22, 23, 24,\
-		           10,  9, 25, 11,  8,  7
-#define WIPI_PINS1  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
-        		   12, 13,  6, 14, 10, 11
-
-#define HEAD_PINS2  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
-		           19, 21, 22, 23, 24, 26
-#define BCOM_GPIO2  2,  3,  4, 14, 15, 17, 18, 27, 22, 23, 24,\
-	        	   10,  9, 25, 11,  8,  7
-#define WIPI_PINS2  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
-		           12, 13,  6, 14, 10, 11
-
-#define HEAD_PINS3  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
-                   19, 21, 22, 23, 24, 26, 29, 31, 32, 33, 35,\
-                   36, 37, 38, 40
-#define BCOM_GPIO3  2,  3,  4, 14, 15, 17, 18, 27, 22, 23, 24,\
-                   10,  9, 25, 11,  8,  7,  5,  6, 12, 13, 19,\
-		           16, 26, 20, 21
-#define WIPI_PINS3  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
-		           12, 13,  6, 14, 10, 11, 21, 22, 26, 23, 24,\
-		           27, 25, 28, 29
-
-
-// Data structure for command line arguments.
-struct structArgs
+struct cmdOptionsStruct
 {
-    char *card;         // ALSA card name.
-    char *mixer;        // Alsa mixer name.
-    int volumeGPIO1;    // GPIO pin for vol rotary encoder.
-    int volumeGPIO2;    // GPIO pin for vol rotary encoder.
-    int volMuteGPIO;    // GPIO pin for mute button.
-    int balanceGPIO1;   // GPIO pin for bal rotary encoder.
-    int balanceGPIO2;   // GPIO pin for bal rotary encoder.
-    int balResetGPIO;   // GPIO pin for bal reset button.
-    int volume;         // Initial volume (%).
-    int volumeMin;      // Minimum soft volume (%).
-    int volumeMax;      // Maximum soft volume (%).
-    int volumeIncs;     // No. of increments over volume range.
-    float volumeFactor; // Volume shaping factor.
-    int balance;        // Volume L/R balance.
-    int delay;          // Delay between encoder tics.
-    bool printGPIO;     // Flag to print GPIO mapping.
-    bool printOutput;   // Flag to print output.
-    bool printDefault;  // Flag to print defaults.
-    bool printRanges;   // Flag to print ranges.
-    bool printSet;      // Flag to print set parameters.
-    bool printMixer;    // Flag to print mixer info.
-    bool printPiInfo;   // Flag to print Pi info.
+    char *card;                     // ALSA card name.
+    char *mixer;                    // Alsa mixer name.
+    unsigned char volumeGPIO1;      // GPIO pin for vol rotary encoder.
+    unsigned char volumeGPIO2;      // GPIO pin for vol rotary encoder.
+    unsigned char volMuteGPIO;      // GPIO pin for mute button.
+    unsigned char balanceGPIO1;     // GPIO pin for bal rotary encoder.
+    unsigned char balanceGPIO2;     // GPIO pin for bal rotary encoder.
+    unsigned char  balResetGPIO;    // GPIO pin for bal reset button.
+    unsigned char volume;           // Initial volume (%).
+    unsigned char minimum;          // Minimum soft volume (%).
+    unsigned char maximum;          // Maximum soft volume (%).
+    unsigned char increments;       // No. of increments over volume range.
+    float factor;                   // Volume shaping factor.
+    char balance;                   // Volume L/R balance.
+    unsigned char delay;            // Delay between encoder tics.
+    bool printOutput;               // Flag to print output.
+    bool printOptions;              // Flag to print options.
+    bool printRanges;               // Flag to print ranges.
 };
 
-// Data structure for argument bounds.
+// Rewrite this using arrays.
 struct boundsStruct
 {
-    int volumeLow;
-    int volumeHigh;
-    int balanceLow;
-    int balanceHigh;
+    unsigned char volumeLow;
+    unsigned char volumeHigh;
+    char balanceLow;
+    char balanceHigh;
     float factorLow;
     float factorHigh;
-    int incLow;
-    int incHigh;
-    int delayLow;
-    int delayHigh;
+    unsigned char incLow;
+    unsigned char incHigh;
+    unsigned char delayLow;
+    unsigned char delayHigh;
 };
 
+// ----------------------------------------------------------------------------
 // Data structure for volume.
+// ----------------------------------------------------------------------------
 struct volumeStruct
 {
-    char *card;
-    char *mixer;
-    float factor;
-    unsigned int volume;
-    int balance;
-    bool debug;
+    char *card;                 // Card name.
+    char *mixer;                // Mixer name.
+    float factor;               // Volume mapping factor.
+    unsigned char index;        // Relative index for volume level.
+    unsigned char increments;   // Number of increments over soft range.
+    unsigned char minimum;      // Soft minimum level.
+    unsigned char maximum;      // Soft maximum level.
+    char balance;               // Relative balance.
+    bool mute;                  // Mute switch.
+    bool print;                 // Print output switch.
 };
 
-// Data structure for rotary encoder functions.
+// ----------------------------------------------------------------------------
+// Data structures for rotary encoder and button functions.
+// ----------------------------------------------------------------------------
 struct encoderStruct
 {
-    unsigned int gpio1;
-    unsigned int gpio2;
+    unsigned char gpio1;
+    unsigned char gpio2;
     unsigned char state;
-    int direction;
+    char direction;
+    char position;
 };
 
-// Data structure for button functions.
 struct buttonStruct
 {
-    unsigned int gpio;
-    unsigned int state;
+    unsigned char gpio;
+    unsigned char state;
 };
+
+// Define now for global access (due to limitation of wiringPi).
+static struct encoderStruct encoderVolume, encoderBalance;
+static struct buttonStruct buttonMute, buttonReset;
 
 
 // ----------------------------------------------------------------------------
 //  Set default values.
 // ----------------------------------------------------------------------------
-static struct structArgs cmdArgs, defaultArgs =
+static struct cmdOptionsStruct cmdOptions =
 {
     .card = "hw:0",         // 1st ALSA card.
-    .control = "PCM",       // Default ALSA control.
+    .mixer = "PCM",         // Default ALSA control.
     .volumeGPIO1 = 14,      // GPIO 1 for volume encoder.
     .volumeGPIO2 = 15,      // GPIO 2 for volume encoder.
     .volMuteGPIO = 2,       // GPIO for mute/unmute button.
@@ -200,47 +157,15 @@ static struct structArgs cmdArgs, defaultArgs =
     .balanceGPIO2 = 24,     // GPIO2 for balance encoder.
     .balResetGPIO = 3,      // GPIO for balance reset button.
     .volume = 0,            // Start muted.
-    .volumeMin = 0,         // 0% of Maximum output level.
-    .volumeMax = 100,       // 100% of Maximum output level.
-    .volumeIncs = 20,       // 20 increments from 0 to 100%.
-    .volumeFactor = 1,      // Volume change rate factor.
+    .minimum = 0,           // 0% of Maximum output level.
+    .maximum = 100,         // 100% of Maximum output level.
+    .increments = 20,       // 20 increments from 0 to 100%.
+    .factor = 1,            // Volume change rate factor.
     .balance = 0,           // L = R.
     .delay = 1,             // 1ms between interrupt checks
-    .printGPIO = false,     // No wiringPi map printing.
     .printOutput = false,   // No output printing.
-    .printDefault = false,  // No defaults printing.
-    .printRanges = false,   // No range printing.
-    .printSet = false,      // No set parameters printing.
-    .printMixer = false,    // No mixer info printing.
-    .printPiInfo = false    // No Pi info printing.
-};
-
-static struct encoderStruct encoderVolume =
-{
-    .gpio1 = 14,
-    .gpio2 = 15,
-    .state = 0,
-    .direction = 0
-};
-
-static struct encoderStruct encoderBalance =
-{
-    .gpio1 = 23,
-    .gpio2 = 24,
-    .state = 0,
-    .direction = 0
-};
-
-static struct buttonStruct buttonMute =
-{
-    .gpio = 2,
-    .state = 0
-};
-
-static struct buttonStruct buttonBalance =
-{
-    .gpio = 3,
-    .state = 0
+    .printOptions = false,  // No command line options printing.
+    .printRanges = false    // No range printing.
 };
 
 static struct boundsStruct paramBounds =
@@ -257,719 +182,38 @@ static struct boundsStruct paramBounds =
     .delayHigh = 100    // Upper bound for delay between tics.
 };
 
-// ****************************************************************************
-//  Pi information functions.
-// ****************************************************************************
-
-/* Currently known versions.
-
-        +--------+------+----------+ +---+
-        |  Rev   | Year | Md | Ver | | * |
-        +--------+------+----------+ +---+
-        |   0002 | 2012 | B  | 1.0 | | 1 |
-        |   0003 | 2012 | B  | 1.0 | | 1 |
-        |   0004 | 2012 | B  | 2.0 | | 2 |
-        |   0005 | 2012 | B  | 2.0 | | 2 |
-        |   0006 | 2012 | B  | 2.0 | | 2 |
-        |   0007 | 2013 | A  | 2.0 | | 2 |
-        |   0008 | 2013 | A  | 2.0 | | 2 |
-        |   0009 | 2013 | A  | 2.0 | | 2 |
-        |   000d | 2012 | B  | 2.0 | | 2 |
-        |   000e | 2012 | B  | 2.0 | | 2 |
-        |   000f | 2012 | B  | 2.0 | | 2 |
-        |   0010 | 2014 | B+ | 1.0 | | 3 |
-        |   0011 | 2014 | -- | 1.0 | | - |
-        |   0012 | 2014 | A+ | 1.0 | | 3 |
-        |   0013 | 2015 | B+ | 1.2 | | 3 |
-        | a01041 | 2015 | 2B | 1.1 | | 3 |
-        | a21041 | 2015 | 2B | 1.1 | | 3 |
-        +--------+------+----+-----+ +---+
-    Function will return the '*' column value.
-*/
-
-/* Pin layouts and GPIO numbers.
-
-         Layout          B Rev 1.0       A Rev 2.0
-                                         B Rev 2.0
-
-         Pin  Pin        GPIO GPIO       GPIO GPIO
-        +----+----+     +----+----+     +----+----+
-        |  1 |  2 |     | -- | -- |     | -- | -- |
-        |  3 |  4 |     |  0 | -- |     |  2 | -- |
-        |  5 |  6 |     |  1 | -- |     |  3 | -- |
-        |  7 |  8 |     |  4 | 14 |     |  4 | 14 |
-        |  9 | 10 |     | -- | 15 |     | -- | 15 |
-        | 11 | 12 |     | 17 | 18 |     | 17 | 18 |
-        | 13 | 14 |     | 21 | -- |     | 27 | -- |
-        | 15 | 16 |     | 22 | 23 |     | 22 | 23 |
-        | 17 | 18 |     | -- | 24 |     | -- | 24 |
-        | 19 | 20 |     | 10 | -- |     | 10 | -- |
-        | 21 | 22 |     |  9 | 25 |     |  9 | 25 |
-        | 23 | 24 |     | 11 |  8 |     | 11 |  8 |
-        | 25 | 26 |     | -- |  7 |     | -- |  7 |
-        +====+====+     +----+----+     +====+====+
-        | 27 | 28 | }                 { | -- | -- |
-        | 29 | 30 | }                 { |  5 | -- |
-        | 31 | 32 | }      |A+|       { |  6 | 12 |
-        | 33 | 34 | } ---- |B+|  ---- { | 13 | -- |
-        | 35 | 36 | }      |2B|       { | 19 | 16 |
-        | 37 | 38 | }                 { | 26 | 20 |
-        | 39 | 40 | }                 { | -- | 21 |
-        +----+----+                     +----+----+
-*/
-
-// ============================================================================
-//  Returns GPIO layout by querying /proc/cpuinfo.
-// ============================================================================
-static int piInfoLayout( unsigned int prOut )
-{
-    int revision[] = { REVISION };
-    char *model[] = { MODEL };
-    float version[] = { VERSION };
-    int layout[] = { LAYOUT };
-
-    char *labels1[] = { LABELS1 };
-    char *labels2[] = { LABELS2 };
-    char *labels3[] = { LABELS3 };
-
-    FILE *pFile;        // File to read in and search.
-    char line[ 512 ];   // Storage for each line read in.
-    char term;          // Storage for end of line character.
-    static int rev;     // Revision in hex format.
-    static int loop;    // Loop incrementer.
-    static int index;   // Index of found revision.
-
-    // Open file for reading.
-    pFile = fopen( "/proc/cpuinfo", "r" );
-    if ( pFile == NULL )
-    {
-        perror( "Error" );
-        return( -1 );
-    }
-
-    while ( fgets( line, sizeof( line ), pFile ) != NULL )
-    {
-        if ( strncmp ( line, "Revision", 8 ) == 0 )
-        {
-            if ( !strncasecmp( "revision\t", line, 9 ))
-            {
-                // line should be "string" "colon" "hex string" "line break"
-                sscanf( line, "%s%s%x%c", &line, &term, &rev, &term );
-                {
-                    if ( term == '\n' ) break;
-                    rev = 0;
-                }
-            }
-        }
-    }
-    fclose ( pFile ) ;
-
-    if ( prOut )
-    {
-        printf( "\nKnown revisions:\n\n" );
-    	printf( "\t+-------+----------+-------+---------+\n" );
-    	printf( "\t| Index | Revision | Model | Version |\n" );
-    	printf( "\t+-------+----------+-------+---------+\n" );
-    }
-    // Now compare against arrays to find info.
-    index = 0;
-    for ( loop = 0; loop < sizeof( revision )  / sizeof( int ); loop++ )
-    {
-    if ( prOut )
-    {
-        printf( "\t|    %2i | 0x%0.6x |   %-2s  |   %3.1f   |",
-                loop,
-                revision[ loop ],
-                model[ loop ],
-                version[ loop ]);
-    }
-        if ( rev == revision[ loop ] )
-        {
-            index = loop;
-            if ( prOut ) printf( "<-This Pi\n" );
-        }
-        else
-            if ( prOut ) printf ( "\n" );
-    }
-
-    // Print GPIO header layout.
-    if (prOut )
-        printf( "\t+-------+----------+-------+---------+\n\n" );
-    if ( index == 0 )
-    {
-        if ( prOut )
-            printf( "Cannot find your card version from known versions.\n\n" );
-        return -1;
-    }
-    else
-    {
-        if ( prOut )
-        {
-            printf( "Raspberry Pi information:\n" );
-            printf( "\tRevision = 0x%0.6x.\n", revision[ index ]);
-            printf( "\tModel = %s (ver %3.1f).\n",
-                            model[ index ],
-                            version[ index ]);
-
-            printf( "\t+--------+-----++-----+--------+\n" );
-            printf( "\t|  GPIO  | pin || pin |  GPIO  |\n" );
-            printf( "\t+--------+-----++-----+--------+\n" );
-            switch ( layout[ index ] )
-            {
-                case 1 :
-                    for ( loop = 0; loop < sizeof( labels1 ) /
-                                ( 4 * sizeof( char )); loop = loop + 2 )
-                        printf( "\t| %6s | %3i || %3i | %6s |\n",
-                            labels1[ loop ], loop + 1, loop + 2, labels1[ loop + 1 ]);
-                    break;
-                case 2 :
-                    for ( loop = 0; loop < sizeof( labels2 ) /
-                                ( 4 * sizeof( char )); loop = loop + 2 )
-                        printf( "\t| %6s | %3i || %3i | %6s |\n",
-                             labels2[ loop ], loop + 1, loop + 2, labels2[ loop + 1 ]);
-                    break;
-                case 3 :
-                    for ( loop = 0; loop < sizeof( labels3 ) /
-                                ( 4 * sizeof( char )); loop = loop + 2 )
-                        printf( "\t| %6s | %3i || %3i | %6s |\n",
-                             labels3[ loop ], loop + 1, loop + 2, labels3[ loop + 1 ]);
-                    break;
-            }
-            printf( "\t+--------+-----++-----+--------+\n\n" );
-        }
-    }
-
-    return layout[ index ];
-}
-
-// ============================================================================
-//  Returns Broadcom GPIO number from Pi header pin number.
-// ============================================================================
-static int piInfoGetGPIOHead( unsigned int piPin )
-{
-    unsigned int headPins1[] = { HEAD_PINS1 };
-    unsigned int headPins2[] = { HEAD_PINS2 };
-    unsigned int headPins3[] = { HEAD_PINS3 };
-    unsigned int bcomGPIO1[] = { BCOM_GPIO1 };
-    unsigned int bcomGPIO2[] = { BCOM_GPIO2 };
-    unsigned int bcomGPIO3[] = { BCOM_GPIO3 };
-
-    int layout = piInfoLayout( 0 );
-    unsigned int loop;
-    int retCode = -1;
-
-    if ( layout == 1 )
-    {
-        for ( loop = 0; loop < sizeof( headPins1 ) / sizeof( int ); loop++ )
-            if ( piPin == headPins1[ loop ]) retCode = bcomGPIO1[ loop ];
-    }
-    else if ( layout == 2 )
-    {
-        for ( loop = 0; loop < sizeof( headPins2 ) / sizeof( int ); loop++ )
-            if ( piPin == headPins2[ loop ]) retCode = bcomGPIO2[ loop ];
-    }
-    else if ( layout == 3 )
-    {
-        for ( loop = 0; loop < sizeof( headPins3 ) / sizeof( int ); loop++ )
-            if ( piPin == headPins3[ loop ]) retCode = bcomGPIO3[ loop ];
-    }
-    return retCode;
-}
-
-// ============================================================================
-//  Returns wiringPi number from Pi header pin number.
-// ============================================================================
-static int piInfoGetWPiHead( unsigned int piPin )
-{
-
-    unsigned int headPins1[] = { HEAD_PINS1 };
-    unsigned int headPins2[] = { HEAD_PINS2 };
-    unsigned int headPins3[] = { HEAD_PINS3 };
-    unsigned int wiPiPins1[] = { WIPI_PINS1 };
-    unsigned int wiPiPins2[] = { WIPI_PINS2 };
-    unsigned int wiPiPins3[] = { WIPI_PINS3 };
-
-    int layout = piInfoLayout( 0 );
-    unsigned int loop;
-    int retCode = -1;
-
-    if ( layout == 1 )
-    {
-        for ( loop = 0; loop < sizeof( headPins1 ) / sizeof( int ); loop++ )
-            if ( piPin == headPins1[ loop ]) retCode = wiPiPins1[ loop ];
-    }
-    else if ( layout == 2 )
-    {
-        for ( loop = 0; loop < sizeof( headPins2) / sizeof( int ); loop++ )
-            if ( piPin == headPins2[ loop ]) retCode = wiPiPins2[ loop ];
-    }
-    else if ( layout == 3 )
-    {
-        for ( loop = 0; loop < sizeof( headPins3) / sizeof( int ); loop++ )
-            if ( piPin == headPins3[ loop ]) retCode = wiPiPins3[ loop ];
-    }
-    return retCode;
-}
-
-// ============================================================================
-//  Returns wiringPi number from GPIO number.
-// ============================================================================
-static int piInfoGetWPiGPIO( unsigned int piGPIO )
-{
-    unsigned int bcomGPIO1[] = { BCOM_GPIO1 };
-    unsigned int bcomGPIO2[] = { BCOM_GPIO2 };
-    unsigned int bcomGPIO3[] = { BCOM_GPIO3 };
-    unsigned int wiPiPins1[] = { WIPI_PINS1 };
-    unsigned int wiPiPins2[] = { WIPI_PINS2 };
-    unsigned int wiPiPins3[] = { WIPI_PINS3 };
-
-    int layout = piInfoLayout( 0 );
-    unsigned int loop;
-    int retCode = -1;
-
-    if ( layout == 1 )
-    {
-        for ( loop = 0; loop < sizeof( bcomGPIO1 ) / sizeof( int ); loop++ )
-            if ( piGPIO == bcomGPIO1[ loop ]) retCode = wiPiPins1[ loop ];
-    }
-    else if ( layout == 2 )
-    {
-        for ( loop = 0; loop < sizeof( bcomGPIO2) / sizeof( int ); loop++ )
-            if ( piGPIO == bcomGPIO2[ loop ]) retCode = wiPiPins2[ loop ];
-    }
-    else if ( layout == 3 )
-    {
-        for ( loop = 0; loop < sizeof( bcomGPIO3) / sizeof( int ); loop++ )
-            if ( piGPIO == bcomGPIO3[ loop ]) retCode = wiPiPins3[ loop ];
-    }
-    return retCode;
-}
-
 
 // ****************************************************************************
 //  ALSA functions.
 // ****************************************************************************
 
 // ============================================================================
-//  Return mapped volume.
+//  Returns mapped volume from linear volume based on shaping factor.
 // ============================================================================
-static long mappedVolume( long volume, long range, long min, float factor )
-{
-    // mappedVolume = ( base^fraction - 1 ) / ( base - 1 )
-    // fraction = increment / total increments.
+/*
+    mappedVolume = ( base^fraction - 1 ) / ( base - 1 )
+    fraction = linear volume / volume range.
 
+    factor << 1, logarithmic.
+    factor == 1, linear.
+    factor >> 1, exponential.
+*/
+static long mapVolume( long linear, long range, long min, float factor )
+{
     float base;
-    long mappedVol;
+    long mapped;
 
-    //  As factor -> 0, volume input is logarithmic.
-    //  As factor -> 1, volume input is more linear.
-    //  As factor >> 1, volume input is more exponential.
-    if ( factor == 1 ) mappedVol = volume;
-    else mappedVol = lroundf((( pow( factor, (float) volume / range ) - 1 ) /
-                             ( factor - 1 ) *
-                               range + min ));
-    return mappedVol;
+    if ( factor == 1 ) mapped = linear;
+    else mapped = lroundf((( pow( factor, (float) linear / range ) - 1 ) /
+                             ( factor - 1 ) * range + min ));
+    return mapped;
 };
-
-
-// ============================================================================
-//  List ALSA controls for all available cards.
-// ============================================================================
-static void listAllControls()
-{
-    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
-    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
-    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
-    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
-    snd_ctl_t *ctlHandle;               // Simple control handle.
-    snd_ctl_elem_type_t ctlType;        // Simple control element type.
-
-    snd_hctl_t *hctlHandle;             // High level control handle;
-    snd_hctl_elem_t *hctlElem;          // High level control element handle.
-
-    int cardNumber = -1;
-    int errNum;
-    char *controlType;
-    char deviceID[8];
-
-
-    // ------------------------------------------------------------------------
-    //  Initialise ALSA card and device types.
-    // ------------------------------------------------------------------------
-    snd_ctl_card_info_alloca( &ctlCard );
-    snd_ctl_elem_value_alloca( &ctlControl );
-    snd_ctl_elem_id_alloca( &ctlId );
-    snd_ctl_elem_info_alloca( &ctlInfo );
-
-
-    // ------------------------------------------------------------------------
-    //  Start card section.
-    // ------------------------------------------------------------------------
-    // For each card.
-    while (1)
-    {
-        // Find next card number. If < 0 then returns 1st card.
-        snd_card_next( &cardNumber );
-        if ( cardNumber < 0 ) break;
-
-        // Concatenate strings to get card's control interface.
-        sprintf( deviceID, "hw:%i", cardNumber );
-
-        //  Try to open card.
-        snd_ctl_open( &ctlHandle, deviceID, 0 );
-        snd_ctl_card_info( ctlHandle, ctlCard );
-
-
-        // --------------------------------------------------------------------
-        //  Print header block.
-        // --------------------------------------------------------------------
-        printf( "\t+-----------------------------" );
-        printf( "-----------------------------+\n" );
-        printf( "\t| Card: %d - %-46s |",
-                        cardNumber,
-                        snd_ctl_card_info_get_name( ctlCard ));
-        printf( "\n" );
-        printf( "\t+--------+------------" );
-        printf( "+------------------------------------+\n" );
-        printf( "\t| Device | Type       " );
-        printf( "| Name                               |\n" );
-        printf( "\t+--------+------------" );
-        printf( "+------------------------------------+\n" );
-
-
-        // --------------------------------------------------------------------
-        //  Start control section.
-        // --------------------------------------------------------------------
-        snd_hctl_open( &hctlHandle, deviceID, 0 );
-        snd_hctl_load( hctlHandle );
-
-
-        // --------------------------------------------------------------------
-        //  For each control element.
-        // --------------------------------------------------------------------
-        for ( hctlElem = snd_hctl_first_elem( hctlHandle );
-                    hctlElem;
-                    hctlElem = snd_hctl_elem_next( hctlElem ))
-        {
-            // Get ID of high level control element.
-            snd_hctl_elem_get_id( hctlElem, ctlId );
-
-
-            // ----------------------------------------------------------------
-            //  Determine control type.
-            // ----------------------------------------------------------------
-            snd_hctl_elem_info( hctlElem, ctlInfo );
-            ctlType = snd_ctl_elem_info_get_type( ctlInfo );
-
-            switch ( ctlType )
-            {
-                case SND_CTL_ELEM_TYPE_NONE:
-                    controlType = "None";
-                    break;
-                case SND_CTL_ELEM_TYPE_BOOLEAN:
-                    controlType = "Boolean";
-                    break;
-                case SND_CTL_ELEM_TYPE_INTEGER:
-                    controlType = "Integer";
-                    break;
-                case SND_CTL_ELEM_TYPE_INTEGER64:
-                    controlType = "Integer64";
-                    break;
-                case SND_CTL_ELEM_TYPE_ENUMERATED:
-                    controlType = "Enumerated";
-                    break;
-                case SND_CTL_ELEM_TYPE_BYTES:
-                    controlType = "Bytes";
-                    break;
-                case SND_CTL_ELEM_TYPE_IEC958:
-                    controlType = "IEC958";
-                    break;
-                default:
-                    controlType = "Not Found";
-                    break;
-            }
-            printf( "\t| %-6i | %-10s | %-34s |\n",
-                snd_hctl_elem_get_numid( hctlElem ),
-                controlType,
-                snd_hctl_elem_get_name( hctlElem ));
-        }
-        printf( "\t+--------+------------" );
-        printf( "+------------------------------------+\n\n" );
-
-
-        // --------------------------------------------------------------------
-        //  Tidy up.
-        // --------------------------------------------------------------------
-        snd_hctl_close( hctlHandle );
-        snd_ctl_close( ctlHandle );
-    }
-
-    return;
-}
-
-// ============================================================================
-//  Lists ALSA mixers for all available cards.
-// ============================================================================
-static void listAllMixers()
-{
-    snd_ctl_t *ctlHandle;               // Simple control handle.
-    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
-    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
-    snd_ctl_elem_type_t ctlType;        // Simple control element type.
-    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
-    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
-
-    snd_mixer_t *mixerHandle;           // Mixer handle.
-    snd_mixer_selem_id_t *mixerId;      // Mixer simple element identifier.
-    snd_mixer_elem_t *mixerElem;        // Mixer element handle.
-
-
-    int cardNumber = -1;
-    int mixerNumber = -1;
-    char deviceID[8];
-    char channelStr[3];
-    unsigned int channels;
-    long volMin, volMax;
-
-    int errNum;
-    int body = 1;
-
-    while (1)
-    {
-        // Find next card. Exit loop if none.
-        snd_card_next( &cardNumber );
-        if ( cardNumber < 0 ) break;
-
-        sprintf( deviceID, "hw:%i", cardNumber );
-
-        // Open card.
-        snd_ctl_open( &ctlHandle, deviceID, 0 );
-        snd_ctl_card_info_alloca( &ctlCard );
-        snd_ctl_card_info( ctlHandle, ctlCard );
-
-
-        // --------------------------------------------------------------------
-        //  Print header block and some card specific info.
-        // --------------------------------------------------------------------
-        printf( "Card: %s.\n", snd_ctl_card_info_get_name( ctlCard ));
-        printf( "\t+------------------------------------------" );
-        printf( "+---+---+---+-------+-------+\n" );
-        printf( "\t| Control ID%-30s ", "" );
-        printf( "|Vol|0/1|Chn|  Min  |  Max  |\n" );
-        printf( "\t+------------------------------------------" );
-        printf( "+---+---+---+-------+-------+\n" );
-
-
-        // --------------------------------------------------------------------
-        //  Set up control and mixer.
-        // --------------------------------------------------------------------
-        snd_mixer_open( &mixerHandle, 0 );
-        snd_mixer_attach( mixerHandle, deviceID );
-        snd_mixer_selem_register( mixerHandle, NULL, NULL );
-        snd_mixer_load( mixerHandle );
-        snd_mixer_selem_id_alloca( &mixerId );
-
-
-        // --------------------------------------------------------------------
-        //  For each mixer element.
-        // --------------------------------------------------------------------
-        for ( mixerElem = snd_mixer_first_elem( mixerHandle );
-              mixerElem;
-              mixerElem = snd_mixer_elem_next( mixerElem ))
-        {
-            // Get ID of mixer element.
-            snd_mixer_selem_get_id( mixerElem, mixerId );
-
-            // Get range of values for control.
-            errNum = snd_mixer_selem_get_playback_volume_range(
-                            mixerElem, &volMin, &volMax );
-
-            // Check whether element has volume control.
-            char *hasVolume = "-";
-            char *hasSwitch = "-";
-            if ( snd_mixer_selem_has_playback_volume( mixerElem ))
-                    hasVolume = "*";
-            if ( snd_mixer_selem_has_playback_switch( mixerElem ))
-                    hasSwitch = "*";
-
-            // Check which channels the mixer has.
-            channels = 0;
-            if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                        SND_MIXER_SCHN_MONO ) &&
-                 snd_mixer_selem_has_playback_channel( mixerElem,
-                        SND_MIXER_SCHN_FRONT_LEFT ) &&
-                !snd_mixer_selem_has_playback_channel( mixerElem,
-                        SND_MIXER_SCHN_FRONT_RIGHT ))
-                sprintf( channelStr, " 1 " );
-            else
-            {
-
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_FRONT_LEFT ))
-                    channels++;
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_FRONT_CENTER ))
-                    channels++;
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_FRONT_RIGHT ))
-                    channels++;
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_SIDE_LEFT ))
-                    channels++;
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_SIDE_RIGHT ))
-                    channels++;
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_REAR_LEFT ))
-                    channels++;
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_REAR_CENTER ))
-                    channels++;
-                if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                            SND_MIXER_SCHN_REAR_RIGHT ))
-                    channels++;
-
-                sprintf( channelStr, "%i.%i",
-                         channels,
-                         snd_mixer_selem_has_playback_channel( mixerElem,
-                             SND_MIXER_SCHN_WOOFER ));
-            }
-
-            printf( "\t| %-40s | %s | %s |%s|%+7d|%+7d|\n",
-                    snd_mixer_selem_id_get_name( mixerId ),
-                    hasVolume,
-                    hasSwitch,
-                    channelStr,
-                    volMin, volMax );
-        }
-        printf( "\t+------------------------------------------" );
-        printf( "+---+---+---+-------+-------+\n\n" );
-
-    }
-    snd_mixer_close( mixerHandle );
-
-    return;
-}
-
-// ============================================================================
-//  Prints info for selected mixer.
-// ============================================================================
-static void mixerInfo( char *card, char *mixer )
-{
-    snd_ctl_t *ctlHandle;               // Simple control handle.
-    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
-    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
-    snd_ctl_elem_type_t ctlType;        // Simple control element type.
-    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
-    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
-
-    snd_mixer_t *mixerHandle;           // Mixer handle.
-    snd_mixer_selem_id_t *mixerId;      // Mixer simple element identifier.
-    snd_mixer_elem_t *mixerElem;        // Mixer element handle.
-
-    int cardNumber = -1;
-    int mixerNumber = -1;
-    char deviceID[8];
-    char channelStr[3];
-
-    int errNum;
-    int body = 1;
-
-
-    // ------------------------------------------------------------------------
-    //  Set up ALSA mixer.
-    // ------------------------------------------------------------------------
-    snd_mixer_open( &mixerHandle, 0 );
-    snd_mixer_attach( mixerHandle, card );
-    snd_mixer_load( mixerHandle );
-    snd_mixer_selem_register( mixerHandle, NULL, NULL );
-
-    snd_mixer_selem_id_alloca( &mixerId );
-    snd_mixer_selem_id_set_name( mixerId, mixer );
-    mixerElem = snd_mixer_find_selem( mixerHandle, mixerId );
-    snd_mixer_selem_get_id( mixerElem, mixerId );
-
-
-    // ------------------------------------------------------------------------
-    //  Print information for selected mixer.
-    // ------------------------------------------------------------------------
-    long volMin, volMax;
-    long dBMin, dBMax;
-    long voldBL, voldBR;
-    int switchL, switchR;
-
-    printf( "Mixer element name = %s.\n",
-        snd_mixer_selem_get_name( mixerElem ));
-    printf( "Mixer element index = %i.\n",
-        snd_mixer_selem_get_index( mixerElem ));
-    printf( "Mixer element ID name = %s.\n",
-        snd_mixer_selem_id_get_name( mixerId ));
-    printf( "Mixer element ID index = %i.\n",
-        snd_mixer_selem_id_get_index( mixerId ));
-    if ( snd_mixer_selem_is_active )
-        printf( "Mixer is active.\n" );
-    else
-        printf( "Mixer is inactive.\n" );
-
-        snd_mixer_selem_get_playback_volume_range( mixerElem,
-                &volMin, &volMax );
-        snd_mixer_selem_get_playback_dB_range( mixerElem, &dBMin, &dBMax );
-        printf( "Minimum volume = %d (%ddB).\n", volMin, dBMin );
-        printf( "Maximum volume = %d (%ddB).\n", volMax, dBMax );
-
-    if ( snd_mixer_selem_has_playback_channel( mixerElem,
-                    SND_MIXER_SCHN_FRONT_LEFT ) &&
-         snd_mixer_selem_has_playback_channel( mixerElem,
-                    SND_MIXER_SCHN_FRONT_RIGHT ))
-    {
-        printf( "Mixer has stereo channels.\n" );
-
-        snd_mixer_selem_get_playback_dB( mixerElem,
-                SND_MIXER_SCHN_FRONT_LEFT, &voldBL );
-        snd_mixer_selem_get_playback_dB( mixerElem,
-                SND_MIXER_SCHN_FRONT_RIGHT, &voldBR );
-        printf( "Playback volume = L%idB, R%idB.\n", voldBL, voldBR );
-
-        snd_mixer_selem_get_playback_switch( mixerElem,
-                SND_MIXER_SCHN_FRONT_LEFT, &switchL );
-        snd_mixer_selem_get_playback_switch( mixerElem,
-                SND_MIXER_SCHN_FRONT_RIGHT, &switchR );
-        printf( "Playback switch controls are %i (L) and %i (R).\n",
-                switchL, switchR );
-        printf( "\n" );
-    }
-    else
-    {
-        printf( "Mixer is mono.\n" );
-
-        snd_mixer_selem_get_playback_dB( mixerElem,
-                SND_MIXER_SCHN_FRONT_LEFT, &voldBL );
-        printf( "Playback volume = %idB.\n", voldBL );
-
-        snd_mixer_selem_get_playback_switch( mixerElem,
-                SND_MIXER_SCHN_FRONT_LEFT, &switchL );
-        printf( "Playback switch controls is %i.\n", switchL );
-        printf( "\n" );
-
-    }
-
-    // ------------------------------------------------------------------------
-    //  Clean up.
-    // ------------------------------------------------------------------------
-    snd_mixer_detach( mixerHandle, card );
-    snd_mixer_close( mixerHandle );
-
-    return;
-}
 
 
 // ============================================================================
 //  Set volume using ALSA mixers.
 // ============================================================================
-static void setVolMixer( char *card, char *mixer,
-                         unsigned int volume,
-                         int balance,
-                         float factor )
+static void setVolumeMixer( struct volumeStruct volume )
 {
     snd_ctl_t *ctlHandle;               // Simple control handle.
     snd_ctl_elem_id_t *ctlId;           // Simple control element id.
@@ -982,65 +226,96 @@ static void setVolMixer( char *card, char *mixer,
     snd_mixer_selem_id_t *mixerId;      // Mixer simple element identifier.
     snd_mixer_elem_t *mixerElem;        // Mixer element handle.
 
-    int errNum;
-    long volLinear, volMapped;
-    long volMappedL, volMappedR;
-    long volLeft, volRight;
-    long volMin, volMax;
-
 
     // ------------------------------------------------------------------------
     //  Set up ALSA mixer.
     // ------------------------------------------------------------------------
     snd_mixer_open( &mixerHandle, 0 );
-    snd_mixer_attach( mixerHandle, card );
+    snd_mixer_attach( mixerHandle, volume.card );
     snd_mixer_load( mixerHandle );
     snd_mixer_selem_register( mixerHandle, NULL, NULL );
 
     snd_mixer_selem_id_alloca( &mixerId );
-    snd_mixer_selem_id_set_name( mixerId, mixer );
+    snd_mixer_selem_id_set_name( mixerId, volume.mixer );
     mixerElem = snd_mixer_find_selem( mixerHandle, mixerId );
     snd_mixer_selem_get_id( mixerElem, mixerId );
 
 
     // ------------------------------------------------------------------------
-    //  Get some information for selected card and mixer.
+    //  Get some information for selected mixer.
     // ------------------------------------------------------------------------
-    snd_mixer_selem_get_playback_volume_range( mixerElem, &volMin, &volMax );
+    // Hardware volume limits.
+    long hardMin, hardMax;
+    snd_mixer_selem_get_playback_volume_range( mixerElem, &hardMin, &hardMax );
+    long hardRange = hardMax - hardMin;
 
+    // Soft volume limits.
+    long softMin = ( volume.minimum * ( hardMax - hardMin )) / 100;
+    long softMax = ( volume.maximum * ( hardMax - hardMin )) / 100;
+    long softRange = softMax - softMin;
 
     // ------------------------------------------------------------------------
     //  Calculate volume and check bounds.
     // ------------------------------------------------------------------------
-    volLinear = ((( float ) volume / 100 ) * ( volMax - volMin ) + volMin );
-    volMapped = mappedVolume( volLinear, volMax - volMin, volMin, factor );
+    /*
+        Volume is set based on index / increments.
+        Volume adjustments modify the index rather than a specific value so
+        rounding errors don't accumulate.
+    */
 
-    volLeft = volRight = volLinear;
-    if ( balance < 0 )
-        volLeft = volLinear + balance * volLinear / 100;
+    // Calculate left and right channel indices.
+    unsigned char indexLeft, indexRight;
+    if ( volume.balance < 0 )
+    {
+        indexLeft = volume.index + volume.balance;
+        indexRight = volume.index;
+    }
     else
-    if ( balance > 0 )
-        volRight = volLinear - balance * volLinear / 100;
+    if ( volume.balance > 0 )
+    {
+        indexLeft = volume.index;
+        indexRight = volume.index - volume.index;
+    }
+    else
+        indexLeft = indexRight = volume.index;
 
-    volMappedL = mappedVolume( volLeft, volMax - volMin, volMin, factor );
-    volMappedR = mappedVolume( volRight, volMax - volMin, volMin, factor );
-    printf( "Volume = %d, L = %d, R = %d, M = %d.\n",
-                volLinear, volMappedL, volMappedR, volMapped );
+    // Calculate linear volume for left and right channels.
+    long linearLeft = (( indexLeft * softRange ) /
+                          volume.increments ) + softMin;
+    long linearRight = (( indexRight * softRange ) /
+                          volume.increments ) + softMin;
+
+    // Calculate mapped volumes.
+    long mappedLeft = mapVolume( linearLeft, softRange,
+                                 softMin, volume.factor );
+    long mappedRight = mapVolume( linearRight, softRange,
+                                 softMin, volume.factor );
 
     // ------------------------------------------------------------------------
     //  Set volume.
     // ------------------------------------------------------------------------
         // If control is mono then FL will set volume.
         snd_mixer_selem_set_playback_volume( mixerElem,
-                SND_MIXER_SCHN_FRONT_LEFT, volMappedL );
+                SND_MIXER_SCHN_FRONT_LEFT, mappedLeft );
         snd_mixer_selem_set_playback_volume( mixerElem,
-                SND_MIXER_SCHN_FRONT_RIGHT, volMappedR );
+                SND_MIXER_SCHN_FRONT_RIGHT, mappedRight );
+
+
+    // ------------------------------------------------------------------------
+    //  Print output if requested.
+    // ------------------------------------------------------------------------
+    if ( volume.print )
+    {
+        printf( " %10d | %10d | %10d | %10d |\n",
+                linearLeft, linearRight,
+                mappedLeft, mappedRight );
+    }
 
 
     // ------------------------------------------------------------------------
     //  Clean up.
     // ------------------------------------------------------------------------
-    snd_mixer_detach( mixerHandle, card );
+    snd_mixer_detach( mixerHandle, volume.card );
     snd_mixer_close( mixerHandle );
 
     return;
@@ -1144,10 +419,10 @@ static void buttonMuteInterrupt()
 // ============================================================================
 //  GPIO activity call for balance reset button.
 // ============================================================================
-static void buttonBalanceInterrupt()
+static void buttonResetInterrupt()
 {
-    int buttonRead = digitalRead( buttonBalance.gpio );
-    if ( buttonRead ) buttonBalance.state = !buttonBalance.state;
+    int buttonRead = digitalRead( buttonReset.gpio );
+    if ( buttonRead ) buttonReset.state = !buttonReset.state;
 };
 
 
@@ -1156,105 +431,55 @@ static void buttonBalanceInterrupt()
 // ****************************************************************************
 
 // ============================================================================
-//  Prints informational output.
-// ============================================================================
-static void printOutput( struct volStruct *volParams, int header )
-{
-    float linearP; // Percentage of hard volume range (linear).
-    float shapedP; // Percentage of hard volume range (shaped).
-
-    linearP = 100 - ( volParams->hardMax -
-                      volParams->linearVol ) * 100 /
-                      volParams->hardRange;
-    shapedP = 100 - ( volParams->hardMax -
-                      volParams->shapedVol ) * 100 /
-                      volParams->hardRange;
-
-    if ( header == 1 )
-    {
-        printf( "\n\tHardware volume range = %ld to %ld\n",
-                volParams->hardMin,
-                volParams->hardMax );
-        printf( "\tSoft volume range =     %ld to %ld\n\n",
-                volParams->softMin,
-                volParams->softMax );
-
-        printf( "\t+-------+------------+-----+------------+-----+\n" );
-        printf( "\t| Index | Left |  %%  | Right |  %%  |\n" );
-        printf( "\t+-------+------------+-----+------------+-----+\n" );
-        printf( "\t| %4d |", volParams->index );
-    }
-    else
-    {
-        if ( volParams->muteState ) printf( "\t| MUTE |" );
-        else printf( "\t| %4d |", volParams->index );
-    }
-    printf( " %10d | %3d | %10d | %3d |\n",
-            volParams->linearVol,
-            lroundf( linearP ),
-            volParams->shapedVol,
-            lroundf( shapedP ));
-};
-
-
-// ============================================================================
 //  Prints default or command line set parameters values.
 // ============================================================================
-static void printParams ( struct structArgs *printList, int defSet )
+static void printParams ( struct cmdOptionsStruct cmdOptions )
 {
-    if ( defSet == 0 ) printf( "\nDefault parameters:\n\n" );
-    else printf ( "\nSet parameters:\n\n" );
-
-    printf( "\tCard name = %s.\n", printList->card );
-    printf( "\tMixer name = %s.\n", printList->mixer );
-    printf( "\tVolume encoder attached to GPIO pins %i", printList->gpioA );
-    printf( " & %i,\n", printList->gpioB );
-    printf( "\tMapped to WiringPi pin numbers %i", printList->wPiPinA );
-    printf( " & %i.\n", printList->wPiPinB );
-    printf( "\tMute button attached to GPIO pin %i.\n", printList->gpioC );
-    printf( "\tMapped to WiringPi pin number %i.\n", printList->wPiPinC );
-    printf( "\tBalance encoder attached to GPIO pins %i", printList->gpioD );
-    printf( " & %i,\n", printList->gpioE );
-    printf( "\tMapped to WiringPi pin numbers %i", printList->wPiPinD );
-    printf( " & %i.\n", printList->wPiPinE );
-    printf( "\tBalance reset button attached to GPIO pin %d.\n", printList->gpioF );
-    printf( "\tMapped to WiringPi pin number %i.\n", printList->wPiPinF );
-    printf( "\tInitial volume = %i%%.\n", printList->initVol );
-    printf( "\tInitial balance = %i%%.\n", printList->balance );
-    printf( "\tMinimum volume = %i%%.\n", printList->minVol );
-    printf( "\tMaximum volume = %i%%.\n", printList->maxVol );
-    printf( "\tVolume increments = %i.\n", printList->incVol );
-    printf( "\tVolume factor = %g.\n", printList->facVol );
-    printf( "\tTic delay = %i.\n\n", printList->ticDelay );
+    printf( "\nSet options:\n\n" );
+    printf( "\tCard name = %s.\n", cmdOptions.card );
+    printf( "\tMixer name = %s.\n", cmdOptions.mixer );
+    printf( "\tVolume encoder attached to GPIOs %i", cmdOptions.volumeGPIO1 );
+    printf( " & %i,\n", cmdOptions.volumeGPIO2 );
+    printf( "\tMute button attached to GPIO %i.\n", cmdOptions.volMuteGPIO );
+    printf( "\tBalance encoder attached to GPIOs %i", cmdOptions.balanceGPIO1 );
+    printf( " & %i,\n", cmdOptions.balanceGPIO2 );
+    printf( "\tBalance reset attached to GPIO %d.\n", cmdOptions.balResetGPIO );
+    printf( "\tInitial volume = %i%%.\n", cmdOptions.volume );
+    printf( "\tVolume increments = %i.\n", cmdOptions.increments );
+    printf( "\tInitial balance = %i%%.\n", cmdOptions.balance );
+    printf( "\tMinimum volume = %i%%.\n", cmdOptions.minimum );
+    printf( "\tMaximum volume = %i%%.\n", cmdOptions.maximum );
+    printf( "\tVolume factor = %g.\n", cmdOptions.factor );
+    printf( "\tTic delay = %i.\n\n", cmdOptions.delay );
 };
 
 
 // ============================================================================
 //  Prints command line parameter ranges.
 // ============================================================================
-static void printRanges( struct boundsStruct *paramBounds )
+static void printRanges( struct boundsStruct paramBounds )
 {
     printf ( "\nCommand line parameter ranges:\n\n" );
     printf ( "\tVolume range (-i) = %d to %d.\n",
-                    paramBounds->volumeLow,
-                    paramBounds->volumeHigh );
+                    paramBounds.volumeLow,
+                    paramBounds.volumeHigh );
     printf ( "\tBalance  range (-b) = %i%% to %i%%.\n",
-                    paramBounds->balanceLow,
-                    paramBounds->balanceHigh );
+                    paramBounds.balanceLow,
+                    paramBounds.balanceHigh );
     printf ( "\tVolume shaping factor (-f) = %g to %g.\n",
-                    paramBounds->factorLow,
-                    paramBounds->factorHigh );
+                    paramBounds.factorLow,
+                    paramBounds.factorHigh );
     printf ( "\tIncrement range (-e) = %d to %d.\n",
-                    paramBounds->incLow,
-                    paramBounds->incHigh );
+                    paramBounds.incLow,
+                    paramBounds.incHigh );
     printf ( "\tDelay range (-d) = %d to %d.\n\n",
-                    paramBounds->delayLow,
-                    paramBounds->delayHigh );
+                    paramBounds.delayLow,
+                    paramBounds.delayHigh );
 };
 
 
 // ****************************************************************************
-//  Command line argument functions.
+//  Command line option functions.
 // ****************************************************************************
 
 // ============================================================================
@@ -1272,28 +497,27 @@ static const char args_doc[] = "piRotEnc <options>";
 static struct argp_option options[] =
 {
     { 0, 0, 0, 0, "ALSA:" },
-    { "card", 'c', "String", 0, "ALSA card name" },
-    { "mixer", 'm', "String", 0, "ALSA mixer name" },
+    { "card", 'c', "<string>", 0, "ALSA card name" },
+    { "mixer", 'm', "<string>", 0, "ALSA mixer name" },
     { 0, 0, 0, 0, "GPIO:" },
-    { "gpiovol", 'A', "Integer", 0, "GPIO pins for volume encoder." },
-    { "gpiobal", 'B', "Integer", 0, "GPIO pins for balance encoder." },
-    { "gpiomut", 'C', "Integer", 0, "GPIO pin for mute button." },
-    { "gpiores", 'D', "Integer", 0, "GPIO pin for balance reset button." },
+    { "gpiovol", 'A', "<int>,<int>", 0, "GPIO pins for volume encoder." },
+    { "gpiobal", 'B', "<int>,<int>", 0, "GPIO pins for balance encoder." },
+    { "gpiomut", 'C', "<int>", 0, "GPIO pin for mute button." },
+    { "gpiores", 'D', "<int>", 0, "GPIO pin for balance reset button." },
     { 0, 0, 0, 0, "Volume:" },
-    { "vol", 'v', "Integer", 0, "Initial volume (% of Maximum)." },
-    { "bal", 'b', "Integer", 0, "Initial L/R balance -100% to +100%." },
-    { "min", 'j', "Integer", 0, "Minimum volume (% of full output)." },
-    { "max", 'k', "Integer", 0, "Maximum volume (% of full output)." },
-    { "inc", 'i', "Integer", 0, "Volume increments over range." },
-    { "fac", 'f', "Float", 0, "Volume profile factor." },
+    { "vol", 'v', "<int>", 0, "Initial volume (%)." },
+    { "bal", 'b', "<int>", 0, "Initial L/R balance -100% to +100%." },
+    { "min", 'j', "<int>", 0, "Minimum volume (% of full output)." },
+    { "max", 'k', "<int>", 0, "Maximum volume (% of full output)." },
+    { "inc", 'i', "<int>", 0, "Volume increments over range." },
+    { "fac", 'f', "<float>", 0, "Volume profile factor." },
     { 0, 0, 0, 0, "Responsiveness:" },
-    { "response", 'r', "Integer", 0, "Responsiveness (mS)." },
+    { "delay", 'r', "<int>", 0, "Interrupt delay (mS)." },
     { 0, 0, 0, 0, "Debugging:" },
-    { "printgpio", 'M', 0, 0, "Print GPIO/wiringPi map." },
     { "printoutput", 'P', 0, 0, "Print program output." },
     { "printdefault", 'Q', 0, 0, "Print default parameters." },
     { "printranges", 'R', 0, 0, "Print parameter ranges." },
-    { "printparams", 'S', 0, 0, "Print set parameters." },
+    { "printset", 'S', 0, 0, "Print set parameters." },
     { 0 }
 };
 
@@ -1303,59 +527,67 @@ static struct argp_option options[] =
 // ============================================================================
 static int parse_opt( int param, char *arg, struct argp_state *state )
 {
-    struct structArgs *cmdArgs = state->input;
+    char *str, *token;
+    const char delimiter[] = ",";
+    struct cmdOptionsStruct *cmdOptions = state->input;
+
     switch ( param )
     {
         case 'c' :
-            cmdArgs->card = arg;
+            cmdOptions->card = arg;
             break;
         case 'm' :
-            cmdArgs->control = arg;
+            cmdOptions->mixer = arg;
             break;
         case 'A' :
-           cmdArgs->gpioA = atoi( arg );
+            str = arg;
+            token = strtok( str, delimiter );
+            cmdOptions->volumeGPIO1 = atoi( token );
+            token = strtok( NULL, delimiter );
+            cmdOptions->volumeGPIO2 = atoi( token );
             break;
         case 'B' :
-           cmdArgs->gpioB = atoi( arg );
+            str = arg;
+            token = strtok( str, delimiter );
+            cmdOptions->balanceGPIO1 = atoi( token );
+            token = strtok( NULL, delimiter );
+            cmdOptions->balanceGPIO2 = atoi( token );
             break;
         case 'C' :
-            cmdArgs->gpioC = atoi( arg );
+            cmdOptions->volMuteGPIO = atoi( arg );
             break;
-        case 'f' :
-            cmdArgs->facVol = atof( arg );
+        case 'D' :
+            cmdOptions->balResetGPIO = atoi( arg );
+            break;
+        case 'v' :
+            cmdOptions->volume = atoi( arg );
             break;
         case 'b' :
-            cmdArgs->balance = atoi( arg );
-            break;
-        case 'i' :
-            cmdArgs->initVol = atoi( arg );
+            cmdOptions->balance = atoi( arg );
             break;
         case 'j' :
-            cmdArgs->minVol = atoi( arg );
+            cmdOptions->minimum = atoi( arg );
             break;
         case 'k' :
-            cmdArgs->maxVol = atoi( arg );
+            cmdOptions->maximum = atoi( arg );
             break;
-        case 'l' :
-            cmdArgs->incVol = atoi( arg );
+        case 'i' :
+            cmdOptions->increments = atoi( arg );
             break;
-        case 't' :
-            cmdArgs->ticDelay = atoi( arg );
-            break;
-        case 'm' :
-            cmdArgs->prMapping = 1;
-            break;
-        case 'p' :
-            cmdArgs->prOutput = 1;
-            break;
-        case 'q' :
-            cmdArgs->prDefaults = 1;
+        case 'f' :
+            cmdOptions->factor = atof( arg );
             break;
         case 'r' :
-            cmdArgs->prRanges = 1;
+            cmdOptions->delay = atoi( arg );
             break;
-        case 's' :
-            cmdArgs->prSet = 1;
+        case 'P' :
+            cmdOptions->printOutput = true;
+            break;
+        case 'R' :
+            cmdOptions->printRanges = true;
+            break;
+        case 'O' :
+            cmdOptions->printOptions = true;
             break;
     }
     return 0;
@@ -1384,44 +616,32 @@ static int checkIfInBounds( float value, float lower, float upper )
 // ============================================================================
 //  Command line parameter validity checks.
 // ============================================================================
-static int checkParams ( struct structArgs *cmdArgs,
+static int checkParams ( struct cmdOptionsStruct *cmdOptions,
                          struct boundsStruct *paramBounds )
 {
-    static int error = 0;
-    static int pinA, pinB;
-
-    pinA = piInfoGetWPiGPIO( cmdArgs->gpioA );
-    pinB = piInfoGetWPiGPIO( cmdArgs->gpioB );
-
-    if (( pinA == -1 ) || ( pinB == -1 )) error = 1;
-    else
-    {
-        cmdArgs->wPiPinA = pinA;
-        cmdArgs->wPiPinB = pinB;
-    }
-    error = ( error ||
-              checkIfInBounds( cmdArgs->initVol,
-                               cmdArgs->minVol,
-                               cmdArgs->maxVol ) ||
-              checkIfInBounds( cmdArgs->balance,
+    static char error = 0;
+    error = ( checkIfInBounds( cmdOptions->volume,
+                               cmdOptions->minimum,
+                               cmdOptions->maximum ) ||
+              checkIfInBounds( cmdOptions->balance,
                                paramBounds->balanceLow,
                                paramBounds->balanceHigh ) ||
-              checkIfInBounds( cmdArgs->initVol,
+              checkIfInBounds( cmdOptions->volume,
                                paramBounds->volumeLow,
                                paramBounds->volumeHigh ) ||
-              checkIfInBounds( cmdArgs->minVol,
+              checkIfInBounds( cmdOptions->minimum,
                                paramBounds->volumeLow,
                                paramBounds->volumeHigh ) ||
-              checkIfInBounds( cmdArgs->maxVol,
+              checkIfInBounds( cmdOptions->maximum,
                                paramBounds->volumeLow,
                                paramBounds->volumeHigh ) ||
-              checkIfInBounds( cmdArgs->incVol,
+              checkIfInBounds( cmdOptions->increments,
                                paramBounds->incLow,
                                paramBounds->incHigh ) ||
-              checkIfInBounds( cmdArgs->facVol,
+              checkIfInBounds( cmdOptions->factor,
                                paramBounds->factorLow,
                                paramBounds->factorHigh ) ||
-              checkIfInBounds( cmdArgs->ticDelay,
+              checkIfInBounds( cmdOptions->delay,
                                paramBounds->delayLow,
                                paramBounds->delayHigh ));
     if ( error )
@@ -1436,44 +656,69 @@ static int checkParams ( struct structArgs *cmdArgs,
 // ============================================================================
 //  Main section.
 // ============================================================================
-int main( int argc, char *argv[] )
+char main( int argc, char *argv[] )
 {
-    static int volPos = 0;  // Starting encoder position.
-    static int balPos = 0;  // Starting encoder position.
-    static int error = 0;   // Error trapping flag.
-    static struct volStruct volParams; // Data structure for volume.
-    static unsigned int volumeIndex;
-    static unsigned int volumeIncrement;
-    cmdArgs = defaultArgs;  // Set command line arguments to default.
-
+    static int error = 0; // Error trapping flag.
 
     // ------------------------------------------------------------------------
     //  Get command line arguments and check within bounds.
     // ------------------------------------------------------------------------
-    argp_parse( &argp, argc, argv, 0, 0, &cmdArgs );
-    error = checkParams( &cmdArgs, &paramBounds );
-    if ( error ) return 0;
+    argp_parse( &argp, argc, argv, 0, 0, &cmdOptions );
+    if ( checkParams( &cmdOptions, &paramBounds ) != 0 ) return -1;
 
 
     // ------------------------------------------------------------------------
     //  Print out any information requested on command line.
     // ------------------------------------------------------------------------
-    if ( cmdArgs.prMapping ) piInfoLayout( 1 );
-    if ( cmdArgs.prRanges ) printRanges( &paramBounds );
-    if ( cmdArgs.prDefaults ) printParams( &defaultArgs, 0 );
-    if ( cmdArgs.prSet ) printParams ( &cmdArgs, 1 );
+    if ( cmdOptions.printRanges ) printRanges( paramBounds );
+    if ( cmdOptions.printOptions ) printParams( cmdOptions );
 
     // exit program for all information except program output.
-    if (( cmdArgs.prMapping ) ||
-        ( cmdArgs.prDefaults ) ||
-        ( cmdArgs.prSet ) ||
-        ( cmdArgs.prRanges )) return 0;
+    if (( cmdOptions.printOptions ) || ( cmdOptions.printRanges )) return 0;
+
+
+    // ------------------------------------------------------------------------
+    //  Set up volume data structure.
+    // ------------------------------------------------------------------------
+    static struct volumeStruct volume;
+    volume.card = cmdOptions.card,
+    volume.mixer = cmdOptions.mixer,
+    volume.factor = cmdOptions.factor,
+    volume.mute = false,
+    volume.print = cmdOptions.printOutput,
+
+        // Get closest volume index for starting volume.
+    volume.index = ( cmdOptions.increments -
+                   ( cmdOptions.maximum - cmdOptions.volume ) *
+                     cmdOptions.increments /
+                   ( cmdOptions.maximum - cmdOptions.minimum )),
+        // Get closest balance index for starting balance.
+    volume.balance = ( cmdOptions.balance * cmdOptions.increments ) / 100;
+
+    // ------------------------------------------------------------------------
+    //  Set up encoder and button data structures.
+    // ------------------------------------------------------------------------
+    encoderVolume.gpio1 = cmdOptions.volumeGPIO1;
+    encoderVolume.gpio2 = cmdOptions.volumeGPIO2;
+    encoderVolume.state = 0;
+    encoderVolume.direction = 0;
+
+    encoderBalance.gpio1 = cmdOptions.balanceGPIO1;
+    encoderBalance.gpio2 = cmdOptions.balanceGPIO2;
+    encoderBalance.state = 0;
+    encoderBalance.direction = 0;
+
+    buttonMute.gpio = cmdOptions.volMuteGPIO;
+    buttonMute.state = 0;
+
+    buttonReset.gpio = cmdOptions.balResetGPIO;
+    buttonReset.state = 0;
 
 
     // ------------------------------------------------------------------------
     //  Initialise wiringPi.
     // ------------------------------------------------------------------------
-    wiringPiSetup ();
+    wiringPiSetupGpio(); // Use GPIO numbers rather than wiringPi numbers.
 
     // Set encoder pin modes.
     pinMode( encoderVolume.gpio1, INPUT );
@@ -1490,41 +735,14 @@ int main( int argc, char *argv[] )
     pinMode( buttonMute.gpio, INPUT );
     pullUpDnControl( buttonMute.gpio, PUD_UP );
 
-    pinMode( buttonBalance.gpio, INPUT );
-    pullUpDnControl( buttonBalance.gpio, PUD_UP );
-
-    // Initialise encoder direction.
-    encoderVolume.direction = 0;
-    encoderBalance.direction = 0;
-
-
-    // ------------------------------------------------------------------------
-    //  Set up volume data structure.
-    // ------------------------------------------------------------------------
-    volParams.card = cmdArgs.card;
-    volParams.mixer = cmdArgs.mixer;
-    volParams.factor = cmdArgs.facVol;
-    volParams.balance = 0;
-    volParams.mute = 0;
-    volParams.debug = cmdArgs.prOutput;
-
-    // Get closest volume index for starting volume.
-    volumeIndex = ( cmdArgs->incVol -
-                  ( cmdArgs->maxVol - cmdArgs->initVol ) *
-                    cmdArgs->incVol /
-                  ( cmdArgs->maxVol - cmdArgs->minVol ));
-    // Calculate actual starting volume.
-    volParams.volume = index * volumeIncrement;
+    pinMode( buttonReset.gpio, INPUT );
+    pullUpDnControl( buttonReset.gpio, PUD_UP );
 
 
     // ------------------------------------------------------------------------
     //  Set initial volume.
     // ------------------------------------------------------------------------
-    setVolMixer( volParams.card,
-                 volParams.control,
-                 volParams.volume,
-                 volParams.balance,
-                 volParams.factor );
+    setVolumeMixer( volume );
 
 
     // ------------------------------------------------------------------------
@@ -1535,7 +753,7 @@ int main( int argc, char *argv[] )
     wiringPiISR( encoderBalance.gpio1, INT_EDGE_BOTH, &encoderBalanceInterrupt );
     wiringPiISR( encoderBalance.gpio2, INT_EDGE_BOTH, &encoderBalanceInterrupt );
     wiringPiISR( buttonMute.gpio, INT_EDGE_BOTH, &buttonMuteInterrupt );
-    wiringPiISR( buttonBalance.gpio, INT_EDGE_BOTH, &buttonBalanceInterrupt );
+    wiringPiISR( buttonReset.gpio, INT_EDGE_BOTH, &buttonResetInterrupt );
 
 
     // ------------------------------------------------------------------------
@@ -1546,75 +764,59 @@ int main( int argc, char *argv[] )
         // --------------------------------------------------------------------
         //  Volume.
         // --------------------------------------------------------------------
-        if (( encoderVolume.direction != 0 ) && ( !buttonMute.state )
+        if (( encoderVolume.direction != 0 ) && ( !volume.mute ))
         {
             // Volume +
-            if ( encoderVolume.direction > 0 )
-            {
-                volParams.volume = volParams.volume + 100 /
-                                   volParams.increments;
-                if ( volParams.volume > volParams.max )
-                     volParams.volume = volParams.max;
-            }
+            if (( encoderVolume.direction > 0 ) &&
+                ( volume.index < volume.increments )) volume.index++;
             else
             // Volume -
-            if ( encoderVolume.direction < 0 )
-            {
-                volParams.volume = volParams.volume - 100 /
-                                   volParams.increments;
-                if ( volParams.volume < volParams.min )
-                     volParams.volume = volParams.min;
-            }
+            if (( encoderVolume.direction < 0 ) &&
+                ( volume.index > 0 )) volume.index--;
+
             encoderVolume.direction = 0;
+            setVolumeMixer( volume );
         }
         // --------------------------------------------------------------------
         //  Balance.
         // --------------------------------------------------------------------
-        if (( encoderBalance.direction != 0 ) && ( !buttonMute.state )
+        if (( encoderBalance.direction != 0 ) && ( !volume.mute ))
         {
             // Balance +
-            if ( encoderBalance.direction > 0 )
-            {
-            // Needs coding.
-            }
+            if (( encoderBalance.direction > 0 ) &&
+                ( volume.balance < volume.increments )) volume.balance++;
             else
             // Balance -
-            if ( encoderBalance.direction < 0 )
-            {
-            // Needs coding.
-            }
+            if (( encoderBalance.direction < 0 ) &&
+                ( volume.balance > -volume.increments )) volume.balance--;
+
             encoderBalance.direction = 0;
+            setVolumeMixer( volume );
+
         }
         // --------------------------------------------------------------------
-        //  Check and set mute state.
+        //  Mute.
         // --------------------------------------------------------------------
+        if ( buttonMute.state )
         {
-        // Needs coding
+            volume.mute = true;
+            buttonMute.state = false;
+            setVolumeMixer( volume );  // May be better to use playback switch.
         }
-
         // --------------------------------------------------------------------
-        //  Check and set balance reset.
+        //  Balance reset.
         // --------------------------------------------------------------------
+        if ( buttonReset.state )
         {
-        // Needs coding
+            volume.balance = 0;
+            buttonReset.state = false;
+            setVolumeMixer( volume );
         }
 
-        // --------------------------------------------------------------------
-        //  Calculate and set volume.
-        // --------------------------------------------------------------------
-        setVolMixer( volParams.card,
-                     volParams.control,
-                     volParams.volume,
-                     volParams.balance,
-                     volParams.factor );
-
-
-
-        // Tic delay in mS. Adjust according to encoder.
-        delay( cmdArgs.ticDelay );
+        // Responsiveness - small delay to allow interrupts to finish.
+        // Keep as small as possible.
+        delay( cmdOptions.delay );
     }
-    // Close sockets.
-    snd_ctl_close( ctl );
 
     return 0;
 }
