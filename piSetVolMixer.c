@@ -23,22 +23,23 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.2"
+#define Version "Version 0.3"
 
 //  Compilation:
 //
-//  Compile with gcc piSetVolMixer.c -o piSetVolMixer -lasound
+//  Compile with gcc piSetVolMixer.c -o piSetVolMixer -lasound -lm
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-//    Authors:     	D.Faulke	19/10/15
-//    Contributors:
+//  Authors:     	D.Faulke	19/10/15
+//  Contributors:
 //
-//    Changelog:
+//  Changelog:
 //
-//    v0.1 Initial version.
-//    v0.2 Added command line parameters.
+//  v0.1 Initial version.
+//  v0.2 Added command line parameters.
+//  v0.3 Added volume shaping.
 //
 
 #include <stdio.h>
@@ -46,6 +47,7 @@
 #include <alsa/asoundlib.h>
 #include <alsa/mixer.h>
 #include <argp.h>
+#include <math.h>
 
 // ****************************************************************************
 //  argp documentation.
@@ -61,12 +63,13 @@ static char args_doc[] = "alsavolmixer <options>";
 // ****************************************************************************
 
 // Data structure to hold command line arguments.
-struct structArgs
+struct volumeStruct
 {
     char *card;
     char *mixer;
-    int value1;
-    int value2;
+    float factor;
+    unsigned int left;
+    unsigned int right;
 };
 
 // ****************************************************************************
@@ -80,6 +83,7 @@ static struct argp_option options[] =
     { "mixer", 'm', "<mixer>", 0, "Mixer name." },
     { 0, 0, 0, 0, "Mixer parameters:" },
     { "val", 'v', "<%>/<%,%>", 0, "Set mixer value(s)." },
+    { "fac", 'f', "<int>", 0, "Volume shaping factor" },
     { 0 }
 };
 
@@ -92,25 +96,28 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
     char *str;
     char *token;
     const char delimiter[] = ",";
-    struct structArgs *cmdArgs = state->input;
+    struct volumeStruct *volume = state->input;
 
     switch( param )
     {
         case 'c' :
-            cmdArgs->card = arg;
+            volume->card = arg;
             break;
         case 'm' :
-            cmdArgs->mixer = arg;
+            volume->mixer = arg;
+            break;
+        case 'f' :
+            volume->factor = atof( arg );
             break;
         case 'v' :
             str = arg;
             token = strtok( str, delimiter );
-            cmdArgs->value1 = atoi( token );
+            volume->left = atoi( token );
             token = strtok( NULL, delimiter );
             if ( token == NULL )
-                cmdArgs->value2 = cmdArgs->value1;
+                volume->right = volume->left;
             else
-                cmdArgs->value2 = atoi( token );
+                volume->right = atoi( token );
             break;
     }
     return 0;
@@ -122,6 +129,100 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
 
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
+// ============================================================================
+//  Returns mapped volume based on shaping factor.
+// ============================================================================
+/*
+    mappedVolume = ( factor^fraction - 1 ) / ( base - 1 )
+    fraction = linear volume / volume range.
+
+    factor << 1, logarithmic.
+    factor == 1, linear.
+    factor >> 1, exponential.
+*/
+static long getVolume( float volume, float factor,
+                       float minimum, float maximum )
+{
+    long mappedVolume;
+    float range = maximum - minimum;
+
+    if ( factor == 1 )
+         mappedVolume = lroundf(( volume / 100 * range ) + minimum );
+    else mappedVolume = lroundf((( pow( factor, volume / 100 ) - 1 ) /
+                                ( factor - 1 ) * range + minimum ));
+    return mappedVolume;
+};
+
+
+// ============================================================================
+//  Set volume using ALSA mixers.
+// ============================================================================
+static void setVolume( struct volumeStruct volume )
+{
+    snd_ctl_t *ctlHandle;               // Simple control handle.
+    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
+    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
+    snd_ctl_elem_type_t ctlType;        // Simple control element type.
+    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
+    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
+
+    snd_mixer_t *mixerHandle;           // Mixer handle.
+    snd_mixer_selem_id_t *mixerId;      // Mixer simple element identifier.
+    snd_mixer_elem_t *mixerElem;        // Mixer element handle.
+
+
+    // ------------------------------------------------------------------------
+    //  Set up ALSA mixer.
+    // ------------------------------------------------------------------------
+    snd_mixer_open( &mixerHandle, 0 );
+    snd_mixer_attach( mixerHandle, volume.card );
+    snd_mixer_load( mixerHandle );
+    snd_mixer_selem_register( mixerHandle, NULL, NULL );
+
+    snd_mixer_selem_id_alloca( &mixerId );
+    snd_mixer_selem_id_set_name( mixerId, volume.mixer );
+    mixerElem = snd_mixer_find_selem( mixerHandle, mixerId );
+    snd_mixer_selem_get_id( mixerElem, mixerId );
+
+    // ------------------------------------------------------------------------
+    //  Get some information for selected mixer.
+    // ------------------------------------------------------------------------
+    // Hardware volume limits.
+    long minimum, maximum;
+    snd_mixer_selem_get_playback_volume_range( mixerElem, &minimum, &maximum );
+    long range = maximum - minimum;
+
+
+    // ------------------------------------------------------------------------
+    //  Calculate volume and check bounds.
+    // ------------------------------------------------------------------------
+    // Calculate mapped volumes.
+    long mappedLeft;
+    long mappedRight;
+    mappedLeft = getVolume( volume.left, volume.factor, minimum, maximum );
+    mappedRight = getVolume( volume.right, volume.factor, minimum, maximum );
+
+
+    // ------------------------------------------------------------------------
+    //  Set volume.
+    // ------------------------------------------------------------------------
+    // If control is mono then FL will set volume.
+    snd_mixer_selem_set_playback_volume( mixerElem,
+                SND_MIXER_SCHN_FRONT_LEFT, mappedLeft );
+    snd_mixer_selem_set_playback_volume( mixerElem,
+                SND_MIXER_SCHN_FRONT_RIGHT, mappedRight );
+
+
+    // ------------------------------------------------------------------------
+    //  Clean up.
+    // ------------------------------------------------------------------------
+    snd_mixer_detach( mixerHandle, volume.card );
+    snd_mixer_close( mixerHandle );
+
+    return;
+}
+
+
 // ****************************************************************************
 //  Main routine.
 // ****************************************************************************
@@ -129,131 +230,22 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 void main( int argc, char *argv[] )
 {
 
-    struct structArgs cmdArgs =
+    struct volumeStruct volume =
     {
-        .card = "",
-        .mixer = "",
-        .value1 = 0,
-        .value2 = 0
+        .card = "hw:0",
+        .mixer = "PCM",
+        .factor = 0.01,
+        .left = 0,
+        .right = 0
     };
-
-    int errNum;
-    long minVal, maxVal;
-    unsigned int channels = 0;
-
-
-    // ************************************************************************
-    //  ALSA mixer elements.
-    // ************************************************************************
-    snd_mixer_t *handle;        // Mixer handle.
-    snd_mixer_selem_id_t *id;   // Mixer simple element identifier.
-    snd_mixer_elem_t *elem;     // Mixer element handle.
 
 
     // ************************************************************************
     //  Get command line parameters.
     // ************************************************************************
-    argp_parse( &argp, argc, argv, 0, 0, &cmdArgs );
+    argp_parse( &argp, argc, argv, 0, 0, &volume );
 
-    printf( "Card = %s\n", cmdArgs.card );
-    printf( "mixer = %s\n", cmdArgs.mixer );
-    printf( "Value 1 = %i\n", cmdArgs.value1 );
-    printf( "Value 2 = %i\n", cmdArgs.value2 );
-
-
-    // ************************************************************************
-    //  Set up ALSA mixer.
-    // ************************************************************************
-    if ( snd_mixer_open( &handle, 0 ) < 0 )
-    {
-        printf( "Error opening mixer.\n" );
-        return;
-    }
-    if ( snd_mixer_attach( handle, cmdArgs.card ) < 0 )
-    {
-        printf( "Error attaching mixer.\n" );
-        return;
-    }
-    if ( snd_mixer_load( handle ) < 0 )
-    {
-        printf( "Error loading mixer elements.\n" );
-        return;
-    }
-
-
-    // ************************************************************************
-    //  Set up mixer simple element register.
-    // ************************************************************************
-    snd_mixer_selem_id_alloca( &id );
-    snd_mixer_selem_id_set_name( id, cmdArgs.mixer );
-    if ( snd_mixer_selem_register( handle, NULL, NULL ) < 0 )
-    {
-        printf( "Error registering element.\n" );
-        return;
-    }
-
-    elem = snd_mixer_find_selem( handle, id );
-    if ( elem == NULL )
-    {
-        printf( "Couldn't find mixer control with that name.\n" );
-        return;
-    }
-
-
-    // ************************************************************************
-    //  Get some information for selected card and mixer.
-    // ************************************************************************
-    snd_mixer_selem_get_playback_volume_range(
-                    elem, &minVal, &maxVal );
-
-    printf( "Mixer information:\n" );
-
-    printf( "Min = %d, Max = %d\n", minVal, maxVal );
-
-    if ( snd_mixer_selem_has_playback_channel( elem,
-                    SND_MIXER_SCHN_FRONT_LEFT ))
-        channels++;
-    if ( snd_mixer_selem_has_playback_channel( elem,
-                    SND_MIXER_SCHN_FRONT_RIGHT ))
-        channels++;
-
-
-
-    // ************************************************************************
-    //  Set values for selected card and mixer.
-    // ************************************************************************
-    if ( channels == 1 )
-    {
-        printf( "Mixer control is mono.\n" );
-        if ( snd_mixer_selem_set_playback_volume_all( elem,
-                cmdArgs.value1 ) < 0)
-            printf( "Unable to set volume.\n" );
-        else
-            printf( "Set volume to %d.\n", cmdArgs.value1 );
-    }
-    else
-    if ( channels == 2 )
-    {
-        printf( "Mixer has stereo control.\n" );
-        if ( snd_mixer_selem_set_playback_volume( elem,
-                SND_MIXER_SCHN_FRONT_LEFT, cmdArgs.value1 ) < 0 )
-            printf( "Unable to set L volume.\n" );
-        else
-            printf( "Set L volume to %d.\n", cmdArgs.value1 );
-        if ( snd_mixer_selem_set_playback_volume( elem,
-                SND_MIXER_SCHN_FRONT_RIGHT, cmdArgs.value2 ) < 0 )
-            printf( "Unable to set R volume.\n" );
-        else
-            printf( "Set R volume to %d.\n", cmdArgs.value2 );
-    }
-    else
-        printf( "No channels to set.\n" );
-
-    // ************************************************************************
-    //  Clean up.
-    // ************************************************************************
-    snd_mixer_detach( handle, cmdArgs.card );
-    snd_mixer_close( handle );
+    setVolume( volume );
 
     return;
 }
