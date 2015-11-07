@@ -3,7 +3,7 @@
 /*
     piInfo:
 
-    A collection of tools to print information for the Raspberry Pi.
+    A collection of informational tools for the Raspberry Pi.
 
     Copyright 2015 by Darren Faulke <darren@alidaf.co.uk>
 
@@ -27,7 +27,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc piInfo.c -o piInfo -lasound -lm
+//  Compile with gcc piInfo.c -o piInfo -lasound
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -43,98 +43,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <argp.h>
-#include <math.h>
 #include <alsa/asoundlib.h>
 #include <alsa/mixer.h>
 #include <stdbool.h>
-#include <ctype.h>
-#include <stdlib.h>
-
-// ----------------------------------------------------------------------------
-//  Pi header information. Placed here for easier updating.
-// ----------------------------------------------------------------------------
-
-// Known Pi revision numbers, corresponding models and board versions.
-#define REVISIONS   0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,\
-                    0x0008, 0x0009, 0x0010, 0x0012, 0x0013, 0x000d,\
-                    0x000e, 0x000f, 0xa01041, 0xa21041
-#define MODELS      "B", "B", "B", "B", "B", "A",\
-                    "A", "A", "B+", "A+", "B+", "B",\
-                    "B", "B", "2B", "2B"
-#define VERSIONS    1.0, 1.0, 2.0, 2.0, 2.0, 2.0,\
-                    2.0, 2.0, 1.0, 1.0, 1.2, 2.0,\
-                    2.0, 2.0, 1.1, 1.1
-#define LAYOUTS     1, 1, 2, 2, 2, 2,\
-                    2, 2, 3, 3, 3, 2,\
-                    2, 2, 3, 3
-#define NUMLAYOUTS  3
-
-// GPIO pin layouts - preformatted to make the printout routine easier.
-#define LABELS1  " +3.3V", "+5V   ", " GPIO0", "+5V   ", " GPIO1", "GND   ",\
-                 " GPIO4", "GPIO14",    "GND", "GPIO15", "GPIO17", "GPIO18",\
-                 "GPIO21", "GND   ", "GPIO22", "GPIO23", "  3.3V", "GPIO24",\
-                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-                 "   GND", "GPIO7 "
-#define LABELS2  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
-                 " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
-                 "GPIO21", "GND   ", "GPIO22", "GPIO23",   "3.3V", "GPIO24",\
-                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-                 "   GND", "GPIO7 "
-#define LABELS3  " +3.3V", "+5V   ", " GPIO2", "+5V   ", " GPIO3", "GND   ",\
-                 " GPIO4", "GPIO14", "   GND", "GPIO15", "GPIO17", "GPIO18",\
-                 "GPIO21", "GND   ", "GPIO22", "GPIO23", " +3.3V", "GPIO24",\
-                 "GPIO10", "GND   ", " GPIO9", "GPIO25", "GPIO11", "GPIO8 ",\
-                 "   GND", "GPIO7 ", "   DNC", "DNC   ", " GPIO5", "GND   ",\
-                 " GPIO6", "GPIO12", "GPIO13", "GND   ", "GPIO19", "GPIO16",\
-                 "GPIO26", "GPIO20", "   GND", "GPIO21"
-
-// Header pin, Broadcom GPIO and wiringPi pin numbers for each board revision.
-#define HEAD_PINS1  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
-        		   19, 21, 22, 23, 24, 26
-#define BCOM_GPIO1  0,  1,  4, 14, 15, 17, 18, 21, 22, 23, 24,\
-		           10,  9, 25, 11,  8,  7
-#define WIPI_PINS1  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
-        		   12, 13,  6, 14, 10, 11
-
-#define HEAD_PINS2  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
-		           19, 21, 22, 23, 24, 26
-#define BCOM_GPIO2  2,  3,  4, 14, 15, 17, 18, 27, 22, 23, 24,\
-	        	   10,  9, 25, 11,  8,  7
-#define WIPI_PINS2  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
-		           12, 13,  6, 14, 10, 11
-
-#define HEAD_PINS3  3,  5,  7,  8, 10, 11, 12, 13, 15, 16, 18,\
-                   19, 21, 22, 23, 24, 26, 29, 31, 32, 33, 35,\
-                   36, 37, 38, 40
-#define BCOM_GPIO3  2,  3,  4, 14, 15, 17, 18, 27, 22, 23, 24,\
-                   10,  9, 25, 11,  8,  7,  5,  6, 12, 13, 19,\
-		           16, 26, 20, 21
-#define WIPI_PINS3  8,  9,  7, 15, 16,  0,  1,  2,  3,  4,  5,\
-		           12, 13,  6, 14, 10, 11, 21, 22, 26, 23, 24,\
-		           27, 25, 28, 29
-
-
-// Data structure for command line arguments.
-struct optionsStruct
-{
-    bool printGPIO;         // Flag to print GPIO information.
-    bool printALSAmixers;   // Flag to print ALSA mixers.
-    bool printALSAcontrols; // Flag to print ALSA control.
-};
-
-
-// ----------------------------------------------------------------------------
-//  Set default values.
-// ----------------------------------------------------------------------------
-static struct optionsStruct cmdOptions  =
-{
-    .printGPIO = false,
-    .printALSAmixers = false,
-    .printALSAcontrols = false,
-};
 
 // ****************************************************************************
-//  Pi information functions.
+//  Pi header information. Placed here for easier updating.
 // ****************************************************************************
 
 /* Currently known versions.
@@ -160,7 +74,6 @@ static struct optionsStruct cmdOptions  =
         | a01041 | 2015 | 2B | 1.1 | | 3 |
         | a21041 | 2015 | 2B | 1.1 | | 3 |
         +--------+------+----+-----+ +---+
-    Function will return the '*' column value.
 */
 
 /* Pin layouts and GPIO numbers.
@@ -194,19 +107,108 @@ static struct optionsStruct cmdOptions  =
         +----+----+                     +----+----+
 */
 
-// ============================================================================
-//  Returns GPIO layout by querying /proc/cpuinfo.
-// ============================================================================
-static int gpioLayout( bool print )
-{
-    static unsigned int revisions[] = { REVISIONS };
-    static char         *model[]    = { MODELS };
-    static float        version[]   = { VERSIONS };
-    static unsigned int layout[]    = { LAYOUTS };
+/*
+piRevisions[0] = Known board revisions.
+           [1] = Models.
+           [2] = Versions.
+           [3] = Layouts.
+*/
+#define NUMREVISIONS    16
+#define NUMLAYOUTS       3
+#define INDEXREVISIONS   0
+#define INDEXMODELS      1
+#define INDEXVERSIONS    2
+#define INDEXLAYOUTS     3
 
-    static char *labels1[] = { LABELS1 };
-    static char *labels2[] = { LABELS2 };
-    static char *labels3[] = { LABELS3 };
+/*
+    Needed to define entire array as strings so numeric contents need
+    to be converted from strings to numbers.
+*/
+static char *piRevisions[4][NUMREVISIONS] =
+    {{ "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009",
+       "0010", "0012", "0013", "000d", "000e", "000f", "a01041", "a21041" },
+     {  "B",  "B",  "B",  "B",  "B",  "A",  "A",  "A",
+        "B+", "A+", "B+",  "B", "B",  "B", "2B", "2B" },
+     { "1.0", "1.0", "2.0", "2.0", "2.0", "2.0", "2.0", "2.0",
+       "1.0", "1.0", "1.2", "2.0", "2.0", "2.0", "1.1", "1.1" },
+     { "1", "1", "2", "2", "2", "2", "2", "2",
+       "3", "3", "3", "2", "2", "2", "3", "3" }};
+
+// Header pin, Broadcom GPIO and wiringPi pin numbers for each board revision.
+/*
+piInfo[layout][0] = Labels.
+      [layout][1] = GPIO numbers.
+      [layout][2] = WiringPi numbers
+*/
+#define INDEXLABELS 0
+#define INDEXGPIO   1
+
+static unsigned char numPins[NUMLAYOUTS] = { 26, 26, 40 };
+static char *piInfo[3][2][40] =
+    {
+      /* Layout 1 labels */
+     {{ "+3.3V",  "+5V", "GPIO",  "+5V", "GPIO",  "GND", "GPIO", "GPIO",
+          "GND", "GPIO", "GPIO", "GPIO", "GPIO",  "GND", "GPIO", "GPIO",
+         "3.3V", "GPIO", "GPIO",  "GND", "GPIO", "GPIO", "GPIO", "GPIO",
+          "GND", "GPIO",     "",     "",     "",     "",     "",     "",
+             "",     "",     "",     "",     "",     "",     "",     "" },
+      /* Layout 1 GPIO */
+      { "-1", "-1",  "0", "-1",  "1", "-1",  "4", "14", "-1", "15",
+        "17", "18", "21", "-1", "22", "23", "-1", "24", "10", "-1",
+         "9", "25", "11",  "8", "-1",  "7", "-1", "-1", "-1", "-1",
+        "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1", "-1" }},
+      /* Layout 2 labels */
+     {{ "+3.3V",  "+5V", "GPIO",  "+5V", "GPIO",  "GND", "GPIO", "GPIO",
+          "GND", "GPIO", "GPIO", "GPIO", "GPIO",  "GND", "GPIO", "GPIO",
+         "3.3V", "GPIO", "GPIO",  "GND", "GPIO", "GPIO", "GPIO", "GPIO",
+          "GND", "GPIO",     "",     "",     "",     "",     "",     "",
+             "",     "",     "",     "",     "",     "",     "",     "" },
+      /* Layout 2 GPIO */
+      { "-1", "-1",  "2", "-1",  "3", "-1",  "4", "14", "-1", "15",
+        "17", "18", "27", "-1", "22", "23", "-1", "24", "10", "-1",
+         "9", "25", "11",  "8", "-1",  "7", "-1", "-1", "-1", "-1" }},
+      /* Layout 3 labels */
+     {{ "+3.3V",  "+5V", "GPIO",  "+5V", "GPIO",  "GND", "GPIO", "GPIO",\
+          "GND", "GPIO", "GPIO", "GPIO", "GPIO",  "GND", "GPIO", "GPIO",\
+        "+3.3V", "GPIO", "GPIO",  "GND", "GPIO", "GPIO", "GPIO", "GPIO",\
+          "GND", "GPIO",  "DNC",  "DNC", "GPIO",  "GND", "GPIO", "GPIO",\
+         "GPIO",  "GND", "GPIO", "GPIO", "GPIO", "GPIO",  "GND", "GPIO" },
+      /* Layout 3 GPIO */
+      {   "",   "",  "2",   "",  "3",   "",  "4", "14",   "", "15",\
+        "17", "18", "27",   "", "22", "23",   "", "24", "10",   "",\
+         "9", "25", "11",  "8",   "",  "7",   "",   "",  "5",   "",\
+         "6", "12", "13",   "", "19", "16", "26", "20",   "", "21" }}};
+
+
+// Data structure for command line arguments.
+struct optionsStruct
+{
+    bool listPins;
+    bool listMixers;
+    bool listControls;
+    int  gpio;
+    int  pin;
+};
+
+
+// ----------------------------------------------------------------------------
+//  Set default values.
+// ----------------------------------------------------------------------------
+static struct optionsStruct cmdOptions  =
+{
+    .listPins = false,
+    .listMixers = false,
+    .listControls = false,
+    .gpio = -1,
+    .pin = -1
+};
+
+
+// ============================================================================
+//  Returns index of piRevisions for matching revision from /proc/cpuinfo.
+// ============================================================================
+static int getRevisionIndex( void )
+{
 
     FILE *filePtr;                  // File to read in and search.
     static char line[ 512 ];        // Storage for each line read in.
@@ -224,187 +226,130 @@ static int gpioLayout( bool print )
                 // line should be "string" "colon" "hex string" "line break"
                 sscanf( line, "%s%s%x%c", &line, &token, &revision, &token );
                     if ( token == '\n' ) break;
-                    revision = 0;
             }
     fclose ( filePtr ) ;
-
-    if ( print )
-    {
-        printf( "\nKnown revisions:\n\n" );
-        printf( "\t+-------+----------+-------+---------+\n" );
-        printf( "\t| Index | Revision | Model | Version |\n" );
-        printf( "\t+-------+----------+-------+---------+\n" );
-    }
     // Now compare against arrays to find info.
-    static unsigned int index = 0;
+    static unsigned int foundPos = -1;
     static unsigned int i;
-    for ( i = 0; i < sizeof( revisions )  / sizeof( int ); i++ )
+    for ( i = 0; i < NUMREVISIONS; i++ )
+            if ( revision == strtol(
+                 piRevisions[INDEXREVISIONS][i], NULL, 16 )) return i;
+    return -1;
+}
+
+// ============================================================================
+//  Print full header pin layout and GPIO/wiringPi mapping.
+// ============================================================================
+static int listPins()
+{
+
+    int index = getRevisionIndex();
+    if ( index < 0 ) return -1;
+    int layout = atoi( piRevisions[INDEXLAYOUTS][index]);
+    if ( layout < 1 ) return layout;
+    int revision = strtol( piRevisions[INDEXREVISIONS][index], NULL, 16 );
+
+    printf( "\nKnown revisions:\n\n" );
+    printf( "\t+-------+----------+-------+---------+\n" );
+    printf( "\t| Index | Revision | Model | Version |\n" );
+    printf( "\t+-------+----------+-------+---------+\n" );
+
+    // Now compare against arrays to find info.
+    static unsigned int foundPos = -1;
+    static unsigned int i;
+    static char *padding;
+    for ( i = 0; i < NUMREVISIONS; i++ )
     {
-        if ( print )
-            printf( "\t|    %2i | 0x%0.6x |   %-2s  |   %3.1f   |",
-                i,
-                revisions[ i ],
-                model[ i ],
-                version[ i ]);
-        if ( revision == revisions[ i ] )
-        {
-            index = i;
-            if ( print ) printf( "<-This Pi\n" );
-        }
+        if ( strtol( piRevisions[INDEXREVISIONS][i], NULL, 16 ) < 0xfff )
+            padding = "  ";
         else
-            if ( print ) printf ( "\n" );
+            padding = "";
+        printf( "\t|    %2i |   %s%0.4x |   %-2s  |   %3.1f   |",
+                i,
+                padding,
+                strtol( piRevisions[INDEXREVISIONS][i], NULL, 16 ),
+                piRevisions[INDEXMODELS][i],
+                atof( piRevisions[INDEXVERSIONS][i] ));
+        if ( i == index )
+            printf( "<-This Pi\n" );
+        else
+            printf ( "\n" );
     }
+    printf( "\t+-------+----------+-------+---------+\n\n" );
 
     // Print GPIO header layout.
-    if ( print )
-        printf( "\t+-------+----------+-------+---------+\n\n" );
-    if ( index == 0 )
+    if ( foundPos < 0 )
     {
         printf( "Cannot find your card version from known versions.\n\n" );
         return -1;
     }
     else
     {
-        if ( print )
-        {
-            printf( "Raspberry Pi information:\n" );
-            printf( "\tRevision = 0x%0.6x.\n", revisions[ index ]);
-            printf( "\tModel = %s (ver %3.1f).\n", model[ index ],
-                                                   version[ index ]);
+        printf( "Raspberry Pi information:\n\n" );
+        printf( "\tModel = %s (ver %3.1f), board revision %0.4x.\n",
+                piRevisions[INDEXMODELS][index],
+                atof( piRevisions[INDEXVERSIONS][index] ),
+                strtol( piRevisions[INDEXREVISIONS][index], NULL, 16 ));
+        printf( "\tHeader pin layout %i:\n", layout );
 
-            printf( "\t+--------+-----++-----+--------+\n" );
-            printf( "\t|  GPIO  | pin || pin |  GPIO  |\n" );
-            printf( "\t+--------+-----++-----+--------+\n" );
-            switch ( layout[ index ] )
-            {
-                case 1 :
-                    for ( i = 0; i < sizeof( labels1 ) /
-                                ( 4 * sizeof( char )); i = i + 2 )
-                        printf( "\t| %6s | %3i || %3i | %6s |\n",
-                            labels1[ i ], i + 1, i + 2, labels1[ i + 1 ]);
-                    break;
-                case 2 :
-                    for ( i = 0; i < sizeof( labels2 ) /
-                                ( 4 * sizeof( char )); i = i + 2 )
-                        printf( "\t| %6s | %3i || %3i | %6s |\n",
-                             labels2[ i ], i + 1, i + 2, labels2[ i + 1 ]);
-                    break;
-                case 3 :
-                    for ( i = 0; i < sizeof( labels3 ) /
-                                ( 4 * sizeof( char )); i = i + 2 )
-                        printf( "\t| %6s | %3i || %3i | %6s |\n",
-                             labels3[ i ], i + 1, i + 2, labels3[ i + 1 ]);
-                    break;
-            }
-            printf( "\t+--------+-----++-----+--------+\n\n" );
+        printf( "\t+------+-------++-----+-----++-------+------+\n" );
+        printf( "\t| gpio | label || pin | pin || label | gpio |\n" );
+        printf( "\t+------+-------++-----+-----++-------+------+\n" );
+
+        static int gpio1, gpio2;
+        for ( i = 0; i < numPins[layout-1]; i = i + 2 )
+        {
+            gpio1 = atoi( piInfo[layout-1][INDEXGPIO][i] );
+            gpio2 = atoi( piInfo[layout-1][INDEXGPIO][i+1] );
+
+            if ( gpio1 < 0 )
+                 printf( "\t|   %2s ", "--" );
+            else printf( "\t|   %2i ", gpio1 );
+
+            printf( "| %5s || %3i | %-3i || %-5s ",
+                    piInfo[layout-1][INDEXLABELS][i],
+                    i + 1, i + 2,
+                    piInfo[layout-1][INDEXLABELS][i+1] );
+
+            if ( gpio2 < 0 )
+                 printf( "| %-2s   |\n", "--" );
+            else printf( "| %-2i   |\n", gpio2 );
         }
+        printf( "\t+------+-------++-----" );
+        printf( "+-----++-------+------+\n\n" );
     }
-    return layout[ index ];
+    return 0;
 }
+
 
 // ============================================================================
 //  Returns Broadcom GPIO number for corresponding header pin number.
 // ============================================================================
-static int getGPIOfromHeaderPin( unsigned int headerPin )
+static int getGPIO( unsigned int pin )
 {
-    unsigned int headerPins1[] = { HEAD_PINS1 };
-    unsigned int headerPins2[] = { HEAD_PINS2 };
-    unsigned int headerPins3[] = { HEAD_PINS3 };
-    unsigned int bcomGPIO1[]   = { BCOM_GPIO1 };
-    unsigned int bcomGPIO2[]   = { BCOM_GPIO2 };
-    unsigned int bcomGPIO3[]   = { BCOM_GPIO3 };
+    int layout = atoi( piRevisions[INDEXLAYOUTS][getRevisionIndex()] );
+    if ( layout < 1 ) return -1;
+    if (( pin < 1 ) || ( pin > numPins[layout-1] )) return -1;
 
-    int layout = gpioLayout( 0 );
-    unsigned int i;
-    int returnCode = -1;
-
-    if ( layout == 1 )
-    {
-        for ( i = 0; i < sizeof( headerPins1 ) / sizeof( int ); i++ )
-            if ( headerPin == headerPins1[ i ]) returnCode = bcomGPIO1[ i ];
-    }
-    else if ( layout == 2 )
-    {
-        for ( i = 0; i < sizeof( headerPins2 ) / sizeof( int ); i++ )
-            if ( headerPin == headerPins2[ i ]) returnCode = bcomGPIO2[ i ];
-    }
-    else if ( layout == 3 )
-    {
-        for ( i = 0; i < sizeof( headerPins3 ) / sizeof( int ); i++ )
-            if ( headerPin == headerPins3[ i ]) returnCode = bcomGPIO3[ i ];
-    }
-    return returnCode;
+    return atoi( piInfo[layout-1][INDEXGPIO][pin-1] );
 }
 
+
 // ============================================================================
-//  Returns wiringPi number from Pi header pin number.
+//  Returns header pin number for corresponding GPIO.
 // ============================================================================
-static int getWiringPifromHeader( unsigned int headerPin )
+static int getPin( unsigned int gpio )
 {
-
-    unsigned int headerPins1[]   = { HEAD_PINS1 };
-    unsigned int headerPins2[]   = { HEAD_PINS2 };
-    unsigned int headerPins3[]   = { HEAD_PINS3 };
-    unsigned int wiringPiPins1[] = { WIPI_PINS1 };
-    unsigned int wiringPiPins2[] = { WIPI_PINS2 };
-    unsigned int wiringPiPins3[] = { WIPI_PINS3 };
-
-    int layout = gpioLayout( 0 );
+    int layout = atoi( piRevisions[INDEXLAYOUTS][getRevisionIndex()] );
     unsigned int i;
-    int returnCode = -1;
 
-    if ( layout == 1 )
-    {
-        for ( i = 0; i < sizeof( headerPins1 ) / sizeof( int ); i++ )
-            if ( headerPin == headerPins1[ i ]) returnCode = wiringPiPins1[ i ];
-    }
-    else if ( layout == 2 )
-    {
-        for ( i = 0; i < sizeof( headerPins2) / sizeof( int ); i++ )
-            if ( headerPin == headerPins2[ i ]) returnCode = wiringPiPins2[ i ];
-    }
-    else if ( layout == 3 )
-    {
-        for ( i = 0; i < sizeof( headerPins3) / sizeof( int ); i++ )
-            if ( headerPin == headerPins3[ i ]) returnCode = wiringPiPins3[ i ];
-    }
-    return returnCode;
-}
+    if ( layout < 1 ) return -1;
 
-// ============================================================================
-//  Returns wiringPi number from GPIO number.
-// ============================================================================
-static int getWiringPiFromGPIO( unsigned int gpio )
-{
-    unsigned int bcomGPIO1[]     = { BCOM_GPIO1 };
-    unsigned int bcomGPIO2[]     = { BCOM_GPIO2 };
-    unsigned int bcomGPIO3[]     = { BCOM_GPIO3 };
-    unsigned int wiringPiPins1[] = { WIPI_PINS1 };
-    unsigned int wiringPiPins2[] = { WIPI_PINS2 };
-    unsigned int wiringPiPins3[] = { WIPI_PINS3 };
+    for ( i = 0; i < numPins[layout-1]; i++ )
+        if ( gpio == atoi( piInfo[layout-1][INDEXGPIO][i] ))
+              return i + 1;
 
-    int layout = gpioLayout( 0 );
-    unsigned int i;
-    int returnCode = -1;
-
-    // Change this to use switch.
-
-    if ( layout == 1 )
-    {
-        for ( i = 0; i < sizeof( bcomGPIO1 ) / sizeof( int ); i++ )
-            if ( gpio == bcomGPIO1[ i ]) returnCode = wiringPiPins1[ i ];
-    }
-    else if ( layout == 2 )
-    {
-        for ( i = 0; i < sizeof( bcomGPIO2) / sizeof( int ); i++ )
-            if ( gpio == bcomGPIO2[ i ]) returnCode = wiringPiPins2[ i ];
-    }
-    else if ( layout == 3 )
-    {
-        for ( i = 0; i < sizeof( bcomGPIO3) / sizeof( int ); i++ )
-            if ( gpio == bcomGPIO3[ i ]) returnCode = wiringPiPins3[ i ];
-    }
-    return returnCode;
+    return -1;
 }
 
 
@@ -427,7 +372,6 @@ static void listALSAmixers( void )
     snd_mixer_t *mixerHandle;           // Mixer handle.
     snd_mixer_selem_id_t *mixerId;      // Mixer simple element identifier.
     snd_mixer_elem_t *mixerElem;        // Mixer element handle.
-
 
     int cardNumber = -1;
     int mixerNumber = -1;
@@ -556,15 +500,16 @@ static void listALSAmixers( void )
     return;
 }
 
+
 // ============================================================================
 //  Lists ALSA controls for all available cards.
 // ============================================================================
 int listALSAcontrols( void )
 {
-    int cardNumber = -1;
-    int errNum;
-    char *controlType;
-    char deviceID[16];
+    static int cardNumber = -1;
+    static int errNum;
+    static char *controlType;
+    static char deviceID[16];
 
 
     // ------------------------------------------------------------------------
@@ -598,7 +543,7 @@ int listALSAcontrols( void )
     {
         // Find next card number. If < 0 then returns 1st card.
         errNum = snd_card_next( &cardNumber );
-        if (( errNum < 0 ) || ( cardNumber < 0 )) break;
+        if (( errNum < 0 ) || ( cardNumber < 0 )) return -1;
 
         // Concatenate strings to get card's control interface.
         sprintf( deviceID, "hw:%i", cardNumber );
@@ -607,14 +552,14 @@ int listALSAcontrols( void )
         if ( snd_ctl_open( &ctl, deviceID, 0 ) < 0 )
         {
             printf( "Error opening card.\n" );
-            continue;
+            return -1;
         }
 
         // Fill control card info element.
         if ( snd_ctl_card_info( ctl, card ) < 0 )
         {
             printf( "Error getting card info.\n" );
-            continue;
+            return -1;
         }
 
         // --------------------------------------------------------------------
@@ -650,11 +595,16 @@ int listALSAcontrols( void )
         // --------------------------------------------------------------------
         // Open an empty high level control.
         if ( snd_hctl_open( &hctl, deviceID, 0 ) < 0 )
+        {
             printf( "Error opening high level control.\n" );
-
+            return -1;
+        }
         // Load high level control element.
         if ( snd_hctl_load( hctl ) < 0 )
+        {
             printf( "Error loading high level control.\n" );
+            return -1;
+        }
 
 
         // --------------------------------------------------------------------
@@ -668,9 +618,9 @@ int listALSAcontrols( void )
             snd_hctl_elem_get_id( elem, id );
 
 
-        // --------------------------------------------------------------------
+            // ----------------------------------------------------------------
             //  Determine control type.
-        // --------------------------------------------------------------------
+            // ----------------------------------------------------------------
             if ( snd_hctl_elem_info( elem, info ) < 0 )
                 printf( "Can't get control information.\n" );
 
@@ -741,11 +691,14 @@ static const char args_doc[] = "piInfo <options>";
 // ============================================================================
 static struct argp_option options[] =
 {
-    { 0, 0, 0, 0, "GPIO:" },
-    { "listgpio",     'p', 0, 0, "Print GPIO/wiringPi map." },
+    { 0, 0, 0, 0, "Tables:" },
+    { "listpins", 'p', 0, 0, "Print full map of pin functions." },
+    { 0, 0, 0, 0, "Conversion:" },
+    { "getgpio",  'g', "int", 0, "Return GPIO from header pin." },
+    { "getpin",   'h', "int", 0, "Return header pin from GPIO." },
     { 0, 0, 0, 0, "ALSA:" },
-    { "listmixers",   'm', 0, 0, "print ALSA mixers info." },
-    { "listcontrols", 'c', 0, 0, "print ALSA controls info." },
+    { "listmixers",   'm', 0, 0, "print ALSA mixer info." },
+    { "listcontrols", 'c', 0, 0, "print ALSA control info." },
     { 0 }
 };
 
@@ -759,13 +712,19 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
     switch ( param )
     {
         case 'p' :
-            cmdOptions->printGPIO = true;
+            cmdOptions->listPins = true;
             break;
         case 'm' :
-            cmdOptions->printALSAmixers = true;
+            cmdOptions->listMixers = true;
             break;
         case 'c' :
-            cmdOptions->printALSAcontrols = true;
+            cmdOptions->listControls = true;
+            break;
+        case 'g' :
+            cmdOptions->pin = atoi( arg );
+            break;
+        case 'h' :
+            cmdOptions->gpio = atoi( arg );
             break;
     }
     return 0;
@@ -793,9 +752,23 @@ int main( int argc, char *argv[] )
     // ------------------------------------------------------------------------
     //  Print out any information requested on command line.
     // ------------------------------------------------------------------------
-    if ( cmdOptions.printGPIO ) gpioLayout( 1 );
-    if ( cmdOptions.printALSAmixers ) listALSAmixers();
-    if ( cmdOptions.printALSAcontrols ) listALSAcontrols();
+    if ( cmdOptions.listPins ) listPins();
+    if ( cmdOptions.listMixers ) listALSAmixers();
+    if ( cmdOptions.listControls ) listALSAcontrols();
+
+    if ( cmdOptions.pin > 0 )
+    {
+        int gpio = getGPIO( cmdOptions.pin );
+        if ( gpio < 0 ) printf( "\nNo GPIO for that pin.\n\n" );
+        else printf( "\nHeader pin %i = GPIO%i.\n\n", cmdOptions.pin, gpio);
+    }
+
+    if ( cmdOptions.gpio >= 0 )
+    {
+        int pin = getPin( cmdOptions.gpio );
+        if ( pin < 0 ) printf( "\nGPIO doesn't exist for this board.\n\n" );
+        else printf( "\nGPIO%i = header pin %i.\n\n", cmdOptions.gpio, pin );
+    }
 
     return 0;
 }
