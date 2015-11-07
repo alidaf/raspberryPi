@@ -51,18 +51,27 @@ A simple command line program to test adjusting ALSA control elements. Use piLis
 
 A simple command line program to test adjusting ALSA mixer controls. Use piListMixers to find out which mixer controls are available.
 
+###piInfo:
+
+A collection of tools to provide information for the Raspberry Pi -
+	-p prints out a full pin layout with labels and GPIO numbers.
+	-m lists ALSA mixers for all available cards.
+	-c lists ALSA controls for all available cards.
+	-g <pin>  Returns corresponding GPIO for pin number.
+	-h <gpio> Returns corresponding pin number for GPIO.
+
 ###testTab:
 
 A test of an alternative rotary encoder routine using a state machine and simple polling. 
-Consumes CPU!
+Consumes CPU! Ony useful as a demonstration.
 
 ###testTabInt:
 
-A test of an alternative rotary encoder routine using a state machine and interrupts. 
+A test of an alternative rotary encoder routine using a state machine and interrupts. Low CPU usage and works well without debouncing filters on the encoder pins. This has now been incorporated into piRotEnc.
 
 ###thx1138:
 
-ALSA experimentation to test analysing streams and help me develop a spectrum analyser and digital VU metering. Not currently useful.
+ALSA experimentation to test analysing streams and help me develop a spectrum analyser and digital VU metering. Not currently useful but will hopefully use the GPU_FFT library to avoid overloading the CPU.
 
 ---
 #### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
