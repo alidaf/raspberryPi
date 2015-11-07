@@ -53,12 +53,12 @@ A simple command line program to test adjusting ALSA mixer controls. Use piListM
 
 ###piInfo:
 
-A collection of tools to provide information for the Raspberry Pi -
-	-p prints out a full pin layout with labels and GPIO numbers.
-	-m lists ALSA mixers for all available cards.
-	-c lists ALSA controls for all available cards.
-	-g <pin>  Returns corresponding GPIO for pin number.
-	-h <gpio> Returns corresponding pin number for GPIO.
+A collection of tools to provide some useful information for the Raspberry Pi:
+* -p Prints out a full pin layout with labels and GPIO numbers.
+* -m Lists ALSA mixers for all available cards.
+* -c Lists ALSA controls for all available cards.
+* -g <pin>  Returns corresponding GPIO for pin number.
+* -h <gpio> Returns corresponding pin number for GPIO.
 
 ###testTab:
 
