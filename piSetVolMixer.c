@@ -209,32 +209,22 @@ void main( int argc, char *argv[] )
     printf( "Mixer information:\n" );
 
     printf( "Min = %d, Max = %d\n", minVal, maxVal );
-    if ( snd_mixer_selem_is_playback_mono )
-    {
-        printf( "Control is mono.\n" );
-        channels++;
-    }
-    else
-    {
-        if ( snd_mixer_selem_has_playback_channel( elem,
+
+    if ( snd_mixer_selem_has_playback_channel( elem,
                     SND_MIXER_SCHN_FRONT_LEFT ))
-        {
-            printf( "Has front left channel.\n" );
-            channels++;
-        }
-        if ( snd_mixer_selem_has_playback_channel( elem,
+        channels++;
+    if ( snd_mixer_selem_has_playback_channel( elem,
                     SND_MIXER_SCHN_FRONT_RIGHT ))
-        {
-            printf( "Has front right channel.\n" );
-            channels++;
-        }
-    }
+        channels++;
+
+
 
     // ************************************************************************
     //  Set values for selected card and mixer.
     // ************************************************************************
     if ( channels == 1 )
     {
+        printf( "Mixer control is mono.\n" );
         if ( snd_mixer_selem_set_playback_volume_all( elem,
                 cmdArgs.value1 ) < 0)
             printf( "Unable to set volume.\n" );
@@ -244,6 +234,7 @@ void main( int argc, char *argv[] )
     else
     if ( channels == 2 )
     {
+        printf( "Mixer has stereo control.\n" );
         if ( snd_mixer_selem_set_playback_volume( elem,
                 SND_MIXER_SCHN_FRONT_LEFT, cmdArgs.value1 ) < 0 )
             printf( "Unable to set L volume.\n" );
