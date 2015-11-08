@@ -200,33 +200,71 @@ char LCDtoggleEnable( struct pinStruct pin )
 // ----------------------------------------------------------------------------
 //  Writes byte values to LCD in nibbles.
 // ----------------------------------------------------------------------------
+static char *getByteString(unsigned int nibble)
+{
+    static char binary[BYTE_BITS + 1];
+    unsigned int i;
+    for ( i = 0; i < BYTE_BITS; i++ )
+        binary[i] = (( nibble >> ( BYTE_BITS - i - 1 )) & 1 ) + '0';
+    binary[i] = '\0';
+    return binary;
+};
+
+
+// ----------------------------------------------------------------------------
+//  Writes byte values to LCD in nibbles.
+// ----------------------------------------------------------------------------
 char LCDwriteByte( struct pinStruct pin, unsigned char data, bool mode )
 {
     unsigned char i;
-    bool nibble[NIBBLE_BITS];
+    int nibble[NIBBLE_BITS];
+
+    printf( "Char = %02x, binary = %s. ", data, getByteString( data ));
 
     digitalWrite( pin.gpioRS, mode );
+
+    // High nibble first.
+    for ( i = 0; i < NIBBLE_BITS; i++ )
+        nibble[i] = (( data >> ( NIBBLE_BITS - i - 1 )) & 0x10 );
 
     // Clear gpio data pins.
     for ( i = 0; i < NIBBLE_BITS; i++ )
         digitalWrite( pin.gpioDB[i], 0 );
 
-    // Write high nibble first.
+    // Now write nibble to GPIOs
     for ( i = 0; i < NIBBLE_BITS; i++ )
-        nibble[i] = (( data >> ( NIBBLE_BITS - i - 1 )) & 0x10 );
-
-    for ( i = 0; i < NIBBLE_BITS; i++ )
-        digitalWrite( pin.gpioDB[i], 0 );
+        digitalWrite( pin.gpioDB[i], nibble[i] );
 
     // Toggle enable bit to send nibble.
     LCDtoggleEnable( pin );
 
-    // Write low nibble.
+    printf( "Nibbles = " );
+    for ( i = 0; i < NIBBLE_BITS; i++ )
+    {
+        if ( nibble[i] ) printf( "1" );
+        else printf( "0" );
+    }
+    printf( "," );
+
+    // Low nibble next.
     for ( i = NIBBLE_BITS; i < BYTE_BITS; i++ )
         nibble[i-NIBBLE_BITS] = (( data >> ( BYTE_BITS - i - 1 )) & 0x1 );
 
+    // Clear gpio data pins.
     for ( i = 0; i < NIBBLE_BITS; i++ )
         digitalWrite( pin.gpioDB[i], 0 );
+
+    // Now write nibble to GPIOs
+    for ( i = 0; i < NIBBLE_BITS; i++ )
+        digitalWrite( pin.gpioDB[i], nibble[i] );
+
+    printf( "Low nibble = " );
+    for ( i = 0; i < NIBBLE_BITS; i++ )
+    {
+        if ( nibble[i] ) printf( "1" );
+        else printf( "0" );
+    }
+    printf( ".\n" );
 
     // Toggle enable bit to send nibble.
     LCDtoggleEnable( pin );
@@ -410,14 +448,13 @@ char main( int argc, char *argv[] )
     wiringPiInit( pin );
     LCDinitialise( pin );
 
-    LCDwriteString( pin, "Hello Master", 1 );
-    LCDwriteString( pin, "How are you today?", 2 );
-    delay( 3000 );
+//    LCDwriteString( pin, "Hello Master", 1 );
+//    LCDwriteString( pin, "How are you today?", 2 );
+
+    LCDwriteString( pin, "abcdefghijklmnopqrstuvwxyz", 1 );
+    LCDwriteString( pin, "0123456789", 2 );
+
     LCDclearScreen( pin );
-
-
-//    for ( i = 0; i < 254; i++ )
-//        LCDwriteByte( pin, i );
 
     return 0;
 }
