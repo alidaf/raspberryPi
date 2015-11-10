@@ -154,7 +154,6 @@
 // Clear and reset.
 #define MODE_CLR  0x01 // Clear LCD screen.
 #define MODE_HOME 0x02 // Screen and cursor home.
-#define MODE_INIT 0x30 // Initialise.
 
 // Character entry modes.
 #define MODE_ENTR 0x04 // OR this with the options below:
@@ -275,9 +274,9 @@ static const char *getBinaryString(unsigned char nibble)
 static char toggleEnable( void )
 {
     digitalWrite( gpio.en, 1 );
-    delayMicroseconds( 50 );
+    delayMicroseconds( 1 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 50 );
+    delayMicroseconds( 41 );
 };
 
 // ----------------------------------------------------------------------------
@@ -311,6 +310,7 @@ static char writeCmd( unsigned char data )
 
     // Set to command mode.
     digitalWrite( gpio.rs, 0 );
+    digitalWrite( gpio.en, 0 );
 
     // High nibble.
     if (DEBUG) printf( "Writing cmd 0x%02x = ", data );
@@ -336,6 +336,7 @@ static char writeChar( unsigned char data )
 
     // Set to character mode.
     digitalWrite( gpio.rs, 1 );
+    digitalWrite( gpio.en, 0 );
 
     // High nibble.
     if (DEBUG) printf( "Writing char %c (0x%0x) = ", data, data );
@@ -354,12 +355,13 @@ static char writeChar( unsigned char data )
 // ----------------------------------------------------------------------------
 //  Moves cursor to position, row.
 // ----------------------------------------------------------------------------
-char gotoRowPos( unsigned char row, unsigned char pos )
+static char gotoRowPos( unsigned char row, unsigned char pos )
 {
-    if (( pos < 0 ) | ( pos > LCD_COLS-1 ) |
-        ( row < 0 ) | ( row > LCD_ROWS-1 )) return -1;
-    static unsigned char rows[LCD_ROWS] = { ROW1_ADDR, ROW2_ADDR };
-    writeCmd( pos + ( DISP_ADDR | rows[row] ));
+    if (( pos < 0 ) | ( pos > LCD_COLS - 1 )) return -1;
+    if (( row < 0 ) | ( row > LCD_ROWS - 1 )) return -1;
+
+    static unsigned char address[LCD_ROWS] = { ROW1_ADDR, ROW2_ADDR };
+    writeCmd(( DISP_ADDR | address[row] ) + pos );
     return 0;
 };
 
@@ -387,7 +389,7 @@ static char clearDisplay( void )
 {
     if (DEBUG) printf( "Clearing display.\n" );
     writeCmd( MODE_CLR );
-    delay( 5 );
+    delayMicroseconds( 1600 ); // Needs 1.6ms to clear.
     return 0;
 };
 
@@ -398,7 +400,82 @@ static char resetDisplay( void )
 {
     if (DEBUG) printf( "Resetting display.\n" );
     writeCmd( MODE_HOME );
-    delay( 5 );
+    delayMicroseconds( 1600 ); // Needs 1.6ms to clear
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  sets LCD modes.
+// ----------------------------------------------------------------------------
+static char setMode( void )
+{
+
+    if (DEBUG)
+    {
+        printf( "Setting display mode:\n" );
+        if ( mode.data )
+             printf( "\t8-bit mode.\n" );
+        else printf( "\t4-bit mode.\n" );
+        if ( mode.lines )
+             printf( "\t2 display lines with a " );
+        else printf( "\t1 display line with a " );
+        if ( mode.font )
+             printf( "5x10 font.\n" );
+        else printf( "5x7 font.\n" );
+    }
+    writeCmd( MODE_LCD | ( mode.data * LCD_DATA )
+                       | ( mode.lines * LCD_LINE )
+                       | ( mode.font * LCD_FONT ));
+
+    if (DEBUG)
+    {
+        printf( "Setting display and cursor properties:\n" );
+        if ( mode.display )
+             printf( "\tDisplay is on.\n" );
+        else printf( "\tDisplay is off.\n" );
+        if ( mode.cursor )
+             printf( "\tCursor is on and " );
+        else printf( "\tCursor is off and " );
+        if ( mode.blink )
+             printf( "blinking.\n" );
+        else printf( "not blinking.\n" );
+    }
+    writeCmd( MODE_DISP | ( mode.display * DISP_ON )
+                        | ( mode.cursor * CURS_ON )
+                        | ( mode.blink * BLNK_ON ));
+
+    if (DEBUG) printf( "Clearing display.\n" );
+    clearDisplay();
+
+    if (DEBUG)
+    {
+        printf( "Setting entry mode:\n" );
+        if ( mode.increment )
+             printf( "\tCursor movement is +ve with " );
+        else printf( "\tCursor movement is -ve with " );
+        if ( mode.shift )
+             printf( "auto shift.\n" );
+        else printf( "no auto shift.\n" );
+    }
+    writeCmd( MODE_ENTR | ( mode.increment * ENTR_INCR )
+                        | ( mode.shift * ENTR_SHFT ));
+
+    if (DEBUG)
+        {
+            printf( "Setting screen/cursor move mode:\n" );
+            if ( mode.movedisp )
+                 printf( "\tShift display " );
+            else printf( "\tShift cursor " );
+            if ( mode.direction )
+                 printf( "right.\n" );
+            else printf( "left.\n" );
+        }
+    writeCmd( MODE_MOVE | ( mode.movedisp * MOVE_DISP )
+                        | ( mode.direction * MOVE_RGHT ));
+
+    if (DEBUG) printf( "Setting Address.\n" );
+    writeCmd( DISP_ADDR | ROW1_ADDR );
+
     return 0;
 };
 
@@ -408,106 +485,36 @@ static char resetDisplay( void )
 static char initLCD( void )
 {
 /*
-    LCD has to be initialised in 8-bit mode by writing a fixed sequence
-    of initialise commands with delays betwen each command.
+    LCD has to be initialised by setting 8-bit mode and writing a sequence
+    of EN toggles with fixed delays between each command.
+        ?ms for start-up?
+        send command for 8-bit mode (0x30).
+        toggle EN.
+        4.1ms.
+        toggle EN.
+        100 us.
+        toggle EN.
+        100 us.
 */
-    delay( 30 );
+    delay( 5 );
     if (DEBUG) printf( "Initialising LCD.\n" );
-    writeCmd( MODE_INIT );
-    delay( 35 );
-    writeCmd( MODE_INIT );
-    delay( 35 );
-    writeCmd( MODE_INIT );
-    delay( 35 );
-    return 0;
-};
 
-// ----------------------------------------------------------------------------
-//  sets LCD mode.
-// ----------------------------------------------------------------------------
-static char setMode( void )
-{
+    writeCmd( MODE_LCD | LCD_DATA );
+    digitalWrite( gpio.en, 1 );
+    digitalWrite( gpio.en, 0 );
+    delayMicroseconds( 4200 );  // 4.1ms + 100us margin.
 
-    unsigned char lcd;
-    unsigned char display;
-    unsigned char entry;
-    unsigned char move;
+//    writeCmd( MODE_INIT );
+    digitalWrite( gpio.en, 1 );
+    digitalWrite( gpio.en, 0 );
+    delayMicroseconds( 150 );   // 100us + 50us margin.
 
-    lcd = ( MODE_LCD | ( mode.data * LCD_DATA )
-                     | ( mode.lines * LCD_LINE )
-                     | ( mode.font * LCD_FONT ));
-    if (DEBUG)
-    {
-        printf( "Setting display mode:\n" );
-        if (( lcd & LCD_DATA ) == LCD_DATA )
-             printf( "\t8-bit mode.\n" );
-        else printf( "\t4-bit mode.\n" );
-        if (( lcd & LCD_LINE ) == LCD_LINE )
-             printf( "\t2 display lines with a " );
-        else printf( "\t1 display line with a " );
-        if (( lcd & LCD_FONT ) == LCD_FONT )
-             printf( "5x10 font.\n" );
-        else printf( "5x7 font.\n" );
-    }
-    writeCmd( lcd );
-    delay( 5 );
+//    writeCmd( MODE_INIT );
+    digitalWrite( gpio.en, 1 );
+    digitalWrite( gpio.en, 0 );
+    delayMicroseconds( 150 );   // 100us + 50us margin.
 
-    if (DEBUG) printf( "Turning display off.\n" );
-    writeCmd( MODE_DISP ); // Turn off display, cursor and blink.
-
-    display = ( MODE_DISP | ( mode.display * DISP_ON )
-                          | ( mode.cursor * CURS_ON )
-                          | ( mode.blink * BLNK_ON ));
-    if (DEBUG)
-    {
-        printf( "Setting display and cursor properties:\n" );
-        if (( display & DISP_ON ) == DISP_ON )
-             printf( "\tDisplay is on.\n" );
-        else printf( "\tDisplay is off.\n" );
-        if (( display & CURS_ON ) == CURS_ON )
-             printf( "\tCursor is on and " );
-        else printf( "\tCursor is off and " );
-        if (( display & BLNK_ON ) == BLNK_ON )
-             printf( "blinking.\n" );
-        else printf( "not blinking.\n" );
-    }
-    writeCmd( display );
-    delay( 5 );
-
-    entry = ( MODE_ENTR | ( mode.increment * ENTR_INCR )
-                        | ( mode.shift * ENTR_SHFT ));
-    if (DEBUG)
-    {
-        printf( "Setting entry mode:\n" );
-        if (( entry & ENTR_INCR ) == ENTR_INCR )
-             printf( "\tCursor movement is +ve with " );
-        else printf( "\tCursor movement is -ve with " );
-        if (( entry & ENTR_SHFT ) == ENTR_SHFT )
-             printf( "auto shift.\n" );
-        else printf( "no auto shift.\n" );
-    }
-    writeCmd( entry );
-    delay( 5 );
-
-    move = ( MODE_MOVE | ( mode.movedisp * MOVE_DISP )
-                       | ( mode.direction * MOVE_RGHT ));
-    if (DEBUG)
-        {
-            printf( "Setting screen/cursor move mode:\n" );
-            if (( move & MOVE_DISP ) == MOVE_DISP )
-                 printf( "\tShift display " );
-            else printf( "\tShift cursor " );
-            if (( move & MOVE_RGHT ) == MOVE_RGHT )
-                 printf( "right.\n" );
-            else printf( "left.\n" );
-        }
-    writeCmd( move );
-    delay( 5 );
-
-    if (DEBUG) printf( "Clearing display.\n" );
-    writeCmd( MODE_CLR );
-    delay( 5 );
-
+    setMode();
     return 0;
 };
 
@@ -702,12 +709,11 @@ char main( int argc, char *argv[] )
     setMode();
 
     printf( "Initialisation finished.\n" );
+    printf( "Press a key.\n" );
+    getchar();
 
     while (1)
     {
-        printf( "Press a key.\n" );
-        getchar();
-
         gotoRowPos( 0, 0 );
         writeString( "abcdefghijklmnop" );
         gotoRowPos( 1, 0 );
@@ -715,15 +721,18 @@ char main( int argc, char *argv[] )
 
         printf( "Press a key.\n" );
         getchar();
-
-//        clearDisplay();
+        clearDisplay();
         resetDisplay();
 
         gotoRowPos( 0, 0 );
-        writeString( "0123456789" );
+        writeString( "***0123456789***" );
         gotoRowPos( 1, 0 );
-        writeString( "Darren Faulke" );
+        writeString( "-Darren Faulke-" );
 
+        printf( "Press a key.\n" );
+        getchar();
+        clearDisplay();
+        resetDisplay();
     }
 
     return 0;
