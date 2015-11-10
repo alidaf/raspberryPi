@@ -245,9 +245,8 @@ struct modeStruct
     .movedisp  = 0,
     .direction = 1,
     .increment = 1,
-    .shift     = 0
+    .shift     = 1
 };
-
 
 // ============================================================================
 //  Some helpful functions.
@@ -339,7 +338,7 @@ static char writeChar( unsigned char data )
     digitalWrite( gpio.rs, 1 );
 
     // High nibble.
-    if (DEBUG) printf( "Writing char 0x%0x = ", data );
+    if (DEBUG) printf( "Writing char %c (0x%0x) = ", data, data );
     nibble = ( data >> BITS_NIBBLE ) & 0xF;
     if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
@@ -371,7 +370,7 @@ static char writeString( char *string )
 {
     unsigned int i;
 
-    for ( i = 0; i < strlen( string ) - 1; i++ )
+    for ( i = 0; i < strlen( string ); i++ )
         writeChar( string[i] );
 
     return 0;
@@ -702,20 +701,30 @@ char main( int argc, char *argv[] )
     initLCD();
     setMode();
 
-    gotoRowPos( 0, 0 );
-    writeString( "abcdefghijklm" );
-    gotoRowPos( 1, 0 );
-    writeString( "nopqrstuvwxyz" );
-    getchar();
-//    clearDisplay();
-//    resetDisplay();
-    gotoRowPos( 0, 0 );
-    writeString( "0123456789" );
-    gotoRowPos( 1, 0 );
-    writeString( "9876543210" );
-    getchar();
-//    clearDisplay();
-//    resetDisplay();
+    printf( "Initialisation finished.\n" );
+
+    while (1)
+    {
+        printf( "Press a key.\n" );
+        getchar();
+
+        gotoRowPos( 0, 0 );
+        writeString( "abcdefghijklmnop" );
+        gotoRowPos( 1, 0 );
+        writeString( "ABCDEFGHIJKLMNOP" );
+
+        printf( "Press a key.\n" );
+        getchar();
+
+//        clearDisplay();
+        resetDisplay();
+
+        gotoRowPos( 0, 0 );
+        writeString( "0123456789" );
+        gotoRowPos( 1, 0 );
+        writeString( "Darren Faulke" );
+
+    }
 
     return 0;
 }
