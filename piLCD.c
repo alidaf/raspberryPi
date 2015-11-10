@@ -138,8 +138,8 @@
 #define BITS_BYTE    8 // Number of bits in a byte.
 #define BITS_NIBBLE  4 // Number of bits in a nibble.
 #define PINS_DATA    4 // Number of LCD data pins being used.
-#define LCD_WIDTH   16 // No of LCD display characters.
-#define LCD_LINES    2 // No of LCD display lines.
+#define LCD_COLS    16 // No of LCD display characters.
+#define LCD_ROWS     2 // No of LCD display lines.
 
 // Modes
 #define MODE_CMD     0 // Enable command mode for RS pin.
@@ -176,8 +176,8 @@
 #define CHAR_ADDR 0x40 // Character generator start address.
 #define DISP_ADDR 0x80 // Display data start address.
 
-#define GOTO_1    0x80 // Move cursor to start of line 1.
-#define GOTO_2    0xC0 // Move cursor to start of line 2
+#define ROW1_ADDR 0x00 // Start address of LCD row 1.
+#define ROW2_ADDR 0x40 // Start address of LCD row 2.
 
 
 // ============================================================================
@@ -200,17 +200,13 @@ struct gpioStruct
     unsigned char db[PINS_DATA]; // GPIO pins for LCD data pins.
 } gpio =
 {
-    .rs    = 7,   // Pin 26.
-    .en    = 8,   // Pin 24.
-    .rw    = 11,  // Pin 23
-    .db[0] = 25,  // Pin 22.
-    .db[1] = 24,  // Pin 18.
-    .db[2] = 23,  // Pin 16.
-    .db[3] = 18   // Pin 12.
-//    .db[0] = 18,  // Pin 12.
-//    .db[1] = 23,  // Pin 16.
-//    .db[2] = 24,  // Pin 18.
-//    .db[3] = 25   // Pin 22.
+    .rs    = 7,   // Pin 26 (RS).
+    .en    = 8,   // Pin 24 (E).
+    .rw    = 11,  // Pin 23 (RW).
+    .db[0] = 25,  // Pin 12 (DB4).
+    .db[1] = 24,  // Pin 16 (DB5).
+    .db[2] = 23,  // Pin 18 (DB6).
+    .db[3] = 18   // Pin 22 (DB7).
 };
 
 struct modeStruct
@@ -248,6 +244,20 @@ struct modeStruct
 //  LCD functions.
 // ****************************************************************************
 
+
+// ----------------------------------------------------------------------------
+//  Returns binary string for a nibble. Used for debugging only.
+// ----------------------------------------------------------------------------
+static const char *getBinaryString(unsigned char nibble)
+{
+    static const char *nibbles[] =
+    {
+        "0000", "0001", "0010", "0011", "0100", "0101", "0110", "0111",
+        "1000", "1001", "1010", "1011", "1100", "1101", "1110", "1111",
+    };
+    return nibbles[nibble & 0xff];
+}
+
 // ----------------------------------------------------------------------------
 //  Toggles Enable bit to allow writing.
 // ----------------------------------------------------------------------------
@@ -261,43 +271,20 @@ static char toggleEnable( void )
 
 
 // ----------------------------------------------------------------------------
-//  Returns string equivalent of byte.
-// ----------------------------------------------------------------------------
-static void printByte( unsigned char byte )
-{
-    unsigned char i;
-    for ( i = 0; i < BITS_BYTE; i++ )
-    {
-        printf( "%i", ( byte & 1 ));
-        byte >>= 1;
-    }
-    return;
-};
-
-
-// ----------------------------------------------------------------------------
-//  Returns string equivalent of nibble.
-// ----------------------------------------------------------------------------
-static void printNibble( unsigned char nibble )
-{
-    unsigned char i;
-    for ( i = 0; i < BITS_NIBBLE; i++ )
-    {
-        printf( "%i", ( nibble & 1 ));
-        nibble >>= 1;
-    }
-    return;
-};
-
-
-// ----------------------------------------------------------------------------
 //  Writes byte value of a char to LCD in nibbles.
 // ----------------------------------------------------------------------------
-static char writeNibble( unsigned char nibble )
+static char writeNibble( unsigned char data )
 {
     unsigned char i;
+    unsigned char nibble;
 
     // Write nibble to GPIOs
+    /*
+        Need to load GPIOs in reverse order because
+        Bitwise operator << shifts bits into next nibble,
+        creating a byte.
+    */
+    nibble = data;
     for ( i = 0; i < BITS_NIBBLE; i++ )
     {
         digitalWrite( gpio.db[i], ( nibble & 1 ));
@@ -321,21 +308,13 @@ static char writeCmd( unsigned char data )
     // Set to command mode.
     digitalWrite( gpio.rs, 0 );
 
-    printf( "Command = 0x%02x, binary = ", data );
-    printByte( data ); printf( ".\n" );
-    printf( "Nibbles = " );
     // High nibble.
-
-    nibble = data & 0x0F;
-    writeNibble( nibble );
-    printNibble( nibble );
-    printf ( "," );
-
-    // Low nibble.
     nibble = ( data >> BITS_NIBBLE ) & 0x0F;
     writeNibble( nibble );
-    printNibble( nibble );
-    printf( ".\n" );
+
+    // Low nibble.
+    nibble = data & 0x0F;
+    writeNibble( nibble );
 
     delay ( 5 );
     return 0;
@@ -353,34 +332,37 @@ static char writeChar( unsigned char data )
     // Set to character mode.
     digitalWrite( gpio.rs, 1 );
 
-    printf( "Char = %c, binary = ", data );
-    printByte( data ); printf( ".\n" );
-    printf( "Nibbles = " );
     // High nibble.
-    nibble = data & 0x0F;
+    nibble = ( data >> BITS_NIBBLE ) & 0xF;
     writeNibble( nibble );
-    printf ( "," );
 
     // Low nibble.
-    nibble = ( data >> BITS_NIBBLE ) & 0x0F;
+    nibble = data & 0xF;
     writeNibble( nibble );
-    printf( ".\n" );
 
     return 0;
 };
 
 
 // ----------------------------------------------------------------------------
+//  Moves cursor to position, row.
+// ----------------------------------------------------------------------------
+char gotoRowPos( unsigned char row, unsigned char pos )
+{
+    if (( pos < 0 ) | ( pos > LCD_COLS-1 ) |
+        ( row < 0 ) | ( row > LCD_ROWS-1 )) return -1;
+    static unsigned char rows[LCD_ROWS] = { ROW1_ADDR, ROW2_ADDR };
+    writeCmd( pos + ( DISP_ADDR | rows[row] ));
+    return 0;
+}
+
+
+// ----------------------------------------------------------------------------
 //  Writes a string to LCD.
 // ----------------------------------------------------------------------------
-static char writeString( char *string, unsigned char line  )
+static char writeString( char *string )
 {
     unsigned int i;
-
-    if (( line < 1 ) || ( line > 2 )) return -1;
-    if ( line == 1 ) writeCmd( GOTO_1 );
-    else
-    if ( line == 1 ) writeCmd( GOTO_2 );
 
     for ( i = 0; i < strlen( string ); i++ )
         writeChar( string[i] );
@@ -395,6 +377,7 @@ static char writeString( char *string, unsigned char line  )
 static char clearScreen( void )
 {
     writeCmd( MODE_CLR );
+    delay( 5 );
     return 0;
 }
 
@@ -430,33 +413,33 @@ static char setMode( void )
     unsigned char entry;
     unsigned char move;
 
-    lcd = MODE_LCD & ( mode.data & LCD_DATA )
-                   & ( mode.lines & LCD_LINE )
-                   & ( mode.font & LCD_FONT );
+    lcd = ( MODE_LCD | ( mode.data * LCD_DATA )
+                     | ( mode.lines * LCD_LINE )
+                     | ( mode.font * LCD_FONT ));
 
     writeCmd( lcd );
     delay( 35 );
 
     writeCmd( MODE_DISP ); // Turn off display, cursor and blink.
 
-    entry = MODE_ENTR & ( mode.increment & ENTR_INCR )
-                      & ( mode.shift & ENTR_SHFT );
+    entry = ( MODE_ENTR | ( mode.increment * ENTR_INCR )
+                        | ( mode.shift * ENTR_SHFT ));
 
-    move = MODE_MOVE & ( mode.movedisp & MOVE_DISP )
-                     & ( mode.direction & MOVE_RGHT );
+    move = ( MODE_MOVE | ( mode.movedisp * MOVE_DISP )
+                       | ( mode.direction * MOVE_RGHT ));
 
-    display = MODE_DISP & ( mode.display & DISP_ON )
-                        & ( mode.cursor & CURS_ON )
-                        & ( mode.blink & BLNK_ON );
+    display = ( MODE_DISP | ( mode.display * DISP_ON )
+                          | ( mode.cursor * CURS_ON )
+                          | ( mode.blink * BLNK_ON ));
 
     writeCmd( display );
-    delay( 35 );
+    delay( 2 );
     writeCmd( entry );
-    delay( 35 );
+    delay( 2 );
     writeCmd( move );
-    delay( 35 );
+    delay( 2 );
     writeCmd( MODE_CLR );
-    delay( 35 );
+    delay( 5 );
 
     return 0;
 };
@@ -577,31 +560,13 @@ char main( int argc, char *argv[] )
     initLCD();
     setMode();
 
-    clearScreen();
+    gotoRowPos( 0, 0 );
+    writeString( "abcdefghijklmnopqrstuvwxyz" );
+    gotoRowPos( 1, 0 );
+    writeString( "0123456789" );
 
-//    writeString( "abcdefghijklmnopqrstuvwxyz", 1 );
-//    writeString( "0123456789", 2 );
+    getchar();
 
-//    unsigned char data = 0xA5;
-//    unsigned char nibble;
-//    unsigned char i;
-
-//    printf( "\n0x%x = %s.\n", data, getStringByte( data ));
-//    printf( "Nibbles = " );
-//    nibble = ( data & 0x0F );
-//    for ( i = 0; i < 4; i++ )
-//    {
-//        printf( "%i", ( nibble & 1 ));
-//        nibble >>= 1;
-//    }
-//    printf( "," );
-//    nibble = ( data >> 4 ) & 0x0F;
-//    for ( i = 0; i < 4; i++ )
-//    {
-//        printf( "%i", ( nibble & 1 ));
-//        nibble >>= 1;
-//    }
-//    printf( ".\n" );
 
     return 0;
 }
