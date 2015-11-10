@@ -6,8 +6,13 @@
     LCD control app for the Raspberry Pi.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
-        - based on Python script lcd_16x2.py 2015 by Matt Hawkins.
-        - see http://www.raspberrypi-spy.co.uk
+    Based on the following guides and codes:
+        the Bus Pirate Project.
+        - see https://code.google.com/p/the-bus-pirate
+        Pratyush's blog
+        - see http://electronicswork.blogspot.in
+        wiringPi (lcd.c) Copyright 2012 Gordon Henderson
+        - see https://github.com/WiringPi
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,7 +30,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.1"
+#define Version "Version 0.2"
 
 //  Compilation:
 //
@@ -41,6 +46,7 @@
 //  Changelog:
 //
 //  v0.1 Original version.
+//  v0.2 Added toggle functions.
 //
 
 //  To Do:
@@ -87,9 +93,7 @@
 
     Note: Setting pin 5 (R/W) to 1 (read) while connected to a GPIO
           will likely damage the Pi unless V is reduced or grounded.
-*/
 
-/*
     HD44780 command codes
         - see https://en.wikipedia.org/wiki/Hitachi_HD44780_LCD_controller
 
@@ -130,9 +134,11 @@
     |  1  |  1  |     :     :    Write Data   :     :     :     |
     +-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+
 */
-// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// ============================================================================
 //  Useful LCD commands and constants.
-// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// ============================================================================
+
+#define DEBUG 1
 
 // Constants
 #define BITS_BYTE    8 // Number of bits in a byte.
@@ -179,7 +185,6 @@
 #define ROW1_ADDR 0x00 // Start address of LCD row 1.
 #define ROW2_ADDR 0x40 // Start address of LCD row 2.
 
-
 // ============================================================================
 //  Data structures.
 // ============================================================================
@@ -190,7 +195,7 @@
 */
 
 // ----------------------------------------------------------------------------
-// Data structure for GPIOs and setting LCD mode.
+//  Data structure for GPIOs.
 // ----------------------------------------------------------------------------
 struct gpioStruct
 {
@@ -209,6 +214,9 @@ struct gpioStruct
     .db[3] = 18   // Pin 22 (DB7).
 };
 
+// ----------------------------------------------------------------------------
+//  Data structure of toggle switches for various LCD functions.
+// ----------------------------------------------------------------------------
 struct modeStruct
 {
     // MODE_DISP
@@ -240,10 +248,10 @@ struct modeStruct
     .shift     = 0
 };
 
-// ****************************************************************************
-//  LCD functions.
-// ****************************************************************************
 
+// ============================================================================
+//  Some helpful functions.
+// ============================================================================
 
 // ----------------------------------------------------------------------------
 //  Returns binary string for a nibble. Used for debugging only.
@@ -256,7 +264,11 @@ static const char *getBinaryString(unsigned char nibble)
         "1000", "1001", "1010", "1011", "1100", "1101", "1110", "1111",
     };
     return nibbles[nibble & 0xff];
-}
+};
+
+// ============================================================================
+//  LCD output functions.
+// ============================================================================
 
 // ----------------------------------------------------------------------------
 //  Toggles Enable bit to allow writing.
@@ -264,11 +276,10 @@ static const char *getBinaryString(unsigned char nibble)
 static char toggleEnable( void )
 {
     digitalWrite( gpio.en, 1 );
-    delayMicroseconds ( 50 );
+    delayMicroseconds( 50 );
     digitalWrite( gpio.en, 0 );
     delayMicroseconds( 50 );
-}
-
+};
 
 // ----------------------------------------------------------------------------
 //  Writes byte value of a char to LCD in nibbles.
@@ -279,11 +290,6 @@ static char writeNibble( unsigned char data )
     unsigned char nibble;
 
     // Write nibble to GPIOs
-    /*
-        Need to load GPIOs in reverse order because
-        Bitwise operator << shifts bits into next nibble,
-        creating a byte.
-    */
     nibble = data;
     for ( i = 0; i < BITS_NIBBLE; i++ )
     {
@@ -295,7 +301,6 @@ static char writeNibble( unsigned char data )
 
     return 0;
 };
-
 
 // ----------------------------------------------------------------------------
 //  Writes byte value of a command to LCD in nibbles.
@@ -309,17 +314,18 @@ static char writeCmd( unsigned char data )
     digitalWrite( gpio.rs, 0 );
 
     // High nibble.
+    if (DEBUG) printf( "Writing cmd 0x%02x = ", data );
     nibble = ( data >> BITS_NIBBLE ) & 0x0F;
+    if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
 
     // Low nibble.
     nibble = data & 0x0F;
+    if (DEBUG) printf( "%s.\n", getBinaryString( nibble ));
     writeNibble( nibble );
 
-    delay ( 5 );
     return 0;
 };
-
 
 // ----------------------------------------------------------------------------
 //  Writes byte value of a command to LCD in nibbles.
@@ -333,16 +339,18 @@ static char writeChar( unsigned char data )
     digitalWrite( gpio.rs, 1 );
 
     // High nibble.
+    if (DEBUG) printf( "Writing char 0x%0x = ", data );
     nibble = ( data >> BITS_NIBBLE ) & 0xF;
+    if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
 
     // Low nibble.
     nibble = data & 0xF;
+    if (DEBUG) printf( "%s.\n", getBinaryString( nibble ));
     writeNibble( nibble );
 
     return 0;
 };
-
 
 // ----------------------------------------------------------------------------
 //  Moves cursor to position, row.
@@ -354,8 +362,7 @@ char gotoRowPos( unsigned char row, unsigned char pos )
     static unsigned char rows[LCD_ROWS] = { ROW1_ADDR, ROW2_ADDR };
     writeCmd( pos + ( DISP_ADDR | rows[row] ));
     return 0;
-}
-
+};
 
 // ----------------------------------------------------------------------------
 //  Writes a string to LCD.
@@ -364,26 +371,40 @@ static char writeString( char *string )
 {
     unsigned int i;
 
-    for ( i = 0; i < strlen( string ); i++ )
+    for ( i = 0; i < strlen( string ) - 1; i++ )
         writeChar( string[i] );
 
     return 0;
 };
 
+// ============================================================================
+//  LCD init and mode functions.
+// ============================================================================
 
 // ----------------------------------------------------------------------------
 //  Clears LCD screen.
 // ----------------------------------------------------------------------------
-static char clearScreen( void )
+static char clearDisplay( void )
 {
+    if (DEBUG) printf( "Clearing display.\n" );
     writeCmd( MODE_CLR );
     delay( 5 );
     return 0;
-}
-
+};
 
 // ----------------------------------------------------------------------------
-//  Initialise LCD.
+//  Clears memory and returns cursor/screen to original position.
+// ----------------------------------------------------------------------------
+static char resetDisplay( void )
+{
+    if (DEBUG) printf( "Resetting display.\n" );
+    writeCmd( MODE_HOME );
+    delay( 5 );
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Initialises LCD. Must be called before any other LCD functions.
 // ----------------------------------------------------------------------------
 static char initLCD( void )
 {
@@ -392,6 +413,7 @@ static char initLCD( void )
     of initialise commands with delays betwen each command.
 */
     delay( 30 );
+    if (DEBUG) printf( "Initialising LCD.\n" );
     writeCmd( MODE_INIT );
     delay( 35 );
     writeCmd( MODE_INIT );
@@ -401,9 +423,8 @@ static char initLCD( void )
     return 0;
 };
 
-
 // ----------------------------------------------------------------------------
-//  set default LCD mode.
+//  sets LCD mode.
 // ----------------------------------------------------------------------------
 static char setMode( void )
 {
@@ -416,34 +437,160 @@ static char setMode( void )
     lcd = ( MODE_LCD | ( mode.data * LCD_DATA )
                      | ( mode.lines * LCD_LINE )
                      | ( mode.font * LCD_FONT ));
-
+    if (DEBUG)
+    {
+        printf( "Setting display mode:\n" );
+        if (( lcd & LCD_DATA ) == LCD_DATA )
+             printf( "\t8-bit mode.\n" );
+        else printf( "\t4-bit mode.\n" );
+        if (( lcd & LCD_LINE ) == LCD_LINE )
+             printf( "\t2 display lines with a " );
+        else printf( "\t1 display line with a " );
+        if (( lcd & LCD_FONT ) == LCD_FONT )
+             printf( "5x10 font.\n" );
+        else printf( "5x7 font.\n" );
+    }
     writeCmd( lcd );
-    delay( 35 );
+    delay( 5 );
 
+    if (DEBUG) printf( "Turning display off.\n" );
     writeCmd( MODE_DISP ); // Turn off display, cursor and blink.
-
-    entry = ( MODE_ENTR | ( mode.increment * ENTR_INCR )
-                        | ( mode.shift * ENTR_SHFT ));
-
-    move = ( MODE_MOVE | ( mode.movedisp * MOVE_DISP )
-                       | ( mode.direction * MOVE_RGHT ));
 
     display = ( MODE_DISP | ( mode.display * DISP_ON )
                           | ( mode.cursor * CURS_ON )
                           | ( mode.blink * BLNK_ON ));
-
+    if (DEBUG)
+    {
+        printf( "Setting display and cursor properties:\n" );
+        if (( display & DISP_ON ) == DISP_ON )
+             printf( "\tDisplay is on.\n" );
+        else printf( "\tDisplay is off.\n" );
+        if (( display & CURS_ON ) == CURS_ON )
+             printf( "\tCursor is on and " );
+        else printf( "\tCursor is off and " );
+        if (( display & BLNK_ON ) == BLNK_ON )
+             printf( "blinking.\n" );
+        else printf( "not blinking.\n" );
+    }
     writeCmd( display );
-    delay( 2 );
+    delay( 5 );
+
+    entry = ( MODE_ENTR | ( mode.increment * ENTR_INCR )
+                        | ( mode.shift * ENTR_SHFT ));
+    if (DEBUG)
+    {
+        printf( "Setting entry mode:\n" );
+        if (( entry & ENTR_INCR ) == ENTR_INCR )
+             printf( "\tCursor movement is +ve with " );
+        else printf( "\tCursor movement is -ve with " );
+        if (( entry & ENTR_SHFT ) == ENTR_SHFT )
+             printf( "auto shift.\n" );
+        else printf( "no auto shift.\n" );
+    }
     writeCmd( entry );
-    delay( 2 );
+    delay( 5 );
+
+    move = ( MODE_MOVE | ( mode.movedisp * MOVE_DISP )
+                       | ( mode.direction * MOVE_RGHT ));
+    if (DEBUG)
+        {
+            printf( "Setting screen/cursor move mode:\n" );
+            if (( move & MOVE_DISP ) == MOVE_DISP )
+                 printf( "\tShift display " );
+            else printf( "\tShift cursor " );
+            if (( move & MOVE_RGHT ) == MOVE_RGHT )
+                 printf( "right.\n" );
+            else printf( "left.\n" );
+        }
     writeCmd( move );
-    delay( 2 );
+    delay( 5 );
+
+    if (DEBUG) printf( "Clearing display.\n" );
     writeCmd( MODE_CLR );
     delay( 5 );
 
     return 0;
 };
 
+// ============================================================================
+//  Toggle functions. setMode needs to be called to stick the toggles.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+//  Toggles display on/off.
+// ----------------------------------------------------------------------------
+static char toggleDisplay( void )
+{
+    mode.display = !mode.display;
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Toggles cursor on/off.
+// ----------------------------------------------------------------------------
+static char toggleCursor( void )
+{
+    mode.cursor = !mode.cursor;
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Toggles cursor blink on/off.
+// ----------------------------------------------------------------------------
+static char toggleBlink( void )
+{
+    mode.blink = !mode.blink;
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Toggles font 5x7/5x10.
+// ----------------------------------------------------------------------------
+static char toggleFont( void )
+{
+    mode.font = !mode.font;
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Toggles display/cursor movement.
+// ----------------------------------------------------------------------------
+static char toggleMove( void )
+{
+    mode.movedisp = !mode.movedisp;
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Toggles direction of screen/display left/right.
+// ----------------------------------------------------------------------------
+static char toggleDirection( void )
+{
+    mode.direction = !mode.direction;
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Toggles increment/decrement.
+// ----------------------------------------------------------------------------
+static char toggleIncrement( void )
+{
+    mode.increment = !mode.increment;
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Toggles display auto shift on/off.
+// ----------------------------------------------------------------------------
+static char toggleShift( void )
+{
+    mode.shift = !mode.shift;
+    return 0;
+};
+
+// ============================================================================
+//  GPIO functions.
+// ============================================================================
 
 // ----------------------------------------------------------------------------
 //  Initialises GPIOs.
@@ -456,6 +603,7 @@ static char initGPIO( void )
     // Set all GPIO pins to 0.
     digitalWrite( gpio.rs, 0 );
     digitalWrite( gpio.en, 0 );
+    // Data pins.
     for ( i = 0; i < PINS_DATA; i++ )
         digitalWrite( gpio.db[i], 0 );
 
@@ -466,26 +614,25 @@ static char initGPIO( void )
     for ( i = 0; i < PINS_DATA; i++ )
         pinMode( gpio.db[i], OUTPUT );
 
+    delay( 35 );
     return 0;
-}
+};
 
-
-// ****************************************************************************
+// ============================================================================
 //  Command line option functions.
-// ****************************************************************************
+// ============================================================================
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 //  argp documentation.
-// ============================================================================
+// ----------------------------------------------------------------------------
 const char *argp_program_version = Version;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
 static const char doc[] = "Raspberry Pi LCD control.";
 static const char args_doc[] = "piLCD <options>";
 
-
-// ============================================================================
+// ----------------------------------------------------------------------------
 //  Command line argument definitions.
-// ============================================================================
+// ----------------------------------------------------------------------------
 static struct argp_option options[] =
 {
     { 0, 0, 0, 0, "Switches:" },
@@ -499,10 +646,9 @@ static struct argp_option options[] =
     { 0 }
 };
 
-
-// ============================================================================
+// ----------------------------------------------------------------------------
 //  Command line argument parser.
-// ============================================================================
+// ----------------------------------------------------------------------------
 static int parse_opt( int param, char *arg, struct argp_state *state )
 {
     char *str, *token;
@@ -533,25 +679,21 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
     return 0;
 };
 
-
-// ============================================================================
+// ----------------------------------------------------------------------------
 //  argp parser parameter structure.
-// ============================================================================
+// ----------------------------------------------------------------------------
 static struct argp argp = { options, parse_opt, args_doc, doc };
-
 
 // ============================================================================
 //  Main section.
 // ============================================================================
 char main( int argc, char *argv[] )
 {
-
     // ------------------------------------------------------------------------
     //  Get command line arguments and check within bounds.
     // ------------------------------------------------------------------------
     argp_parse( &argp, argc, argv, 0, 0, &gpio );
     // Need to check validity of pins.
-
 
     // ------------------------------------------------------------------------
     //  Initialise wiringPi and LCD.
@@ -561,12 +703,19 @@ char main( int argc, char *argv[] )
     setMode();
 
     gotoRowPos( 0, 0 );
-    writeString( "abcdefghijklmnopqrstuvwxyz" );
+    writeString( "abcdefghijklm" );
     gotoRowPos( 1, 0 );
-    writeString( "0123456789" );
-
+    writeString( "nopqrstuvwxyz" );
     getchar();
-
+//    clearDisplay();
+//    resetDisplay();
+    gotoRowPos( 0, 0 );
+    writeString( "0123456789" );
+    gotoRowPos( 1, 0 );
+    writeString( "9876543210" );
+    getchar();
+//    clearDisplay();
+//    resetDisplay();
 
     return 0;
 }
