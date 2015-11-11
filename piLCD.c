@@ -13,6 +13,8 @@
         - see http://electronicswork.blogspot.in
         wiringPi (lcd.c) Copyright 2012 Gordon Henderson
         - see https://github.com/WiringPi
+        Custom characters from ozzmaker.
+        - see http://ozzmaker.com
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -246,6 +248,42 @@ struct modeStruct
     .increment = 1,
     .shift     = 0
 };
+
+// ============================================================================
+//  Custom characters.
+// ============================================================================
+/*
+    Default characters actually have an extra row at the bottom, reserved
+    for the cursor. It is therefore possible to define 8 5x8 characters.
+*/
+
+// ----------------------------------------------------------------------------
+//  Pac Man 5x7 (actually 5x8!!!).
+// ----------------------------------------------------------------------------
+
+#define CUSTOM_SIZE  0x08 // Size of char (rows) for custom chars (5x8).
+#define CUSTOM_MAX   0x08 // Max number of custom chars allowed.
+#define CUSTOM_CHARS 0x02 // Number of custom chars used.
+
+const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
+{{ 0b00000,
+   0b00000,
+   0b00000,
+   0b01110,
+   0b11011,
+   0b11100,
+   0b11111,
+   0b01110 },
+
+ { 0b00000,
+   0b00000,
+   0b00000,
+   0b01110,
+   0b10100,
+   0b11000,
+   0b11100,
+   0b01110 }};
+
 
 // ============================================================================
 //  Some helpful functions.
@@ -518,6 +556,21 @@ static char initLCD( void )
     return 0;
 };
 
+
+// ----------------------------------------------------------------------------
+//  Loads custom character into CGRAM.
+// ----------------------------------------------------------------------------
+static char loadChars( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
+{
+    writeCmd( CHAR_ADDR );
+    unsigned char i, j;
+    for ( i = 0; i < CUSTOM_CHARS; i++ )
+        for ( j = 0; j < CUSTOM_SIZE; j++ )
+        writeChar( newChar[i][j] );
+    writeCmd( DISP_ADDR );
+    return 0;
+}
+
 // ============================================================================
 //  Toggle functions. setMode needs to be called to stick the toggles.
 // ============================================================================
@@ -712,6 +765,11 @@ char main( int argc, char *argv[] )
     printf( "Press a key.\n" );
     getchar();
 
+    loadChars( pacMan );
+    printf( "Loaded custom characters.\n" );
+    printf( "Press a key.\n" );
+    getchar();
+
     while (1)
     {
         gotoRowPos( 0, 0 );
@@ -733,6 +791,16 @@ char main( int argc, char *argv[] )
         getchar();
         clearDisplay();
         resetDisplay();
+
+        gotoRowPos( 0, 0 );
+        writeChar( 0 );
+        writeChar( 1 );
+
+        printf( "Press a key.\n" );
+        getchar();
+        clearDisplay();
+        resetDisplay();
+
     }
 
     return 0;
