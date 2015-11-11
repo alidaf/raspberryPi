@@ -39,7 +39,7 @@
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-//  Authors:        D.Faulke    08/11/2015  This program.
+//  Authors:        D.Faulke    11/11/2015  This program.
 //
 //  Contributors:
 //
@@ -244,7 +244,7 @@ struct modeStruct
     .movedisp  = 0,
     .direction = 1,
     .increment = 1,
-    .shift     = 1
+    .shift     = 0
 };
 
 // ============================================================================
