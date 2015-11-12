@@ -3,18 +3,18 @@
 /*
     piLCD:
 
-    LCD control app for the Raspberry Pi.
+    HD44780 LCD display driver for the Raspberry Pi.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
     Based on the following guides and codes:
+        HD44780 data sheet
+        - unknown source.
+        elm-chan.org
+        - http://elm-chan.org/docs/lcd/hd44780_e.html
         the Bus Pirate Project.
         - see https://code.google.com/p/the-bus-pirate
-        Pratyush's blog
-        - see http://electronicswork.blogspot.in
         wiringPi (lcd.c) Copyright 2012 Gordon Henderson
         - see https://github.com/WiringPi
-        Custom characters from ozzmaker.
-        - see http://ozzmaker.com
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-//  Authors:        D.Faulke    11/11/2015  This program.
+//  Authors:        D.Faulke    12/11/2015  This program.
 //
 //  Contributors:
 //
@@ -54,6 +54,12 @@
 
 //  To Do:
 //      Add routine to check validity of GPIOs.
+//      Multithread display lines?
+//      Add support for multiple displays.
+//      Multithread displays.
+//      Convert to a library.
+//      Add read function to check ready (replace delays?).
+//          - most hobbyists may ground the ready pin.
 //      Improve error trapping and return codes for all functions.
 //      Write GPIO and interrupt routines to replace wiringPi.
 //      Remove all global variables.
@@ -97,100 +103,83 @@
     Note: Setting pin 5 (R/W) to 1 (read) while connected to a GPIO
           will likely damage the Pi unless V is reduced or grounded.
 
-    HD44780 command codes
-        - see https://en.wikipedia.org/wiki/Hitachi_HD44780_LCD_controller
-
-    Key:
-    +-----+----------------------+
-    | Key | Effect               |
-    +-----+----------------------+
-    | D/I | Cursor pos L/R       |
-    | L/R | Shift display L/R.   |
-    | S   | Auto shift off/on.   |
-    | DL  | Nibble/byte mode.    |
-    | D   | Display off/on.      |
-    | N   | 1/2 lines.           |
-    | C   | Cursor off/on.       |
-    | F   | 5x7/5x10 dots.       |
-    | B   | Cursor blink off/on. |
-    | C/S | Move cursor/display. |
-    | BF  | Busy flag.           |
-    +-----+----------------------+
-
+    LCD register bits:
+    +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
+    |RS |RW |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|   |Key|Effect         |
+    +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
+    | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |   |I/D|DDRAM inc/dec. |
+    | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | - |   |R/L|Shift R/L.     |
+    | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |I/D| S |   |S  |Shift on.      |
+    | 0 | 0 | 0 | 0 | 0 | 0 | 1 | D | C | B |   |DL |4-bit/8-bit.   |
+    | 0 | 0 | 0 | 0 | 0 | 1 |S/C|R/L| - | - |   |D  |Display on/off.|
+    | 0 | 0 | 0 | 0 | 1 |DL | N | F | - | - |   |N  |1/2 lines.     |
+    | 0 | 0 | 0 | 1 |   : CGRAM address :   |   |C  |Cursor on/off. |
+    | 0 | 0 | 1 |   :   DDRAM address   :   |   |F  |5x8/5x10 font. |
+    | 0 | 1 |BF |   :   Address counter :   |   |B  |Blink on/off.  |
+    | 1 | 0 |   :   : Read Data :   :   :   |   |S/C|Display/cursor.|
+    | 1 | 1 |   :   : Write Data:   :   :   |   |BF |Busy flag.     |
+    +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
     DDRAM: Display Data RAM.
     CGRAM: Character Generator RAM.
-
-    LCD register bits:
-    +-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-    | RS  | RW  | D7  | D6  | D5  | D4  | D3  | D2  | D1  | D0  |
-    +-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+
-    |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  1  |
-    |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  1  |  -  |
-    |  0  |  0  |  0  |  0  |  0  |  0  |  0  |  1  | D/I |  S  |
-    |  0  |  0  |  0  |  0  |  0  |  0  |  1  |  D  |  C  |  B  |
-    |  0  |  0  |  0  |  0  |  0  |  1  | C/S | L/R |  -  |  -  |
-    |  0  |  0  |  0  |  0  |  1  | DL  |  N  |  F  |  -  |  -  |
-    |  0  |  0  |  0  |  1  |     :   CGRAM address :     :     |
-    |  0  |  0  |  1  |     :     : DDRAM address   :     :     |
-    |  0  |  1  | BF  |     :     : Address counter :     :     |
-    |  1  |  0  |     :     :    Read Data    :     :     :     |
-    |  1  |  1  |     :     :    Write Data   :     :     :     |
-    +-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+
 */
 // ============================================================================
-//  Useful LCD commands and constants.
+//  Command and constant macros.
 // ============================================================================
 
 #define DEBUG 0
 
-// Constants
-#define BITS_BYTE    8 // Number of bits in a byte.
-#define BITS_NIBBLE  4 // Number of bits in a nibble.
-#define PINS_DATA    4 // Number of LCD data pins being used.
-#define LCD_COLS    16 // No of LCD display characters.
-#define LCD_ROWS     2 // No of LCD display lines.
+// Constants. Change these according to needs.
+#define BITS_BYTE          8 // Number of bits in a byte.
+#define BITS_NIBBLE        4 // Number of bits in a nibble.
+#define PINS_DATA          4 // Number of data pins used.
+
+// These should be replaced by command line options.
+#define DISPLAY_COLUMNS   16 // No of LCD display characters.
+#define DISPLAY_ROWS       2 // No of LCD display lines.
+#define DISPLAY_NUM        1 // Number of displays.
 
 // Modes
-#define MODE_CMD     0 // Enable command mode for RS pin.
-#define MODE_CHAR    1 // Enable character mode for RS pin.
+#define MODE_COMMAND       0 // Enable command mode for RS pin.
+#define MODE_DATA          1 // Enable character mode for RS pin.
 
 // Clear and reset.
-#define MODE_CLR  0x01 // Clear LCD screen.
-#define MODE_HOME 0x02 // Screen and cursor home.
+#define DISPLAY_CLEAR   0x01 // Clears DDRAM and sets address counter to start.
+#define DISPLAY_HOME    0x02 // Sets DDRAM address counter to start.
 
 // Character entry modes.
-#define MODE_ENTR 0x04 // OR this with the options below:
-#define ENTR_INCR 0x02 // Cursor increment. Default is decrement,
-#define ENTR_SHFT 0x01 // Auto shift. Default is off.
+// ENTRY_BASE = command, decrement DDRAM counter, display shift off.
+#define ENTRY_BASE      0x04 // OR this with the options below:
+#define ENTRY_COUNTER   0x02 // Increment DDRAM counter (cursor position).
+#define ENTRY_SHIFT     0x01 // Display shift on.
 
 // Screen and cursor commands.
-#define MODE_DISP 0x08 // OR this with the options below:
-#define DISP_ON   0x04 // Display on. Default is off.
-#define CURS_ON   0x02 // Cursor on. Default is off.
-#define BLNK_ON   0x01 // Blink on. Default is off.
+// DISPLAY_BASE = command, display off, underline cursor off, block cursor off.
+#define DISPLAY_BASE    0x08 // OR this with the options below:
+#define DISPLAY_ON      0x04 // Display on.
+#define DISPLAY_CURSOR  0x02 // Cursor on.
+#define DISPLAY_BLINK   0x01 // Block cursor on.
 
 // Screen and cursor movement.
-#define MODE_MOVE 0x10 // OR this with the options below:
-#define MOVE_DISP 0x08 // Move screen. Default is cursor.
-#define MOVE_RGHT 0x04 // Move screen/cursor right. Default is left.
+// MOVE_BASE = command, move cursor left.
+#define MOVE_BASE       0x10 // OR this with the options below:
+#define MOVE_DISPLAY    0x08 // Move screen.
+#define MOVE_DIRECTION  0x04 // Move screen/cursor right.
 
 // LCD function modes.
-#define MODE_LCD  0x20 // OR this with the options below:
-#define LCD_DATA  0x10 // 8 bit (byte) mode. Default is 4 bit (nibble) mode.
-#define LCD_LINE  0x08 // Use 2 display lines. Default is 1 line.
-#define LCD_FONT  0x04 // 5x10 font. Default is 5x7 font.
+// FUNCTION_BASE = command, 4-bit mode, 1 line, 5x8 font.
+#define FUNCTION_BASE   0x20 // OR this with the options below:
+#define FUNCTION_DATA   0x10 // 8-bit (byte) mode.
+#define FUNCTION_LINES  0x08 // Use 2 display lines.
+#define FUNCTION_FONT   0x04 // 5x10 font.
 
-// LCD character generator and display addresses.
-#define CHAR_ADDR 0x40 // Character generator start address.
-#define DISP_ADDR 0x80 // Display data start address.
-
-#define ROW1_ADDR 0x00 // Start address of LCD row 1.
-#define ROW2_ADDR 0x40 // Start address of LCD row 2.
+// LCD character generator and display memory addresses.
+#define ADDRESS_CGRAM   0x40 // Character generator start address.
+#define ADDRESS_DDRAM   0x80 // Display data start address.
+#define ADDRESS_ROWS    0x40 // Each display row increments by this amount.
 
 // ============================================================================
 //  Data structures.
 // ============================================================================
-
 /*
     Note: char is the smallest integer size (usually 8 bit) and is used to
           keep the memory footprint as low as possible.
@@ -216,40 +205,6 @@ struct gpioStruct
     .db[3] = 18   // Pin 22 (DB7).
 };
 
-// ----------------------------------------------------------------------------
-//  Data structure of toggle switches for various LCD functions.
-// ----------------------------------------------------------------------------
-struct modeStruct
-{
-    // MODE_DISP
-    unsigned char display   :1; // 0 = display off, 1 = display on.
-    unsigned char cursor    :1; // 0 = cursor off, 1 = cursor on.
-    unsigned char blink     :1; // 0 = blink off, 1 = blink on.
-    // MODE_LCD
-    unsigned char data      :1; // 0 = nibble mode, 1 = byte mode.
-    unsigned char lines     :1; // 0 = 1 line, 1 = 2 lines.
-    unsigned char font      :1; // 0 = 5x7, 1 = 5x10.
-    // MODE_MOVE
-    unsigned char movedisp  :1; // 0 = move cursor, 1 = move screen.
-    unsigned char direction :1; // 0 = left, 1 = right.
-    //MODE_ENTR
-    unsigned char increment :1; // 0 = decrement, 1 = increment.
-    unsigned char shift     :1; // 0 = auto shift off, 1 = auto shift on.
-    unsigned char           :6; // Padding to make structure 16 bits.
-} mode =
-{
-    .display   = 1,
-    .cursor    = 1,
-    .blink     = 0,
-    .data      = 0,
-    .lines     = 1,
-    .font      = 1,
-    .movedisp  = 0,
-    .direction = 1,
-    .increment = 1,
-    .shift     = 0
-};
-
 // ============================================================================
 //  Custom characters.
 // ============================================================================
@@ -259,79 +214,41 @@ struct modeStruct
 */
 
 // ----------------------------------------------------------------------------
-//  Pac Man 5x7 (actually 5x8!!!).
+//  Pac Man 5x8.
 // ----------------------------------------------------------------------------
-
 #define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
 #define CUSTOM_MAX   8 // Max number of custom chars allowed.
 #define CUSTOM_CHARS 7 // Number of custom chars used.
+/*
+    PacMan 1        PacMan 2        Ghost 1         Ghost 2
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    00000 = 0x00,   00000 = 0x00,   01110 = 0x0E,   01110 = 0x0E
+    01110 = 0x0E,   01111 = 0x1F,   11001 = 0x19,   11001 = 0x19
+    11011 = 0x1B,   10110 = 0x16,   11101 = 0x1D,   11011 = 0x1B
+    11111 = 0x1F,   11100 = 0x1C,   11111 = 0x1F,   11111 = 0x1F
+    11111 = 0x1F,   11110 = 0x1E,   11111 = 0x1F,   11111 = 0x1F
+    01110 = 0x0E,   01111 = 0x0F,   10101 = 0x15,   01010 = 0x0A
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
 
+    Small dot       Large dot       Pac Man 3
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    00000 = 0x00,   00000 = 0x00,   11110 = 0x1E
+    00000 = 0x00,   01100 = 0x0C,   01101 = 0x0D
+    00100 = 0x04,   01100 = 0x0C,   00111 = 0x07
+    00000 = 0x00,   00000 = 0x00,   01111 = 0x0F
+    00000 = 0x00,   00000 = 0x00,   11110 = 0x1E
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+*/
 const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
 {
-   // PacMan 1.
- { 0b00000,
-   0b00000,
-   0b01110,
-   0b11011,
-   0b11111,
-   0b11111,
-   0b01110,
-   0b00000 },
-   // PacMan 2.
- { 0b00000,
-   0b00000,
-   0b01111,
-   0b10110,
-   0b11100,
-   0b11110,
-   0b01111,
-   0b00000 },
-   // Ghost 1.
- { 0b00000,
-   0b01110,
-   0b11001,
-   0b11101,
-   0b11111,
-   0b11111,
-   0b10101,
-   0b00000 },
-   // Ghost 2.
- { 0b00000,
-   0b01110,
-   0b11001,
-   0b11011,
-   0b11111,
-   0b11111,
-   0b01010,
-   0b00000 },
-   // Small dot.
- { 0b00000,
-   0b00000,
-   0b00000,
-   0b00000,
-   0b00100,
-   0b00000,
-   0b00000,
-   0b00000 },
-   // Large dot.
- { 0b00000,
-   0b00000,
-   0b00000,
-   0b01100,
-   0b01100,
-   0b00000,
-   0b00000,
-   0b00000 },
-   // PacMan chase.
- { 0b00000,
-   0b00000,
-   0b11110,
-   0b01101,
-   0b00111,
-   0b01111,
-   0b11110,
-   0b00000 }};
-
+ { 0x00, 0x00, 0x0e, 0x1b, 0x1f, 0x1f, 0x0e, 0x00 },
+ { 0x00, 0x00, 0x1f, 0x16, 0x1c, 0x1e, 0x0f, 0x00 },
+ { 0x00, 0x0e, 0x19, 0x1d, 0x1f, 0x1f, 0x15, 0x00 },
+ { 0x00, 0x0e, 0x19, 0x1b, 0x1f, 0x1f, 0x0a, 0x00 },
+ { 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00 },
+ { 0x00, 0x00, 0x00, 0x0c, 0x0c, 0x00, 0x00, 0x00 },
+ { 0x00, 0x00, 0x1e, 0x0d, 0x07, 0x0f, 0x1e, 0x00 }};
 
 // ============================================================================
 //  Some helpful functions.
@@ -357,7 +274,7 @@ static const char *getBinaryString(unsigned char nibble)
 // ----------------------------------------------------------------------------
 //  Toggles Enable bit to allow writing.
 // ----------------------------------------------------------------------------
-static char toggleEnable( void )
+static char writeEnable( void )
 {
     digitalWrite( gpio.en, 1 );
     delayMicroseconds( 1 );
@@ -379,9 +296,10 @@ static char writeNibble( unsigned char data )
     {
         digitalWrite( gpio.db[i], ( nibble & 1 ));
         nibble >>= 1;
+        delayMicroseconds( 41 ); // Writing data to DDRAM takes 41uS.
     }
     // Toggle enable bit to send nibble.
-    toggleEnable();
+    writeEnable();
 
     return 0;
 };
@@ -389,23 +307,25 @@ static char writeNibble( unsigned char data )
 // ----------------------------------------------------------------------------
 //  Writes byte value of a command to LCD in nibbles.
 // ----------------------------------------------------------------------------
-static char writeCmd( unsigned char data )
+static char writeCommand( unsigned char data )
 {
     unsigned char nibble;
     unsigned char i;
 
     // Set to command mode.
     digitalWrite( gpio.rs, 0 );
+    delayMicroseconds( 37 ); // setting command mode takes 37uS.
     digitalWrite( gpio.en, 0 );
+    delayMicroseconds( 37 ); // setting command mode takes 37uS.
 
     // High nibble.
     if (DEBUG) printf( "Writing cmd 0x%02x = ", data );
-    nibble = ( data >> BITS_NIBBLE ) & 0x0F;
+    nibble = ( data >> BITS_NIBBLE ) & 0x0f;
     if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
 
     // Low nibble.
-    nibble = data & 0x0F;
+    nibble = data & 0x0f;
     if (DEBUG) printf( "%s.\n", getBinaryString( nibble ));
     writeNibble( nibble );
 
@@ -415,23 +335,25 @@ static char writeCmd( unsigned char data )
 // ----------------------------------------------------------------------------
 //  Writes byte value of a command to LCD in nibbles.
 // ----------------------------------------------------------------------------
-static char writeChar( unsigned char data )
+static char writeData( unsigned char data )
 {
     unsigned char i;
     unsigned char nibble;
 
     // Set to character mode.
     digitalWrite( gpio.rs, 1 );
+    delayMicroseconds( 37 ); // setting command mode takes 37uS.
     digitalWrite( gpio.en, 0 );
+    delayMicroseconds( 37 ); // setting command mode takes 37uS.
 
     // High nibble.
     if (DEBUG) printf( "Writing char %c (0x%0x) = ", data, data );
-    nibble = ( data >> BITS_NIBBLE ) & 0xF;
+    nibble = ( data >> BITS_NIBBLE ) & 0xf;
     if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
 
     // Low nibble.
-    nibble = data & 0xF;
+    nibble = data & 0xf;
     if (DEBUG) printf( "%s.\n", getBinaryString( nibble ));
     writeNibble( nibble );
 
@@ -441,26 +363,24 @@ static char writeChar( unsigned char data )
 // ----------------------------------------------------------------------------
 //  Moves cursor to position, row.
 // ----------------------------------------------------------------------------
-static char gotoRowPos( unsigned char row, unsigned char pos )
+static char moveCursor( unsigned char row, unsigned char pos )
 {
-    if (( pos < 0 ) | ( pos > LCD_COLS - 1 )) return -1;
-    if (( row < 0 ) | ( row > LCD_ROWS - 1 )) return -1;
+    if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
+    if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
 
-    static unsigned char address[LCD_ROWS] = { ROW1_ADDR, ROW2_ADDR };
-    writeCmd(( DISP_ADDR | address[row] ) + pos );
+    writeCommand(( ADDRESS_DDRAM + ( row * ADDRESS_ROWS ) + pos ));
     return 0;
 };
 
 // ----------------------------------------------------------------------------
 //  Writes a string to LCD.
 // ----------------------------------------------------------------------------
-static char writeString( char *string )
+static char writeDataString( char *string )
 {
     unsigned int i;
 
     for ( i = 0; i < strlen( string ); i++ )
-        writeChar( string[i] );
-
+        writeData( string[i] );
     return 0;
 };
 
@@ -471,136 +391,87 @@ static char writeString( char *string )
 // ----------------------------------------------------------------------------
 //  Clears LCD screen.
 // ----------------------------------------------------------------------------
-static char clearDisplay( void )
+static char displayClear( void )
 {
     if (DEBUG) printf( "Clearing display.\n" );
-    writeCmd( MODE_CLR );
-    delayMicroseconds( 1600 ); // Needs 1.6ms to clear.
+    writeCommand( DISPLAY_CLEAR );
+    delayMicroseconds( 1600 ); // Data sheet doesn't give execution time!
     return 0;
 };
 
 // ----------------------------------------------------------------------------
 //  Clears memory and returns cursor/screen to original position.
 // ----------------------------------------------------------------------------
-static char resetDisplay( void )
+static char displayHome( void )
 {
     if (DEBUG) printf( "Resetting display.\n" );
-    writeCmd( MODE_HOME );
-    delayMicroseconds( 1600 ); // Needs 1.6ms to clear
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  sets LCD modes.
-// ----------------------------------------------------------------------------
-static char setMode( void )
-{
-
-    if (DEBUG)
-    {
-        printf( "Setting display mode:\n" );
-        if ( mode.data )
-             printf( "\t8-bit mode.\n" );
-        else printf( "\t4-bit mode.\n" );
-        if ( mode.lines )
-             printf( "\t2 display lines with a " );
-        else printf( "\t1 display line with a " );
-        if ( mode.font )
-             printf( "5x10 font.\n" );
-        else printf( "5x7 font.\n" );
-    }
-    writeCmd( MODE_LCD | ( mode.data * LCD_DATA )
-                       | ( mode.lines * LCD_LINE )
-                       | ( mode.font * LCD_FONT ));
-
-    if (DEBUG)
-    {
-        printf( "Setting display and cursor properties:\n" );
-        if ( mode.display )
-             printf( "\tDisplay is on.\n" );
-        else printf( "\tDisplay is off.\n" );
-        if ( mode.cursor )
-             printf( "\tCursor is on and " );
-        else printf( "\tCursor is off and " );
-        if ( mode.blink )
-             printf( "blinking.\n" );
-        else printf( "not blinking.\n" );
-    }
-    writeCmd( MODE_DISP | ( mode.display * DISP_ON )
-                        | ( mode.cursor * CURS_ON )
-                        | ( mode.blink * BLNK_ON ));
-
-    if (DEBUG) printf( "Clearing display.\n" );
-    clearDisplay();
-
-    if (DEBUG)
-    {
-        printf( "Setting entry mode:\n" );
-        if ( mode.increment )
-             printf( "\tCursor movement is +ve with " );
-        else printf( "\tCursor movement is -ve with " );
-        if ( mode.shift )
-             printf( "auto shift.\n" );
-        else printf( "no auto shift.\n" );
-    }
-    writeCmd( MODE_ENTR | ( mode.increment * ENTR_INCR )
-                        | ( mode.shift * ENTR_SHFT ));
-
-    if (DEBUG)
-        {
-            printf( "Setting screen/cursor move mode:\n" );
-            if ( mode.movedisp )
-                 printf( "\tShift display " );
-            else printf( "\tShift cursor " );
-            if ( mode.direction )
-                 printf( "right.\n" );
-            else printf( "left.\n" );
-        }
-    writeCmd( MODE_MOVE | ( mode.movedisp * MOVE_DISP )
-                        | ( mode.direction * MOVE_RGHT ));
-
-    if (DEBUG) printf( "Setting Address.\n" );
-    writeCmd( DISP_ADDR | ROW1_ADDR );
-
+    writeCommand( DISPLAY_HOME );
+    delayMicroseconds( 1520 ); // Needs 1.52ms to execute.
     return 0;
 };
 
 // ----------------------------------------------------------------------------
 //  Initialises LCD. Must be called before any other LCD functions.
 // ----------------------------------------------------------------------------
-static char initLCD( void )
-{
 /*
-    LCD has to be initialised by setting 8-bit mode and writing a sequence
-    of EN toggles with fixed delays between each command.
-        ?ms for start-up?
-        send command for 8-bit mode (0x30).
-        toggle EN.
-        4.1ms.
-        toggle EN.
-        100 us.
-        toggle EN.
-        100 us.
+    data  = 0: 4-bit mode.
+    data  = 1: 8-bit mode.
+    lines = 0: 1 display line.
+    lines = 1: 2 display lines.
+    font  = 0: 5x10 font (uses 2 lines).
+    font  = 1: 5x8 font.
+
+    Software initialisation is achieved by setting 8-bit mode and writing a
+    sequence of EN toggles with fixed delays between each command.
+        Initial delay after Vcc rises to 2.7V
+        15mS@5V, 40mS@3V (minimum).
+        Set 8-bit mode (command 0x30).
+        Set enable
+        4.1mS (minimum).
+        Set enable (8-bit mode stays set until changed).
+        100uS (minimum).
+        Set enable (8-bit mode stays set until changed).
+        100uS (minimum).
+        Set function mode. Cannot be changed after this unless re-initialised.
+        37uS (minimum).
 */
-    delay( 5 );
-    if (DEBUG) printf( "Initialising LCD.\n" );
+static char initialiseDisplay( bool data, bool lines, bool font )
+{
+    delay( 5 ); // >40mS@3V.
 
-    writeCmd( MODE_LCD | LCD_DATA );
+    writeCommand( FUNCTION_BASE | FUNCTION_DATA );
     digitalWrite( gpio.en, 1 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 4200 );  // 4.1ms + 100us margin.
+    delayMicroseconds( 4200 );  // >4.1mS.
 
-//    writeCmd( MODE_INIT );
+//    writeCommand( MODE_INIT );
     digitalWrite( gpio.en, 1 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 150 );   // 100us + 50us margin.
+    delayMicroseconds( 150 );   // >=100uS.
 
-//    writeCmd( MODE_INIT );
+//    writeCommand( MODE_INIT );
     digitalWrite( gpio.en, 1 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 150 );   // 100us + 50us margin.
+    delayMicroseconds( 150 );   // >=100uS.
 
-    setMode();
+    if (DEBUG)
+    {
+        printf( "Setting display mode:\n" );
+        if ( data )
+             printf( "\t8-bit mode.\n" );
+        else printf( "\t4-bit mode.\n" );
+        if ( lines )
+             printf( "\t2 display lines.\n" );
+        else printf( "\t1 display line.\n" );
+        if ( font )
+             printf( "\t5x10 font.\n" );
+        else printf( "\t5x8 font.\n" );
+    }
+    // delay for write command is handled in function.
+    writeCommand( FUNCTION_BASE | ( data * FUNCTION_DATA )
+                                | ( lines * FUNCTION_LINES )
+                                | ( font * FUNCTION_FONT ));
+
     return 0;
 };
 
@@ -608,90 +479,109 @@ static char initLCD( void )
 // ----------------------------------------------------------------------------
 //  Loads custom character into CGRAM.
 // ----------------------------------------------------------------------------
-static char loadChars( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
+/*
+    Set command to point to start of CGRAM and load data line by line. CGRAM
+    pointer is auto-incremented. Set command to point to start of DDRAM to
+    finish.
+*/
+static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
 {
-    writeCmd( CHAR_ADDR );
+    writeCommand( ADDRESS_CGRAM );
+    delayMicroseconds( 37 ); // Write command takes 37uS to execute.
     unsigned char i, j;
     for ( i = 0; i < CUSTOM_CHARS; i++ )
         for ( j = 0; j < CUSTOM_SIZE; j++ )
-        writeChar( newChar[i][j] );
-    writeCmd( DISP_ADDR );
+            writeData( newChar[i][j] );
+    writeCommand( ADDRESS_DDRAM );
     return 0;
 }
 
 // ============================================================================
-//  Toggle functions. setMode needs to be called to stick the toggles.
+//  Mode settings.
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-//  Toggles display on/off.
+//  Sets entry mode.
 // ----------------------------------------------------------------------------
-static char toggleDisplay( void )
+/*
+    counter = 0: Decrement DDRAM counter after data write (cursor moves L)
+    counter = 1: Increment DDRAM counter after data write (cursor moves R)
+    shift =   0: Do not shift display after data write.
+    shift =   1: Shift display after data write.
+*/
+static char setEntryMode( bool counter, bool shift )
 {
-    mode.display = !mode.display;
+    if (DEBUG)
+    {
+        printf( "Setting entry mode:\n" );
+        if ( counter )
+             printf( "\tCursor position increments after data write.\n" );
+        else printf( "\tCursor position decrements after data write.\n" );
+        if ( shift )
+             printf( "\tDisplay shifts after data write.\n" );
+        else printf( "\tNo display shift after data write.\n" );
+    }
+    writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
+                             | ( shift * ENTRY_SHIFT ));
+
     return 0;
 };
 
 // ----------------------------------------------------------------------------
-//  Toggles cursor on/off.
+//  Sets display mode.
 // ----------------------------------------------------------------------------
-static char toggleCursor( void )
+/*
+    display = 0: Display off.
+    display = 1: Display on.
+    cursor  = 0: Cursor off.
+    cursor  = 1: Cursor on.
+    blink   = 0: Blink (block cursor) on.
+    blink   = 0: Blink (block cursor) off.
+*/
+static char setDisplayMode( bool display, bool cursor, bool blink )
 {
-    mode.cursor = !mode.cursor;
+    if (DEBUG)
+    {
+        printf( "Setting display and cursor properties:\n" );
+        if ( display )
+             printf( "\tDisplay on.\n" );
+        else printf( "\tDisplay off.\n" );
+        if ( cursor )
+             printf( "\tCursor on.\n" );
+        else printf( "\tCursor off.\n" );
+        if ( blink )
+             printf( "\tBlink on.\n" );
+        else printf( "\tBlink off.\n" );
+    }
+    writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
+                               | ( cursor * DISPLAY_CURSOR )
+                               | ( blink * DISPLAY_BLINK ));
     return 0;
 };
 
 // ----------------------------------------------------------------------------
-//  Toggles cursor blink on/off.
+//  Shifts cursor or display.
 // ----------------------------------------------------------------------------
-static char toggleBlink( void )
+/*
+    mode      = 0: Shift cursor.
+    mode      = 1: Shift display.
+    direction = 0: Left.
+    direction = 1: Right.
+*/
+static char setMoveMode( bool mode, bool direction )
 {
-    mode.blink = !mode.blink;
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Toggles font 5x7/5x10.
-// ----------------------------------------------------------------------------
-static char toggleFont( void )
-{
-    mode.font = !mode.font;
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Toggles display/cursor movement.
-// ----------------------------------------------------------------------------
-static char toggleMove( void )
-{
-    mode.movedisp = !mode.movedisp;
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Toggles direction of screen/display left/right.
-// ----------------------------------------------------------------------------
-static char toggleDirection( void )
-{
-    mode.direction = !mode.direction;
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Toggles increment/decrement.
-// ----------------------------------------------------------------------------
-static char toggleIncrement( void )
-{
-    mode.increment = !mode.increment;
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Toggles display auto shift on/off.
-// ----------------------------------------------------------------------------
-static char toggleShift( void )
-{
-    mode.shift = !mode.shift;
+    if (DEBUG)
+        {
+            printf( "Setting screen/cursor move mode:\n" );
+            if ( mode )
+                 printf( "\tShift display " );
+            else printf( "\tShift cursor " );
+            if ( direction )
+                 printf( "right.\n" );
+            else printf( "left.\n" );
+        }
+    writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
+                            | ( direction * MOVE_DIRECTION ));
     return 0;
 };
 
@@ -702,7 +592,7 @@ static char toggleShift( void )
 // ----------------------------------------------------------------------------
 //  Initialises GPIOs.
 // ----------------------------------------------------------------------------
-static char initGPIO( void )
+static char initialiseGPIOs( void )
 {
     unsigned char i;
     wiringPiSetupGpio();
@@ -734,7 +624,7 @@ static char initGPIO( void )
 // ----------------------------------------------------------------------------
 const char *argp_program_version = Version;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
-static const char doc[] = "Raspberry Pi LCD control.";
+static const char doc[] = "Raspberry Pi LCD driver.";
 static const char args_doc[] = "piLCD <options>";
 
 // ----------------------------------------------------------------------------
@@ -805,96 +695,78 @@ char main( int argc, char *argv[] )
     // ------------------------------------------------------------------------
     //  Initialise wiringPi and LCD.
     // ------------------------------------------------------------------------
-    initGPIO();
-    initLCD();
-    setMode();
+    initialiseGPIOs();
+    initialiseDisplay( false, true, false );
+    setEntryMode( true, false );
+    setDisplayMode( true, false, false );
+//    setMoveMode( false, false );
 
-    printf( "Initialisation finished.\n" );
-
-    loadChars( pacMan );
-    printf( "Loaded custom characters.\n" );
+    loadCustom( pacMan );
 
     // There must be a better way of doing this but for now, each frame is
     // a separate string.
     unsigned int frames = 5;
-    unsigned char animation[61][17] =
-    {{   4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',  0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',  1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',  0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',  1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',' ',  0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',' ',  1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   2,' ',' ',' ',  0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   3,' ',' ',' ',  1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     {   2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  5,  4,'\0' },
-     { ' ',' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  5,  4,'\0' },
-     { ' ',' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  5,  4,'\0' },
-     { ' ',' ',' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  5,  4,'\0' },
-     { ' ',' ',' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  5,  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  5,  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  5,  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,' ',  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  6,' ',  4,'\0' },
-     { ' ',' ',' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  0,' ',' ',  4,'\0' },
-     { ' ',' ',' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  6,' ',' ',  4,'\0' },
-     { ' ',' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,' ',' ',' ',  4,'\0' },
-     { ' ',' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  6,' ',' ',' ',  4,'\0' },
-     { ' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  0,' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  6,' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',  2,  3,  2,  3,' ',' ',' ',  6,' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',  2,  3,  2,  3,' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',  3,  2,  3,  2,' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   3,  2,  3,  2,' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   2,  3,  2,  3,' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   2,  3,  2,' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   3,  2,  3,' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   3,  2,' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   2,  3,' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   2,' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   3,' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   0,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     {   6,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' },
-     { ' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,'\0' }};
+    unsigned char animation[46][17] =
+    {{   4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',  0,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',  1,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  0,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  1,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  0,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  1,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   2,' ',' ',' ',  0,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   3,' ',' ',' ',  1,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     {   2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  5,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  0,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  6,  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  2,  3,  2,  3,' ',' ',' ',  6,' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',  2,  3,  2,  3,' ',' ',' ',  0,' ',' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',  3,  2,  3,  2,' ',' ',' ',  6,' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   3,  2,  3,  2,' ',' ',' ',  0,' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   2,  3,  2,  3,' ',' ',' ',  6,' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   2,  3,  2,' ',' ',' ',  0,' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   3,  2,  3,' ',' ',' ',  6,' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   3,  2,' ',' ',' ',  0,' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   2,  3,' ',' ',' ',  6,' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   2,' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   3,' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     { ' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   0,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
+     {   6,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' }};
 
-    clearDisplay();
-    resetDisplay();
+    displayClear();
 
-    gotoRowPos( 0, 0 );
-    writeString( "Darren Faulke" );
+    moveCursor( 0, 0 );
+    writeDataString( "Darren Faulke" );
     unsigned int i;
+    unsigned int frameDelay = 500;
 
-    while( 1 )
+    for ( i = 0; i < 46; i++ )
     {
-        for ( i = 0; i < 61; i++ )
-        {
-            gotoRowPos( 1, 0 );
-            writeString( animation[i] );
-            delay( 300 );
-        }
+        moveCursor( 1, 0 );
+        writeDataString( animation[i] );
+        delay( frameDelay );
     }
+    displayClear();
     return 0;
 }
