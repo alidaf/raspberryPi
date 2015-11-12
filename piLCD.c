@@ -13,8 +13,6 @@
         - http://elm-chan.org/docs/lcd/hd44780_e.html
         the Bus Pirate Project.
         - see https://code.google.com/p/the-bus-pirate
-        wiringPi (lcd.c) Copyright 2012 Gordon Henderson
-        - see https://github.com/WiringPi
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -32,7 +30,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.3"
+#define Version "Version 0.4"
 
 //  Compilation:
 //
@@ -49,10 +47,12 @@
 //
 //  v0.1 Original version.
 //  v0.2 Added toggle functions.
-//  v0.3 Added custom characters.
+//  v0.3 Added custom character function.
+//  v0.4 Rewrote init and set mode functions.
 //
 
 //  To Do:
+//      Add animation functions.
 //      Add routine to check validity of GPIOs.
 //      Multithread display lines?
 //      Add support for multiple displays.
@@ -126,7 +126,7 @@
 //  Command and constant macros.
 // ============================================================================
 
-#define DEBUG 0
+#define DEBUG 1
 
 // Constants. Change these according to needs.
 #define BITS_BYTE          8 // Number of bits in a byte.
@@ -175,7 +175,7 @@
 // LCD character generator and display memory addresses.
 #define ADDRESS_CGRAM   0x40 // Character generator start address.
 #define ADDRESS_DDRAM   0x80 // Display data start address.
-#define ADDRESS_ROWS    0x40 // Each display row increments by this amount.
+#define ADDRESS_ROWS    0x40 // Row address increment.
 
 // ============================================================================
 //  Data structures.
@@ -206,51 +206,6 @@ struct gpioStruct
 };
 
 // ============================================================================
-//  Custom characters.
-// ============================================================================
-/*
-    Default characters actually have an extra row at the bottom, reserved
-    for the cursor. It is therefore possible to define 8 5x8 characters.
-*/
-
-// ----------------------------------------------------------------------------
-//  Pac Man 5x8.
-// ----------------------------------------------------------------------------
-#define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
-#define CUSTOM_MAX   8 // Max number of custom chars allowed.
-#define CUSTOM_CHARS 7 // Number of custom chars used.
-/*
-    PacMan 1        PacMan 2        Ghost 1         Ghost 2
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    00000 = 0x00,   00000 = 0x00,   01110 = 0x0E,   01110 = 0x0E
-    01110 = 0x0E,   01111 = 0x1F,   11001 = 0x19,   11001 = 0x19
-    11011 = 0x1B,   10110 = 0x16,   11101 = 0x1D,   11011 = 0x1B
-    11111 = 0x1F,   11100 = 0x1C,   11111 = 0x1F,   11111 = 0x1F
-    11111 = 0x1F,   11110 = 0x1E,   11111 = 0x1F,   11111 = 0x1F
-    01110 = 0x0E,   01111 = 0x0F,   10101 = 0x15,   01010 = 0x0A
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-
-    Small dot       Large dot       Pac Man 3
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    00000 = 0x00,   00000 = 0x00,   11110 = 0x1E
-    00000 = 0x00,   01100 = 0x0C,   01101 = 0x0D
-    00100 = 0x04,   01100 = 0x0C,   00111 = 0x07
-    00000 = 0x00,   00000 = 0x00,   01111 = 0x0F
-    00000 = 0x00,   00000 = 0x00,   11110 = 0x1E
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-*/
-const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
-{
- { 0x00, 0x00, 0x0e, 0x1b, 0x1f, 0x1f, 0x0e, 0x00 },
- { 0x00, 0x00, 0x1f, 0x16, 0x1c, 0x1e, 0x0f, 0x00 },
- { 0x00, 0x0e, 0x19, 0x1d, 0x1f, 0x1f, 0x15, 0x00 },
- { 0x00, 0x0e, 0x19, 0x1b, 0x1f, 0x1f, 0x0a, 0x00 },
- { 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00 },
- { 0x00, 0x00, 0x00, 0x0c, 0x0c, 0x00, 0x00, 0x00 },
- { 0x00, 0x00, 0x1e, 0x0d, 0x07, 0x0f, 0x1e, 0x00 }};
-
-// ============================================================================
 //  Some helpful functions.
 // ============================================================================
 
@@ -277,9 +232,9 @@ static const char *getBinaryString(unsigned char nibble)
 static char writeEnable( void )
 {
     digitalWrite( gpio.en, 1 );
-    delayMicroseconds( 1 );
+    delayMicroseconds( 41 );    // Setting enable flag takes 41uS.
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 41 );
+    delayMicroseconds( 41 );    // Setting enable flag takes 41uS.
 };
 
 // ----------------------------------------------------------------------------
@@ -295,8 +250,8 @@ static char writeNibble( unsigned char data )
     for ( i = 0; i < BITS_NIBBLE; i++ )
     {
         digitalWrite( gpio.db[i], ( nibble & 1 ));
-        nibble >>= 1;
         delayMicroseconds( 41 ); // Writing data to DDRAM takes 41uS.
+        nibble >>= 1;
     }
     // Toggle enable bit to send nibble.
     writeEnable();
@@ -314,8 +269,6 @@ static char writeCommand( unsigned char data )
 
     // Set to command mode.
     digitalWrite( gpio.rs, 0 );
-    delayMicroseconds( 37 ); // setting command mode takes 37uS.
-    digitalWrite( gpio.en, 0 );
     delayMicroseconds( 37 ); // setting command mode takes 37uS.
 
     // High nibble.
@@ -343,8 +296,6 @@ static char writeData( unsigned char data )
     // Set to character mode.
     digitalWrite( gpio.rs, 1 );
     delayMicroseconds( 37 ); // setting command mode takes 37uS.
-    digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 37 ); // setting command mode takes 37uS.
 
     // High nibble.
     if (DEBUG) printf( "Writing char %c (0x%0x) = ", data, data );
@@ -363,12 +314,17 @@ static char writeData( unsigned char data )
 // ----------------------------------------------------------------------------
 //  Moves cursor to position, row.
 // ----------------------------------------------------------------------------
-static char moveCursor( unsigned char row, unsigned char pos )
+static char gotoRowPos( unsigned char row, unsigned char pos )
 {
     if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
     if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
 
-    writeCommand(( ADDRESS_DDRAM + ( row * ADDRESS_ROWS ) + pos ));
+    // Array of row start addresses
+    unsigned char rows[DISPLAY_ROWS] = { 0x00, ADDRESS_ROWS };
+    unsigned char address = ( ADDRESS_DDRAM | ( rows[row] + pos ));
+
+    if (DEBUG) printf( "Moving cursor to 0x%02x.\n", address );
+    writeCommand( address );
     return 0;
 };
 
@@ -434,8 +390,12 @@ static char displayHome( void )
         100uS (minimum).
         Set function mode. Cannot be changed after this unless re-initialised.
         37uS (minimum).
+        Display off.
+        Display clear.
+        Set entry mode.
 */
-static char initialiseDisplay( bool data, bool lines, bool font )
+static char initialiseDisplay( bool data, bool lines, bool font,
+                               bool counter, bool shift )
 {
     delay( 5 ); // >40mS@3V.
 
@@ -454,6 +414,8 @@ static char initialiseDisplay( bool data, bool lines, bool font )
     digitalWrite( gpio.en, 0 );
     delayMicroseconds( 150 );   // >=100uS.
 
+    // Set display mode - cannot be changed after this point
+    // without reinitialising.
     if (DEBUG)
     {
         printf( "Setting display mode:\n" );
@@ -472,29 +434,34 @@ static char initialiseDisplay( bool data, bool lines, bool font )
                                 | ( lines * FUNCTION_LINES )
                                 | ( font * FUNCTION_FONT ));
 
+    if (DEBUG) printf( "Turning display off.\n" );
+    writeCommand( DISPLAY_BASE );   // Display off;
+    delay( 2000 );
+    if (DEBUG) printf( "Clearing display.\n" );
+    writeCommand( DISPLAY_CLEAR );  // Clear display;
+    delay( 2000 );
+
+    // Set entry mode.
+    if (DEBUG)
+    {
+        printf( "Setting entry mode:\n" );
+        if ( counter )
+             printf( "\tCursor position increments after data write.\n" );
+        else printf( "\tCursor position decrements after data write.\n" );
+        if ( shift )
+             printf( "\tDisplay shifts after data write.\n" );
+        else printf( "\tNo display shift after data write.\n" );
+    }
+    writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
+                             | ( shift * ENTRY_SHIFT ));
+    delay( 2000 );
+
+    // Goto start of DDRAM.
+    if (DEBUG) printf( "Setting cursor to start of DDRAM.\n" );
+    writeCommand( ADDRESS_DDRAM );
+    delay( 2000 );
     return 0;
 };
-
-
-// ----------------------------------------------------------------------------
-//  Loads custom character into CGRAM.
-// ----------------------------------------------------------------------------
-/*
-    Set command to point to start of CGRAM and load data line by line. CGRAM
-    pointer is auto-incremented. Set command to point to start of DDRAM to
-    finish.
-*/
-static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
-{
-    writeCommand( ADDRESS_CGRAM );
-    delayMicroseconds( 37 ); // Write command takes 37uS to execute.
-    unsigned char i, j;
-    for ( i = 0; i < CUSTOM_CHARS; i++ )
-        for ( j = 0; j < CUSTOM_SIZE; j++ )
-            writeData( newChar[i][j] );
-    writeCommand( ADDRESS_DDRAM );
-    return 0;
-}
 
 // ============================================================================
 //  Mode settings.
@@ -582,6 +549,95 @@ static char setMoveMode( bool mode, bool direction )
         }
     writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
                             | ( direction * MOVE_DIRECTION ));
+    return 0;
+};
+
+// ============================================================================
+//  Custom characters and animation.
+// ============================================================================
+/*
+    Default characters actually have an extra row at the bottom, reserved
+    for the cursor. It is therefore possible to define 8 5x8 characters.
+*/
+
+// ----------------------------------------------------------------------------
+//  Pac Man 5x8.
+// ----------------------------------------------------------------------------
+#define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
+#define CUSTOM_MAX   8 // Max number of custom chars allowed.
+#define CUSTOM_CHARS 7 // Number of custom chars used.
+/*
+    PacMan 1        PacMan 2        Ghost 1         Ghost 2
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    00000 = 0x00,   00000 = 0x00,   01110 = 0x0e,   01110 = 0x0e
+    01110 = 0x0e,   01111 = 0x0f,   11001 = 0x19,   11001 = 0x13
+    11011 = 0x1b,   10110 = 0x16,   11101 = 0x1d,   11011 = 0x17
+    11111 = 0x1f,   11100 = 0x1c,   11111 = 0x1f,   11111 = 0x1f
+    11111 = 0x1f,   11110 = 0x1e,   11111 = 0x1f,   11111 = 0x1f
+    01110 = 0x0e,   01111 = 0x0f,   10101 = 0x15,   01010 = 0x1b
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+
+    Small dot       Large dot       Pac Man 3
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    00000 = 0x00,   00000 = 0x00,   11110 = 0x1e
+    00000 = 0x00,   01100 = 0x0c,   01101 = 0x0d
+    00100 = 0x04,   01100 = 0x0c,   00111 = 0x07
+    00000 = 0x00,   00000 = 0x00,   01111 = 0x0f
+    00000 = 0x00,   00000 = 0x00,   11110 = 0x1e
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+*/
+const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
+{
+ { 0x00, 0x00, 0x0e, 0x1b, 0x1f, 0x1f, 0x0e, 0x00 },
+ { 0x00, 0x00, 0x0f, 0x16, 0x1c, 0x1e, 0x0f, 0x00 },
+ { 0x00, 0x0e, 0x19, 0x1d, 0x1f, 0x1f, 0x15, 0x00 },
+ { 0x00, 0x0e, 0x13, 0x17, 0x1f, 0x1f, 0x1b, 0x00 },
+ { 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00 },
+ { 0x00, 0x00, 0x00, 0x0c, 0x0c, 0x00, 0x00, 0x00 },
+ { 0x00, 0x00, 0x1e, 0x0d, 0x07, 0x0f, 0x1e, 0x00 }};
+
+// ----------------------------------------------------------------------------
+//  Loads custom character into CGRAM.
+// ----------------------------------------------------------------------------
+/*
+    Set command to point to start of CGRAM and load data line by line. CGRAM
+    pointer is auto-incremented. Set command to point to start of DDRAM to
+    finish.
+*/
+static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
+{
+    writeCommand( ADDRESS_CGRAM );
+    delayMicroseconds( 37 ); // Write command takes 37uS to execute.
+    unsigned char i, j;
+    for ( i = 0; i < CUSTOM_CHARS; i++ )
+        for ( j = 0; j < CUSTOM_SIZE; j++ )
+            writeData( newChar[i][j] );
+    writeCommand( ADDRESS_DDRAM );
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Animates a single char at a fixed position.
+// ----------------------------------------------------------------------------
+/*
+    Move cursor to position and cycle through frames.
+*/
+static char animateChar( unsigned int row,
+                         unsigned int pos,
+                         unsigned char frames[],
+                         unsigned int numFrames,
+                         unsigned int frameDelay,
+                         unsigned int numCycles )
+{
+    static char i, j;
+    for ( i = 0; i < numCycles; i++ )
+        for ( j = 0; j < numFrames; j++ )
+        {
+            gotoRowPos( row, pos );
+            writeData( frames[j] );
+            delay( frameDelay );
+        }
     return 0;
 };
 
@@ -696,77 +752,36 @@ char main( int argc, char *argv[] )
     //  Initialise wiringPi and LCD.
     // ------------------------------------------------------------------------
     initialiseGPIOs();
-    initialiseDisplay( false, true, false );
-    setEntryMode( true, false );
+    initialiseDisplay( false, true, false, true, false );
+//    setEntryMode( true, false );
     setDisplayMode( true, false, false );
 //    setMoveMode( false, false );
 
     loadCustom( pacMan );
 
-    // There must be a better way of doing this but for now, each frame is
-    // a separate string.
-    unsigned int frames = 5;
-    unsigned char animation[46][17] =
-    {{   4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',  0,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',  1,  4,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  0,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  1,  4,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  0,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  1,  4,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   2,' ',' ',' ',  0,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   3,' ',' ',' ',  1,  4,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     {   2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  5,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  1,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  2,  3,  2,  3,' ',' ',' ',  0,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  3,  2,  3,  2,' ',' ',' ',  6,  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  3,  2,  3,  2,' ',' ',' ',  0,' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  2,  3,  2,  3,' ',' ',' ',  6,' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',  2,  3,  2,  3,' ',' ',' ',  0,' ',' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',  3,  2,  3,  2,' ',' ',' ',  6,' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   3,  2,  3,  2,' ',' ',' ',  0,' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   2,  3,  2,  3,' ',' ',' ',  6,' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   2,  3,  2,' ',' ',' ',  0,' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   3,  2,  3,' ',' ',' ',  6,' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   3,  2,' ',' ',' ',  0,' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   2,  3,' ',' ',' ',  6,' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   2,' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   3,' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',  0,' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     { ' ',  6,' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   0,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' },
-     {   6,' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',  4,  4,  4,  4,  4,'\0' }};
-
-    displayClear();
-
-    moveCursor( 0, 0 );
-    writeDataString( "Darren Faulke" );
+//    gotoRowPos( 0, 0 );
+//    writeDataString( "Darren Faulke" );
     unsigned int i;
     unsigned int frameDelay = 500;
 
-    for ( i = 0; i < 46; i++ )
-    {
-        moveCursor( 1, 0 );
-        writeDataString( animation[i] );
-        delay( frameDelay );
-    }
+    unsigned int numAnimations = 3;
+    unsigned int numFrames = 2;
+    unsigned char animations[3][2] =
+    {{ 0, 1 },  // Pac Man right.
+     { 2, 3 },  // Ghosts.
+     { 0, 6 }}; // Pac Man left.
+
+    animateChar( 0, 0, animations[0], numFrames, 300, 5 );
     displayClear();
+    animateChar( 1, 0, animations[2], numFrames, 300, 5 );
+    displayClear();
+
+//    for ( i = 0; i < 46; i++ )
+//    {
+//        gotoRowPos( 1, 0 );
+//        writeDataString( animation[i] );
+//        delay( frameDelay );
+//    }
+//    displayClear();
     return 0;
 }
