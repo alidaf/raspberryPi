@@ -31,6 +31,7 @@
 // ****************************************************************************
 
 #define Version "Version 0.4"
+#define DEBUG 1
 
 //  Compilation:
 //
@@ -126,8 +127,6 @@
 //  Command and constant macros.
 // ============================================================================
 
-#define DEBUG 1
-
 // Constants. Change these according to needs.
 #define BITS_BYTE          8 // Number of bits in a byte.
 #define BITS_NIBBLE        4 // Number of bits in a nibble.
@@ -175,7 +174,7 @@
 // LCD character generator and display memory addresses.
 #define ADDRESS_CGRAM   0x40 // Character generator start address.
 #define ADDRESS_DDRAM   0x80 // Display data start address.
-#define ADDRESS_ROWS    0x40 // Row address increment.
+#define ADDRESS_INC     0x40 // Row address increment.
 
 // ============================================================================
 //  Data structures.
@@ -227,17 +226,6 @@ static const char *getBinaryString(unsigned char nibble)
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-//  Toggles Enable bit to allow writing.
-// ----------------------------------------------------------------------------
-static char writeEnable( void )
-{
-    digitalWrite( gpio.en, 1 );
-    delayMicroseconds( 41 );    // Setting enable flag takes 41uS.
-    digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 41 );    // Setting enable flag takes 41uS.
-};
-
-// ----------------------------------------------------------------------------
 //  Writes byte value of a char to LCD in nibbles.
 // ----------------------------------------------------------------------------
 static char writeNibble( unsigned char data )
@@ -253,8 +241,12 @@ static char writeNibble( unsigned char data )
         delayMicroseconds( 41 ); // Writing data to DDRAM takes 41uS.
         nibble >>= 1;
     }
+
     // Toggle enable bit to send nibble.
-    writeEnable();
+    digitalWrite( gpio.en, 1 );
+    delayMicroseconds( 50 );    // Setting enable flag takes 41uS.
+    digitalWrite( gpio.en, 0 );
+    delayMicroseconds( 50 );    // Setting enable flag takes 41uS.
 
     return 0;
 };
@@ -312,15 +304,18 @@ static char writeData( unsigned char data )
 };
 
 // ----------------------------------------------------------------------------
-//  Moves cursor to position, row.
+//  Moves cursor to row, position.
 // ----------------------------------------------------------------------------
 static char gotoRowPos( unsigned char row, unsigned char pos )
 {
     if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
     if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
+    // This doesn't properly check whther the number of display
+    // lines has been set to 1, in which case the two rows combine
+    // contiguously.
 
     // Array of row start addresses
-    unsigned char rows[DISPLAY_ROWS] = { 0x00, ADDRESS_ROWS };
+    unsigned char rows[DISPLAY_ROWS] = { 0x00, ADDRESS_INC };
     unsigned char address = ( ADDRESS_DDRAM | ( rows[row] + pos ));
 
     if (DEBUG) printf( "Moving cursor to 0x%02x.\n", address );
@@ -362,7 +357,7 @@ static char displayHome( void )
 {
     if (DEBUG) printf( "Resetting display.\n" );
     writeCommand( DISPLAY_HOME );
-    delayMicroseconds( 1520 ); // Needs 1.52ms to execute.
+    delayMicroseconds( 1600 ); // Needs 1.52ms to execute.
     return 0;
 };
 
@@ -370,13 +365,6 @@ static char displayHome( void )
 //  Initialises LCD. Must be called before any other LCD functions.
 // ----------------------------------------------------------------------------
 /*
-    data  = 0: 4-bit mode.
-    data  = 1: 8-bit mode.
-    lines = 0: 1 display line.
-    lines = 1: 2 display lines.
-    font  = 0: 5x10 font (uses 2 lines).
-    font  = 1: 5x8 font.
-
     Software initialisation is achieved by setting 8-bit mode and writing a
     sequence of EN toggles with fixed delays between each command.
         Initial delay after Vcc rises to 2.7V
@@ -395,24 +383,48 @@ static char displayHome( void )
         Set entry mode.
 */
 static char initialiseDisplay( bool data, bool lines, bool font,
-                               bool counter, bool shift )
+                               bool display, bool cursor, bool blink,
+                               bool counter, bool shift,
+                               bool mode, bool direction )
+/*
+    data      = 0: 4-bit mode.
+    data      = 1: 8-bit mode.
+    lines     = 0: 1 display line.
+    lines     = 1: 2 display lines.
+    font      = 0: 5x10 font (uses 2 lines).
+    font      = 1: 5x8 font.
+    counter   = 0: Decrement DDRAM counter after data write (cursor moves L)
+    counter   = 1: Increment DDRAM counter after data write (cursor moves R)
+    shift     = 0: Do not shift display after data write.
+    shift     = 1: Shift display after data write.
+    display   = 0: Display off.
+    display   = 1: Display on.
+    cursor    = 0: Cursor off.
+    cursor    = 1: Cursor on.
+    blink     = 0: Blink (block cursor) on.
+    blink     = 1: Blink (block cursor) off.
+    mode      = 0: Shift cursor.
+    mode      = 1: Shift display.
+    direction = 0: Left.
+    direction = 1: Right.
+*/
 {
     delay( 5 ); // >40mS@3V.
 
     writeCommand( FUNCTION_BASE | FUNCTION_DATA );
     digitalWrite( gpio.en, 1 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 4200 );  // >4.1mS.
+    delayMicroseconds( 5000 );  // >4.1mS.
 
 //    writeCommand( MODE_INIT );
     digitalWrite( gpio.en, 1 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 150 );   // >=100uS.
+    delayMicroseconds( 200 );   // >=100uS.
 
 //    writeCommand( MODE_INIT );
     digitalWrite( gpio.en, 1 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 150 );   // >=100uS.
+    delayMicroseconds( 200 );   // >=100uS.
 
     // Set display mode - cannot be changed after this point
     // without reinitialising.
@@ -429,17 +441,33 @@ static char initialiseDisplay( bool data, bool lines, bool font,
              printf( "\t5x10 font.\n" );
         else printf( "\t5x8 font.\n" );
     }
-    // delay for write command is handled in function.
+    // delay for writeCommand is handled in function.
     writeCommand( FUNCTION_BASE | ( data * FUNCTION_DATA )
                                 | ( lines * FUNCTION_LINES )
                                 | ( font * FUNCTION_FONT ));
 
     if (DEBUG) printf( "Turning display off.\n" );
     writeCommand( DISPLAY_BASE );   // Display off;
-    delay( 2000 );
+
+    if (DEBUG) // Set display.
+    {
+        printf( "Setting display and cursor properties:\n" );
+        if ( display )
+             printf( "\tDisplay on.\n" );
+        else printf( "\tDisplay off.\n" );
+        if ( cursor )
+             printf( "\tCursor on.\n" );
+        else printf( "\tCursor off.\n" );
+        if ( blink )
+             printf( "\tBlink on.\n" );
+        else printf( "\tBlink off.\n" );
+    }
+    writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
+                               | ( cursor * DISPLAY_CURSOR )
+                               | ( blink * DISPLAY_BLINK ));
+
     if (DEBUG) printf( "Clearing display.\n" );
     writeCommand( DISPLAY_CLEAR );  // Clear display;
-    delay( 2000 );
 
     // Set entry mode.
     if (DEBUG)
@@ -454,12 +482,23 @@ static char initialiseDisplay( bool data, bool lines, bool font,
     }
     writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
                              | ( shift * ENTRY_SHIFT ));
-    delay( 2000 );
+
+    if (DEBUG)
+        {
+            printf( "Setting screen/cursor move mode:\n" );
+            if ( mode )
+                 printf( "\tShift display " );
+            else printf( "\tShift cursor " );
+            if ( direction )
+                 printf( "right.\n" );
+            else printf( "left.\n" );
+        }
+    writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
+                            | ( direction * MOVE_DIRECTION ));
 
     // Goto start of DDRAM.
     if (DEBUG) printf( "Setting cursor to start of DDRAM.\n" );
     writeCommand( ADDRESS_DDRAM );
-    delay( 2000 );
     return 0;
 };
 
@@ -608,7 +647,6 @@ const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
 static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
 {
     writeCommand( ADDRESS_CGRAM );
-    delayMicroseconds( 37 ); // Write command takes 37uS to execute.
     unsigned char i, j;
     for ( i = 0; i < CUSTOM_CHARS; i++ )
         for ( j = 0; j < CUSTOM_SIZE; j++ )
@@ -623,8 +661,8 @@ static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
 /*
     Move cursor to position and cycle through frames.
 */
-static char animateChar( unsigned int row,
-                         unsigned int pos,
+static char animateChar( unsigned char row,
+                         unsigned char pos,
                          unsigned char frames[],
                          unsigned int numFrames,
                          unsigned int frameDelay,
@@ -752,15 +790,10 @@ char main( int argc, char *argv[] )
     //  Initialise wiringPi and LCD.
     // ------------------------------------------------------------------------
     initialiseGPIOs();
-    initialiseDisplay( false, true, false, true, false );
-//    setEntryMode( true, false );
-    setDisplayMode( true, false, false );
-//    setMoveMode( false, false );
+    initialiseDisplay( 0, 1, 1, 1, 0, 0, 1, 0, 0, 0 );
 
     loadCustom( pacMan );
 
-//    gotoRowPos( 0, 0 );
-//    writeDataString( "Darren Faulke" );
     unsigned int i;
     unsigned int frameDelay = 500;
 
@@ -771,17 +804,18 @@ char main( int argc, char *argv[] )
      { 2, 3 },  // Ghosts.
      { 0, 6 }}; // Pac Man left.
 
-    animateChar( 0, 0, animations[0], numFrames, 300, 5 );
+    writeDataString( "Static Text" );
+    animateChar( 1, 0, animations[0], numFrames, 300, 5 );
     displayClear();
+    gotoRowPos( 1, 0 );
+    writeDataString( "Different Text" );
+    animateChar( 0, 0, animations[1], numFrames, 300, 5 );
+    displayClear();
+    gotoRowPos( 0, 0 );
+    writeDataString( "More Text" );
     animateChar( 1, 0, animations[2], numFrames, 300, 5 );
     displayClear();
+    displayHome();
 
-//    for ( i = 0; i < 46; i++ )
-//    {
-//        gotoRowPos( 1, 0 );
-//        writeDataString( animation[i] );
-//        delay( frameDelay );
-//    }
-//    displayClear();
     return 0;
 }
