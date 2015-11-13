@@ -8,11 +8,13 @@
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
     Based on the following guides and codes:
         HD44780 data sheet
-        - unknown source.
+        - see https://www.sparkfun.com/datasheets/LCD/HD44780.pdf
         elm-chan.org
         - http://elm-chan.org/docs/lcd/hd44780_e.html
         the Bus Pirate Project.
         - see https://code.google.com/p/the-bus-pirate
+        The wiringPi project copyright 2012 Gordon Henderson
+        - see http://wiringpi.com
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,8 +32,8 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.4"
-#define DEBUG 1
+#define Version "Version 0.5"
+#define DEBUG 0
 
 //  Compilation:
 //
@@ -40,7 +42,7 @@
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-//  Authors:        D.Faulke    12/11/2015  This program.
+//  Authors:        D.Faulke    13/11/2015  This program.
 //
 //  Contributors:
 //
@@ -50,6 +52,7 @@
 //  v0.2 Added toggle functions.
 //  v0.3 Added custom character function.
 //  v0.4 Rewrote init and set mode functions.
+//  v0.5 Finally sorted out initialisation!
 //
 
 //  To Do:
@@ -174,7 +177,8 @@
 // LCD character generator and display memory addresses.
 #define ADDRESS_CGRAM   0x40 // Character generator start address.
 #define ADDRESS_DDRAM   0x80 // Display data start address.
-#define ADDRESS_INC     0x40 // Row address increment.
+#define ADDRESS_ROW_0   0x00 // Row 1 start address.
+#define ADDRESS_ROW_1   0x40 // Row 2 start address.
 
 // ============================================================================
 //  Data structures.
@@ -238,15 +242,15 @@ static char writeNibble( unsigned char data )
     for ( i = 0; i < BITS_NIBBLE; i++ )
     {
         digitalWrite( gpio.db[i], ( nibble & 1 ));
-        delayMicroseconds( 41 ); // Writing data to DDRAM takes 41uS.
+        delayMicroseconds( 41 );
         nibble >>= 1;
     }
 
     // Toggle enable bit to send nibble.
     digitalWrite( gpio.en, 1 );
-    delayMicroseconds( 50 );    // Setting enable flag takes 41uS.
+    delayMicroseconds( 41 );
     digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 50 );    // Setting enable flag takes 41uS.
+    delayMicroseconds( 41 );   // Commands should take 5mS!
 
     return 0;
 };
@@ -261,10 +265,10 @@ static char writeCommand( unsigned char data )
 
     // Set to command mode.
     digitalWrite( gpio.rs, 0 );
-    delayMicroseconds( 37 ); // setting command mode takes 37uS.
+    delayMicroseconds( 41 );
 
     // High nibble.
-    if (DEBUG) printf( "Writing cmd 0x%02x = ", data );
+    if (DEBUG) printf( "Writing command 0x%02x = ", data );
     nibble = ( data >> BITS_NIBBLE ) & 0x0f;
     if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
@@ -287,10 +291,12 @@ static char writeData( unsigned char data )
 
     // Set to character mode.
     digitalWrite( gpio.rs, 1 );
-    delayMicroseconds( 37 ); // setting command mode takes 37uS.
+    delayMicroseconds( 41 );
 
     // High nibble.
-    if (DEBUG) printf( "Writing char %c (0x%0x) = ", data, data );
+    if (DEBUG)
+        if ( data < 32 ) printf( "Writing code (0x%02x) = ", data );
+        else printf( "Writing char %c (0x%02x) = ", data, data );
     nibble = ( data >> BITS_NIBBLE ) & 0xf;
     if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
@@ -315,8 +321,8 @@ static char gotoRowPos( unsigned char row, unsigned char pos )
     // contiguously.
 
     // Array of row start addresses
-    unsigned char rows[DISPLAY_ROWS] = { 0x00, ADDRESS_INC };
-    unsigned char address = ( ADDRESS_DDRAM | ( rows[row] + pos ));
+    unsigned char rows[DISPLAY_ROWS] = { ADDRESS_ROW_0, ADDRESS_ROW_1 };
+    unsigned char address = (( ADDRESS_DDRAM | rows[row] ) + pos );
 
     if (DEBUG) printf( "Moving cursor to 0x%02x.\n", address );
     writeCommand( address );
@@ -365,16 +371,16 @@ static char displayHome( void )
 //  Initialises LCD. Must be called before any other LCD functions.
 // ----------------------------------------------------------------------------
 /*
+    Currently only supports 4-bit mode initialisation.
     Software initialisation is achieved by setting 8-bit mode and writing a
     sequence of EN toggles with fixed delays between each command.
         Initial delay after Vcc rises to 2.7V
         15mS@5V, 40mS@3V (minimum).
-        Set 8-bit mode (command 0x30).
-        Set enable
+        Set 8-bit mode (command 0x3).
         4.1mS (minimum).
-        Set enable (8-bit mode stays set until changed).
+        Set 8-bit mode (command 0x3).
         100uS (minimum).
-        Set enable (8-bit mode stays set until changed).
+        Set 8-bit mode (command 0x3).
         100uS (minimum).
         Set function mode. Cannot be changed after this unless re-initialised.
         37uS (minimum).
@@ -409,28 +415,28 @@ static char initialiseDisplay( bool data, bool lines, bool font,
     direction = 1: Right.
 */
 {
-    delay( 5 ); // >40mS@3V.
+    if (DEBUG) printf( "Initialising display.\n" );
 
-    writeCommand( FUNCTION_BASE | FUNCTION_DATA );
-    digitalWrite( gpio.en, 1 );
-    digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 5000 );  // >4.1mS.
+    // Start-up delay.
+    delay( 50 ); // >40mS@3V.
 
-//    writeCommand( MODE_INIT );
-    digitalWrite( gpio.en, 1 );
-    digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 200 );   // >=100uS.
+    // Need to write low nibbles only as display starts off in 8-bit mode.
+    // Sending high nibble first (0x0) causes init to fail and the display
+    // subsequently shows garbage.
+    writeNibble( 0x3 );
+    delay( 5 );                 // >4.1mS.
+    writeNibble( 0x3 );
+    delayMicroseconds( 150 );   // >100uS.
+    writeNibble( 0x3 );
+    delayMicroseconds( 150 );   // >100uS.
+    writeNibble( 0x2);
+    delayMicroseconds( 150 );
 
-//    writeCommand( MODE_INIT );
-    digitalWrite( gpio.en, 1 );
-    digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 200 );   // >=100uS.
-
-    // Set display mode - cannot be changed after this point
+    // Set actual function mode - cannot be changed after this point
     // without reinitialising.
     if (DEBUG)
     {
-        printf( "Setting display mode:\n" );
+        printf( "Setting function mode:\n" );
         if ( data )
              printf( "\t8-bit mode.\n" );
         else printf( "\t4-bit mode.\n" );
@@ -438,18 +444,34 @@ static char initialiseDisplay( bool data, bool lines, bool font,
              printf( "\t2 display lines.\n" );
         else printf( "\t1 display line.\n" );
         if ( font )
-             printf( "\t5x10 font.\n" );
-        else printf( "\t5x8 font.\n" );
+             printf( "\t5x8 font.\n" );
+        else printf( "\t5x10 font.\n" );
     }
-    // delay for writeCommand is handled in function.
     writeCommand( FUNCTION_BASE | ( data * FUNCTION_DATA )
                                 | ( lines * FUNCTION_LINES )
                                 | ( font * FUNCTION_FONT ));
 
-    if (DEBUG) printf( "Turning display off.\n" );
-    writeCommand( DISPLAY_BASE );   // Display off;
+    if (DEBUG) printf( "Clearing display.\n" );
+    writeCommand( DISPLAY_BASE );   // Clear display;
 
-    if (DEBUG) // Set display.
+    // Set entry mode.
+    if (DEBUG)
+    {
+        printf( "Setting entry mode:\n" );
+        if ( counter )
+             printf( "\tCursor position increments after data write.\n" );
+        else printf( "\tCursor position decrements after data write.\n" );
+        if ( shift )
+             printf( "\tDisplay shifts after data write.\n" );
+        else printf( "\tNo display shift after data write.\n" );
+    }
+    writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
+                             | ( shift * ENTRY_SHIFT ));
+
+    // Display should be initialised at this point.
+    // Set initial display properties.
+
+    if (DEBUG) // Display settings.
     {
         printf( "Setting display and cursor properties:\n" );
         if ( display )
@@ -465,23 +487,6 @@ static char initialiseDisplay( bool data, bool lines, bool font,
     writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
                                | ( cursor * DISPLAY_CURSOR )
                                | ( blink * DISPLAY_BLINK ));
-
-    if (DEBUG) printf( "Clearing display.\n" );
-    writeCommand( DISPLAY_CLEAR );  // Clear display;
-
-    // Set entry mode.
-    if (DEBUG)
-    {
-        printf( "Setting entry mode:\n" );
-        if ( counter )
-             printf( "\tCursor position increments after data write.\n" );
-        else printf( "\tCursor position decrements after data write.\n" );
-        if ( shift )
-             printf( "\tDisplay shifts after data write.\n" );
-        else printf( "\tNo display shift after data write.\n" );
-    }
-    writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
-                             | ( shift * ENTRY_SHIFT ));
 
     if (DEBUG)
         {
@@ -789,8 +794,23 @@ char main( int argc, char *argv[] )
     // ------------------------------------------------------------------------
     //  Initialise wiringPi and LCD.
     // ------------------------------------------------------------------------
-    initialiseGPIOs();
-    initialiseDisplay( 0, 1, 1, 1, 0, 0, 1, 0, 0, 0 );
+    initialiseGPIOs();  // Must be called before initialiseDisplay.
+
+    unsigned char data      = 0; // 4-bit mode.
+    unsigned char lines     = 1; // 2 display lines.
+    unsigned char font      = 1; // 5x8 font.
+    unsigned char display   = 1; // Display on.
+    unsigned char cursor    = 0; // Cursor off.
+    unsigned char blink     = 0; // Blink (block cursor) off.
+    unsigned char counter   = 1; // Increment DDRAM counter after data write
+    unsigned char shift     = 0; // Do not shift display after data write.
+    unsigned char mode      = 0; // Shift cursor.
+    unsigned char direction = 0; // Right.
+
+    initialiseDisplay( data, lines, font,
+                       display, cursor, blink,
+                       counter, shift,
+                       mode, direction );
 
     loadCustom( pacMan );
 
