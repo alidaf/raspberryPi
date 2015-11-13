@@ -9,10 +9,8 @@
     Based on the following guides and codes:
         HD44780 data sheet
         - see https://www.sparkfun.com/datasheets/LCD/HD44780.pdf
-        elm-chan.org
-        - http://elm-chan.org/docs/lcd/hd44780_e.html
-        the Bus Pirate Project.
-        - see https://code.google.com/p/the-bus-pirate
+        An essential article on LCD initialisation by Donald Weiman.
+        - see http://web.alfredstate.edu/weimandn/
         The wiringPi project copyright 2012 Gordon Henderson
         - see http://wiringpi.com
 
@@ -33,7 +31,6 @@
 // ****************************************************************************
 
 #define Version "Version 0.5"
-#define DEBUG 0
 
 //  Compilation:
 //
@@ -139,6 +136,7 @@
 #define DISPLAY_COLUMNS   16 // No of LCD display characters.
 #define DISPLAY_ROWS       2 // No of LCD display lines.
 #define DISPLAY_NUM        1 // Number of displays.
+#define DISPLAY_ROWS_MAX   4 // Max known number of rows for this type of LCD.
 
 // Modes
 #define MODE_COMMAND       0 // Enable command mode for RS pin.
@@ -179,6 +177,8 @@
 #define ADDRESS_DDRAM   0x80 // Display data start address.
 #define ADDRESS_ROW_0   0x00 // Row 1 start address.
 #define ADDRESS_ROW_1   0x40 // Row 2 start address.
+#define ADDRESS_ROW_2   0x14 // Row 3 start address.
+#define ADDRESS_ROW_3   0x54 // Row 4 start address.
 
 // ============================================================================
 //  Data structures.
@@ -268,14 +268,11 @@ static char writeCommand( unsigned char data )
     delayMicroseconds( 41 );
 
     // High nibble.
-    if (DEBUG) printf( "Writing command 0x%02x = ", data );
     nibble = ( data >> BITS_NIBBLE ) & 0x0f;
-    if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
 
     // Low nibble.
     nibble = data & 0x0f;
-    if (DEBUG) printf( "%s.\n", getBinaryString( nibble ));
     writeNibble( nibble );
 
     return 0;
@@ -294,38 +291,13 @@ static char writeData( unsigned char data )
     delayMicroseconds( 41 );
 
     // High nibble.
-    if (DEBUG)
-        if ( data < 32 ) printf( "Writing code (0x%02x) = ", data );
-        else printf( "Writing char %c (0x%02x) = ", data, data );
     nibble = ( data >> BITS_NIBBLE ) & 0xf;
-    if (DEBUG) printf( "%s,", getBinaryString( nibble ));
     writeNibble( nibble );
 
     // Low nibble.
     nibble = data & 0xf;
-    if (DEBUG) printf( "%s.\n", getBinaryString( nibble ));
     writeNibble( nibble );
 
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Moves cursor to row, position.
-// ----------------------------------------------------------------------------
-static char gotoRowPos( unsigned char row, unsigned char pos )
-{
-    if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
-    if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
-    // This doesn't properly check whther the number of display
-    // lines has been set to 1, in which case the two rows combine
-    // contiguously.
-
-    // Array of row start addresses
-    unsigned char rows[DISPLAY_ROWS] = { ADDRESS_ROW_0, ADDRESS_ROW_1 };
-    unsigned char address = (( ADDRESS_DDRAM | rows[row] ) + pos );
-
-    if (DEBUG) printf( "Moving cursor to 0x%02x.\n", address );
-    writeCommand( address );
     return 0;
 };
 
@@ -341,6 +313,29 @@ static char writeDataString( char *string )
     return 0;
 };
 
+// ----------------------------------------------------------------------------
+//  Moves cursor to row, position.
+// ----------------------------------------------------------------------------
+/*
+    All displays, regardless of size, have the same start address for each
+    row due to common architecture. Moving from the end of a line to the start
+    of the next is not contiguous memory.
+*/
+static char gotoRowPos( unsigned char row, unsigned char pos )
+{
+    if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
+    if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
+    // This doesn't properly check whther the number of display
+    // lines has been set to 1.
+
+    // Array of row start addresses
+    unsigned char rows[DISPLAY_ROWS_MAX] = { ADDRESS_ROW_0, ADDRESS_ROW_1,
+                                             ADDRESS_ROW_2, ADDRESS_ROW_3 };
+
+    writeCommand(( ADDRESS_DDRAM | rows[row] ) + pos );
+    return 0;
+};
+
 // ============================================================================
 //  LCD init and mode functions.
 // ============================================================================
@@ -350,7 +345,6 @@ static char writeDataString( char *string )
 // ----------------------------------------------------------------------------
 static char displayClear( void )
 {
-    if (DEBUG) printf( "Clearing display.\n" );
     writeCommand( DISPLAY_CLEAR );
     delayMicroseconds( 1600 ); // Data sheet doesn't give execution time!
     return 0;
@@ -361,7 +355,6 @@ static char displayClear( void )
 // ----------------------------------------------------------------------------
 static char displayHome( void )
 {
-    if (DEBUG) printf( "Resetting display.\n" );
     writeCommand( DISPLAY_HOME );
     delayMicroseconds( 1600 ); // Needs 1.52ms to execute.
     return 0;
@@ -415,9 +408,7 @@ static char initialiseDisplay( bool data, bool lines, bool font,
     direction = 1: Right.
 */
 {
-    if (DEBUG) printf( "Initialising display.\n" );
-
-    // Start-up delay.
+    // Allow a start-up delay.
     delay( 50 ); // >40mS@3V.
 
     // Need to write low nibbles only as display starts off in 8-bit mode.
@@ -434,76 +425,31 @@ static char initialiseDisplay( bool data, bool lines, bool font,
 
     // Set actual function mode - cannot be changed after this point
     // without reinitialising.
-    if (DEBUG)
-    {
-        printf( "Setting function mode:\n" );
-        if ( data )
-             printf( "\t8-bit mode.\n" );
-        else printf( "\t4-bit mode.\n" );
-        if ( lines )
-             printf( "\t2 display lines.\n" );
-        else printf( "\t1 display line.\n" );
-        if ( font )
-             printf( "\t5x8 font.\n" );
-        else printf( "\t5x10 font.\n" );
-    }
     writeCommand( FUNCTION_BASE | ( data * FUNCTION_DATA )
                                 | ( lines * FUNCTION_LINES )
                                 | ( font * FUNCTION_FONT ));
-
-    if (DEBUG) printf( "Clearing display.\n" );
-    writeCommand( DISPLAY_BASE );   // Clear display;
+    // Display off.
+    writeCommand( DISPLAY_BASE );
 
     // Set entry mode.
-    if (DEBUG)
-    {
-        printf( "Setting entry mode:\n" );
-        if ( counter )
-             printf( "\tCursor position increments after data write.\n" );
-        else printf( "\tCursor position decrements after data write.\n" );
-        if ( shift )
-             printf( "\tDisplay shifts after data write.\n" );
-        else printf( "\tNo display shift after data write.\n" );
-    }
     writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
                              | ( shift * ENTRY_SHIFT ));
 
-    // Display should be initialised at this point.
-    // Set initial display properties.
+    // Display should be initialised at this point. Function can no longer
+    // be changed without re-initialising.
 
-    if (DEBUG) // Display settings.
-    {
-        printf( "Setting display and cursor properties:\n" );
-        if ( display )
-             printf( "\tDisplay on.\n" );
-        else printf( "\tDisplay off.\n" );
-        if ( cursor )
-             printf( "\tCursor on.\n" );
-        else printf( "\tCursor off.\n" );
-        if ( blink )
-             printf( "\tBlink on.\n" );
-        else printf( "\tBlink off.\n" );
-    }
+    // Set display properties.
     writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
                                | ( cursor * DISPLAY_CURSOR )
                                | ( blink * DISPLAY_BLINK ));
 
-    if (DEBUG)
-        {
-            printf( "Setting screen/cursor move mode:\n" );
-            if ( mode )
-                 printf( "\tShift display " );
-            else printf( "\tShift cursor " );
-            if ( direction )
-                 printf( "right.\n" );
-            else printf( "left.\n" );
-        }
+    // Set initial display/cursor movement mode.
     writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
                             | ( direction * MOVE_DIRECTION ));
 
     // Goto start of DDRAM.
-    if (DEBUG) printf( "Setting cursor to start of DDRAM.\n" );
     writeCommand( ADDRESS_DDRAM );
+
     return 0;
 };
 
@@ -522,18 +468,10 @@ static char initialiseDisplay( bool data, bool lines, bool font,
 */
 static char setEntryMode( bool counter, bool shift )
 {
-    if (DEBUG)
-    {
-        printf( "Setting entry mode:\n" );
-        if ( counter )
-             printf( "\tCursor position increments after data write.\n" );
-        else printf( "\tCursor position decrements after data write.\n" );
-        if ( shift )
-             printf( "\tDisplay shifts after data write.\n" );
-        else printf( "\tNo display shift after data write.\n" );
-    }
     writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
                              | ( shift * ENTRY_SHIFT ));
+    // Clear display.
+    writeCommand( DISPLAY_CLEAR );
 
     return 0;
 };
@@ -551,22 +489,12 @@ static char setEntryMode( bool counter, bool shift )
 */
 static char setDisplayMode( bool display, bool cursor, bool blink )
 {
-    if (DEBUG)
-    {
-        printf( "Setting display and cursor properties:\n" );
-        if ( display )
-             printf( "\tDisplay on.\n" );
-        else printf( "\tDisplay off.\n" );
-        if ( cursor )
-             printf( "\tCursor on.\n" );
-        else printf( "\tCursor off.\n" );
-        if ( blink )
-             printf( "\tBlink on.\n" );
-        else printf( "\tBlink off.\n" );
-    }
     writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
                                | ( cursor * DISPLAY_CURSOR )
                                | ( blink * DISPLAY_BLINK ));
+    // Clear display.
+    writeCommand( DISPLAY_CLEAR );
+
     return 0;
 };
 
@@ -581,18 +509,11 @@ static char setDisplayMode( bool display, bool cursor, bool blink )
 */
 static char setMoveMode( bool mode, bool direction )
 {
-    if (DEBUG)
-        {
-            printf( "Setting screen/cursor move mode:\n" );
-            if ( mode )
-                 printf( "\tShift display " );
-            else printf( "\tShift cursor " );
-            if ( direction )
-                 printf( "right.\n" );
-            else printf( "left.\n" );
-        }
     writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
                             | ( direction * MOVE_DIRECTION ));
+    // Clear display.
+    writeCommand( DISPLAY_CLEAR );
+
     return 0;
 };
 
@@ -621,15 +542,15 @@ static char setMoveMode( bool mode, bool direction )
     01110 = 0x0e,   01111 = 0x0f,   10101 = 0x15,   01010 = 0x1b
     00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
 
-    Small dot       Large dot       Pac Man 3
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    00000 = 0x00,   00000 = 0x00,   11110 = 0x1e
-    00000 = 0x00,   01100 = 0x0c,   01101 = 0x0d
-    00100 = 0x04,   01100 = 0x0c,   00111 = 0x07
-    00000 = 0x00,   00000 = 0x00,   01111 = 0x0f
-    00000 = 0x00,   00000 = 0x00,   11110 = 0x1e
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    Heart 1         Heart 2         Pac Man 3
+    00000 = 0x00,   10001 = 0x11,   00000 = 0x00
+    01010 = 0x0a,   01010 = 0x0a,   00000 = 0x00
+    11111 = 0x1f,   11111 = 0x1f,   11110 = 0x1e
+    11111 = 0x1f,   11111 = 0x1f,   01101 = 0x0d
+    11111 = 0x1f,   11111 = 0x1f,   00111 = 0x07
+    01110 = 0x0e,   01110 = 0x0e,   01111 = 0x0f
+    00100 = 0x04,   00100 = 0x04,   11110 = 0x1e
+    00000 = 0x00,   10001 = 0x11,   00000 = 0x00
 */
 const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
 {
@@ -637,8 +558,8 @@ const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
  { 0x00, 0x00, 0x0f, 0x16, 0x1c, 0x1e, 0x0f, 0x00 },
  { 0x00, 0x0e, 0x19, 0x1d, 0x1f, 0x1f, 0x15, 0x00 },
  { 0x00, 0x0e, 0x13, 0x17, 0x1f, 0x1f, 0x1b, 0x00 },
- { 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00 },
- { 0x00, 0x00, 0x00, 0x0c, 0x0c, 0x00, 0x00, 0x00 },
+ { 0x00, 0x0a, 0x1f, 0x1f, 0x1f, 0x0e, 0x04, 0x00 },
+ { 0x11, 0x0a, 0x1f, 0x1f, 0x1f, 0x0e, 0x04, 0x11 },
  { 0x00, 0x00, 0x1e, 0x0d, 0x07, 0x0f, 0x1e, 0x00 }};
 
 // ----------------------------------------------------------------------------
@@ -657,30 +578,6 @@ static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
         for ( j = 0; j < CUSTOM_SIZE; j++ )
             writeData( newChar[i][j] );
     writeCommand( ADDRESS_DDRAM );
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Animates a single char at a fixed position.
-// ----------------------------------------------------------------------------
-/*
-    Move cursor to position and cycle through frames.
-*/
-static char animateChar( unsigned char row,
-                         unsigned char pos,
-                         unsigned char frames[],
-                         unsigned int numFrames,
-                         unsigned int frameDelay,
-                         unsigned int numCycles )
-{
-    static char i, j;
-    for ( i = 0; i < numCycles; i++ )
-        for ( j = 0; j < numFrames; j++ )
-        {
-            gotoRowPos( row, pos );
-            writeData( frames[j] );
-            delay( frameDelay );
-        }
     return 0;
 };
 
@@ -814,26 +711,56 @@ char main( int argc, char *argv[] )
 
     loadCustom( pacMan );
 
-    unsigned int i;
-    unsigned int frameDelay = 500;
-
-    unsigned int numAnimations = 3;
     unsigned int numFrames = 2;
-    unsigned char animations[3][2] =
-    {{ 0, 1 },  // Pac Man right.
-     { 2, 3 },  // Ghosts.
-     { 0, 6 }}; // Pac Man left.
+    unsigned char pacManLeft[2] = { 0, 6 };
+    unsigned char pacManRight[2] = { 0, 1 };
+    unsigned char ghost[2] = { 2, 3 };
+    unsigned char heart[2] = { 4, 5 };
 
-    writeDataString( "Static Text" );
-    animateChar( 1, 0, animations[0], numFrames, 300, 5 );
-    displayClear();
-    gotoRowPos( 1, 0 );
-    writeDataString( "Different Text" );
-    animateChar( 0, 0, animations[1], numFrames, 300, 5 );
-    displayClear();
-    gotoRowPos( 0, 0 );
-    writeDataString( "More Text" );
-    animateChar( 1, 0, animations[2], numFrames, 300, 5 );
+
+    unsigned char i, j;
+    while ( 1 )
+    {
+
+        for ( j = 0; j < 16; j++ )
+        {
+            gotoRowPos( 0, 1 );
+            writeDataString( "Animation Demo" );
+
+            for ( i = 0; i < numFrames; i++ )
+                {
+                    gotoRowPos( 0, 0 );
+                    writeData( heart[i] );
+                    gotoRowPos( 0, 15 );
+                    writeData( heart[i] );
+                    gotoRowPos( 1, j );
+                    writeData( pacManRight[i] );
+                    if (( j - 2 ) > 0 )
+                    {
+                        gotoRowPos( 1, j - 2 );
+                        writeData( ghost[i] );
+                    }
+                    if (( j - 3 ) > 0 )
+                    {
+                        gotoRowPos( 1, j - 3 );
+                        writeData( ghost[i] );
+                    }
+                    if (( j - 4 ) > 0 )
+                    {
+                        gotoRowPos( 1, j - 4 );
+                        writeData( ghost[i] );
+                    }
+                    if (( j - 5 ) > 0 )
+                    {
+                        gotoRowPos( 1, j - 5 );
+                        writeData( ghost[i] );
+                    }
+                    delay( 300 );
+                }
+            displayClear();
+        }
+    }
+
     displayClear();
     displayHome();
 
