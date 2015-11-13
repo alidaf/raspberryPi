@@ -35,6 +35,11 @@ Note: If using any GPIO that is not I2C, a pull up resistor should be used betwe
 
 Instructions for installing the rotencvol tcz package in Tiny Core Linux and derivatives is provided at the end of this file.
 
+###piLCD
+
+A program to provide LCD functions for a HD44780 based display. Enables up to 8 custom chars for animation, go to any position and display text. Currently no fancy text modes such as scrolling but theses will be added in due course. It is hoped that there will be some specific animation functions and threading support in the near future.
+
+---
 ###piListControls:
 
 Use this to print out the ALSA controls for all available cards.
