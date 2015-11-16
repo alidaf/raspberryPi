@@ -34,7 +34,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc piLCD.c -o piLCD -lwiringPi
+//  Compile with gcc piLCD.c -o piLCD -lwiringPi lpthread
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -73,6 +73,8 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <time.h>
+#include <pthread.h>
 
 // ============================================================================
 //  Information.
@@ -180,6 +182,25 @@
 #define ADDRESS_ROW_2   0x14 // Row 3 start address.
 #define ADDRESS_ROW_3   0x54 // Row 4 start address.
 
+// Enumerated types for display alignment and ticker directions.
+#define TEXT_ALIGN_NULL    0 // No specific alignment or direction.
+#define TEXT_ALIGN_LEFT    1 // Align or rotate left.
+#define TEXT_ALIGN_CENTRE  2 // Align or oscillate about centre.
+#define TEXT_ALIGN_RIGHT   3 // Align or rotate right.
+#define TEXT_TICKER_OFF    0 // Ticker movement off.
+#define TEXT_TICKER_ON     1 // Ticker movement on.
+#define TEXT_MAX_LENGTH  128 // Arbitrary length limit for text string.
+
+// Enumerated types for GPIO states.
+#define GPIO_UNSET         0 // Set GPIO to low.
+#define GPIO_SET           1 // Set GPIO to high.
+
+// Define a mutex to allow concurrent display routines.
+/*
+    Mutex needs to lock before any cursor positioning or write functions.
+*/
+pthread_mutex_t displayBusy;
+
 // ============================================================================
 //  Data structures.
 // ============================================================================
@@ -198,6 +219,7 @@ struct gpioStruct
     unsigned char rw;            // GPIO pin for R/W mode. Not used.
     unsigned char db[PINS_DATA]; // GPIO pins for LCD data pins.
 } gpio =
+// Default values in case no command line parameters are passed.
 {
     .rs    = 7,   // Pin 26 (RS).
     .en    = 8,   // Pin 24 (E).
@@ -206,6 +228,26 @@ struct gpioStruct
     .db[1] = 24,  // Pin 16 (DB5).
     .db[2] = 23,  // Pin 18 (DB6).
     .db[3] = 18   // Pin 22 (DB7).
+};
+
+// ----------------------------------------------------------------------------
+//  Data structure for displaying strings.
+// ----------------------------------------------------------------------------
+struct textStruct
+/*
+    .align  = TEXT_ALIGN_NULL   : No set alignment (just print at cursor ).
+            = TEXT_ALIGN_LEFT   : Text aligns or rotates left.
+            = TEXT_ALIGN_CENTRE : Text aligns or oscillates about centre.
+            = TEXT_ALIGN_RIGHT  : Text aligns or rotates right.
+    .ticker = TEXT_TICKER_OFF   : No ticker movement.
+            = TEXT_TICKER_ON    : String rotates left.
+*/
+{
+    char string[TEXT_MAX_LENGTH]; // Display text string.
+    unsigned char row;            // Row to display string.
+    unsigned char align;          // Text justification.
+    unsigned char ticker;         // Ticker direction.
+    unsigned int  delay;          // Ticker delay (mS).
 };
 
 // ============================================================================
@@ -247,10 +289,10 @@ static char writeNibble( unsigned char data )
     }
 
     // Toggle enable bit to send nibble.
-    digitalWrite( gpio.en, 1 );
+    digitalWrite( gpio.en, GPIO_SET );
     delayMicroseconds( 41 );
-    digitalWrite( gpio.en, 0 );
-    delayMicroseconds( 41 );   // Commands should take 5mS!
+    digitalWrite( gpio.en, GPIO_UNSET );
+    delayMicroseconds( 41 ); // Commands should take 5mS!
 
     return 0;
 };
@@ -264,7 +306,7 @@ static char writeCommand( unsigned char data )
     unsigned char i;
 
     // Set to command mode.
-    digitalWrite( gpio.rs, 0 );
+    digitalWrite( gpio.rs, GPIO_UNSET );
     delayMicroseconds( 41 );
 
     // High nibble.
@@ -287,7 +329,7 @@ static char writeData( unsigned char data )
     unsigned char nibble;
 
     // Set to character mode.
-    digitalWrite( gpio.rs, 1 );
+    digitalWrite( gpio.rs, GPIO_SET );
     delayMicroseconds( 41 );
 
     // High nibble.
@@ -450,6 +492,9 @@ static char initialiseDisplay( bool data, bool lines, bool font,
     // Goto start of DDRAM.
     writeCommand( ADDRESS_DDRAM );
 
+    // Wipe any previous display.
+    displayClear();
+
     return 0;
 };
 
@@ -543,14 +588,14 @@ static char setMoveMode( bool mode, bool direction )
     00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
 
     Heart 1         Heart 2         Pac Man 3
-    00000 = 0x00,   10001 = 0x11,   00000 = 0x00
-    01010 = 0x0a,   01010 = 0x0a,   00000 = 0x00
-    11111 = 0x1f,   11111 = 0x1f,   11110 = 0x1e
-    11111 = 0x1f,   11111 = 0x1f,   01101 = 0x0d
-    11111 = 0x1f,   11111 = 0x1f,   00111 = 0x07
-    01110 = 0x0e,   01110 = 0x0e,   01111 = 0x0f
-    00100 = 0x04,   00100 = 0x04,   11110 = 0x1e
-    00000 = 0x00,   10001 = 0x11,   00000 = 0x00
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
+    01010 = 0x0a,   00000 = 0x00,   00000 = 0x00
+    11111 = 0x1f,   01010 = 0x0a,   11110 = 0x1e
+    11111 = 0x1f,   01110 = 0x0e,   01101 = 0x0d
+    11111 = 0x1f,   01110 = 0x0e,   00111 = 0x07
+    01110 = 0x0e,   00100 = 0x04,   01111 = 0x0f
+    00100 = 0x04,   00000 = 0x00,   11110 = 0x1e
+    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
 */
 const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
 {
@@ -559,11 +604,11 @@ const unsigned char pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
  { 0x00, 0x0e, 0x19, 0x1d, 0x1f, 0x1f, 0x15, 0x00 },
  { 0x00, 0x0e, 0x13, 0x17, 0x1f, 0x1f, 0x1b, 0x00 },
  { 0x00, 0x0a, 0x1f, 0x1f, 0x1f, 0x0e, 0x04, 0x00 },
- { 0x11, 0x0a, 0x1f, 0x1f, 0x1f, 0x0e, 0x04, 0x11 },
+ { 0x00, 0x00, 0x0a, 0x0e, 0x0e, 0x04, 0x00, 0x00 },
  { 0x00, 0x00, 0x1e, 0x0d, 0x07, 0x0f, 0x1e, 0x00 }};
 
 // ----------------------------------------------------------------------------
-//  Loads custom character into CGRAM.
+//  Loads custom characters into CGRAM.
 // ----------------------------------------------------------------------------
 /*
     Set command to point to start of CGRAM and load data line by line. CGRAM
@@ -581,6 +626,254 @@ static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
     return 0;
 };
 
+// ----------------------------------------------------------------------------
+//  Simple animation demonstration.
+// ----------------------------------------------------------------------------
+static char animatePacMan( unsigned char row )
+{
+    unsigned int numFrames = 2;
+    unsigned char pacManLeft[2] = { 0, 6 };     // Animation frames.
+    unsigned char pacManRight[2] = { 1, 0 };    // Animation frames.
+    unsigned char ghost[2] = { 2, 3 };          // Animation frames.
+    unsigned char heart[2] = { 4, 5 };          // Animation frames.
+
+    // Variables for nanosleep function.
+    struct timespec sleepTime = { 0 };  // Structure defined in time.h.
+    sleepTime.tv_sec = 0;
+    sleepTime.tv_nsec = 300000000;
+
+    loadCustom( pacMan );   // Load custom characters into CGRAM.
+
+    unsigned char i, j;     // i = position counter, j = frame counter.
+
+    while ( 1 )
+    {
+        for ( i = 0; i < 16; i++ )
+        {
+            for ( j = 0; j < numFrames; j++ )
+            {
+                gotoRowPos( row, i );
+                writeData( pacManRight[j] );
+                if (( i - 2 ) > 0 )
+                {
+                    gotoRowPos( row, i - 2 );
+                    writeData( ghost[j] );
+                }
+                if (( i - 3 ) > 0 )
+                {
+                    gotoRowPos( row, i - 3 );
+                    writeData( ghost[j] );
+                }
+                if (( i - 4 ) > 0 )
+                {
+                    gotoRowPos( row, i - 4 );
+                    writeData( ghost[j] );
+                }
+                if (( i - 5 ) > 0 )
+                {
+                    gotoRowPos( row, i - 5 );
+                    writeData( ghost[j] );
+                }
+                nanosleep( &sleepTime, NULL );
+            }
+            gotoRowPos( row, 0 );
+            writeDataString( "                " );
+        }
+    }
+
+    return 0;
+};
+
+// ----------------------------------------------------------------------------
+//  Simple animation demonstration - threaded version.
+// ----------------------------------------------------------------------------
+/*
+    Parameters passed as textStruct, cast to void.
+*/
+void *animatePacManThreaded( void *rowPtr )
+{
+    unsigned int numFrames = 2;
+    unsigned char pacManLeft[2] = { 0, 6 };     // Animation frames.
+    unsigned char pacManRight[2] = { 1, 0 };    // Animation frames.
+    unsigned char ghost[2] = { 2, 3 };          // Animation frames.
+    unsigned char heart[2] = { 4, 5 };          // Animation frames.
+
+    // Needs to be an int as size of pointers are 4 bytes.
+    unsigned int row = (unsigned int)rowPtr;
+
+    // Variables for nanosleep function.
+    struct timespec sleepTime = { 0 };  // Structure defined in time.h.
+    sleepTime.tv_sec = 0;
+    sleepTime.tv_nsec = 300000000;
+
+    pthread_mutex_lock( &displayBusy );
+    loadCustom( pacMan );   // Load custom characters into CGRAM.
+    pthread_mutex_unlock( &displayBusy );
+
+    unsigned char i, j;     // i = position counter, j = frame counter.
+
+    while ( 1 )
+    {
+        for ( i = 0; i < 16; i++ )
+        {
+            for ( j = 0; j < numFrames; j++ )
+            {
+                pthread_mutex_lock( &displayBusy );
+                gotoRowPos( row, i );
+                writeData( pacManRight[j] );
+                pthread_mutex_unlock( &displayBusy );
+            if (( i - 2 ) > 0 )
+                {
+                    pthread_mutex_lock( &displayBusy );
+                    gotoRowPos( row, i - 2 );
+                    writeData( ghost[j] );
+                    pthread_mutex_unlock( &displayBusy );
+                }
+                if (( i - 3 ) > 0 )
+                {
+                    pthread_mutex_lock( &displayBusy );
+                    gotoRowPos( row, i - 3 );
+                    writeData( ghost[j] );
+                    pthread_mutex_unlock( &displayBusy );
+                }
+                if (( i - 4 ) > 0 )
+                {
+                    pthread_mutex_lock( &displayBusy );
+                    gotoRowPos( row, i - 4 );
+                    writeData( ghost[j] );
+                    pthread_mutex_unlock( &displayBusy );
+                }
+                if (( i - 5 ) > 0 )
+                {
+                    pthread_mutex_lock( &displayBusy );
+                    gotoRowPos( row, i - 5 );
+                    writeData( ghost[j] );
+                    pthread_mutex_unlock( &displayBusy );
+                }
+                nanosleep( &sleepTime, NULL );
+            }
+            pthread_mutex_lock( &displayBusy );
+            gotoRowPos( row, 0 );
+            writeDataString( "                " );
+            pthread_mutex_unlock( &displayBusy );
+        }
+    }
+
+    pthread_exit( NULL );
+
+};
+
+// ============================================================================
+//  Some display functions.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+//  Displays time at row with justification.
+// ----------------------------------------------------------------------------
+/*
+    Animates a blinking colon between numbers. Best called as a thread.
+    Justification = -1: Left justified.
+    Justification =  0: Centre justified.
+    Justification =  1: Right justified.
+*/
+static char displayTime( struct textStruct text )
+{
+    char timeString[8];
+
+    struct tm *timePtr; // Structure defined in time.h.
+    time_t timeVar;     // Type defined in time.h.
+
+    struct timespec sleepTime = { 0 }; // Structure defined in time.h.
+    sleepTime.tv_nsec = 500000000;     // 0.5 seconds.
+
+    unsigned char pos;
+    if ( text.align == TEXT_ALIGN_CENTRE ) pos = DISPLAY_COLUMNS / 2 - 4;
+    else
+    if ( text.align == TEXT_ALIGN_RIGHT ) pos = DISPLAY_COLUMNS - 8;
+    else pos = 0;
+
+    while ( 1 )
+    {
+        timeVar = time( NULL );
+        timePtr = localtime( &timeVar );
+
+        sprintf( timeString, "%02d:%02d:%02d", timePtr->tm_hour,
+                                               timePtr->tm_min,
+                                               timePtr->tm_sec );
+        gotoRowPos( text.row, pos );
+        writeDataString( timeString );
+        printf( "%s\n", timeString );
+        nanosleep( &sleepTime, NULL );
+
+        timeVar = time( NULL );
+        timePtr = localtime( &timeVar );
+
+        sprintf( timeString, "%02d %02d %02d", timePtr->tm_hour,
+                                               timePtr->tm_min,
+                                               timePtr->tm_sec );
+        gotoRowPos( text.row, pos );
+        writeDataString( timeString );
+        printf( "%s\n", timeString );
+        nanosleep( &sleepTime, NULL );
+    }
+
+};
+
+// ----------------------------------------------------------------------------
+//  Displays time at row with justification. Threaded version.
+// ----------------------------------------------------------------------------
+/*
+    Animates a blinking colon between numbers. Best called as a thread.
+    Justification = -1: Left justified.
+    Justification =  0: Centre justified.
+    Justification =  1: Right justified.
+*/
+void *displayTimeThreaded( void *threadText )
+{
+    struct textStruct *text = threadText;
+    char timeString[8];
+
+    struct tm *timePtr; // Structure defined in time.h.
+    time_t timeVar;     // Type defined in time.h.
+
+    struct timespec sleepTime = { 0 }; // Structure defined in time.h.
+    sleepTime.tv_nsec = 500000000;     // 0.5 seconds.
+
+    unsigned char pos;
+    if ( text->align == TEXT_ALIGN_CENTRE ) pos = DISPLAY_COLUMNS / 2 - 4;
+    else
+    if ( text->align == TEXT_ALIGN_RIGHT ) pos = DISPLAY_COLUMNS - 8;
+    else pos = 0;
+
+    while ( 1 )
+    {
+        timeVar = time( NULL );
+        timePtr = localtime( &timeVar );
+
+        sprintf( timeString, "%02d:%02d:%02d", timePtr->tm_hour,
+                                               timePtr->tm_min,
+                                               timePtr->tm_sec );
+        pthread_mutex_lock( &displayBusy );
+        gotoRowPos( text->row, pos );
+        writeDataString( timeString );
+        pthread_mutex_unlock( &displayBusy );
+        nanosleep( &sleepTime, NULL );
+
+        timeVar = time( NULL );
+        timePtr = localtime( &timeVar );
+
+        sprintf( timeString, "%02d %02d %02d", timePtr->tm_hour,
+                                               timePtr->tm_min,
+                                               timePtr->tm_sec );
+        pthread_mutex_lock( &displayBusy );
+        gotoRowPos( text->row, pos );
+        writeDataString( timeString );
+        pthread_mutex_unlock( &displayBusy );
+        nanosleep( &sleepTime, NULL );
+    }
+    pthread_exit( NULL );
+};
+
 // ============================================================================
 //  GPIO functions.
 // ============================================================================
@@ -594,15 +887,15 @@ static char initialiseGPIOs( void )
     wiringPiSetupGpio();
 
     // Set all GPIO pins to 0.
-    digitalWrite( gpio.rs, 0 );
-    digitalWrite( gpio.en, 0 );
+    digitalWrite( gpio.rs, GPIO_UNSET );
+    digitalWrite( gpio.en, GPIO_UNSET );
     // Data pins.
     for ( i = 0; i < PINS_DATA; i++ )
-        digitalWrite( gpio.db[i], 0 );
+        digitalWrite( gpio.db[i], GPIO_UNSET );
 
     // Set LCD pin modes.
-    pinMode( gpio.rs, OUTPUT );
-    pinMode( gpio.en, OUTPUT );
+    pinMode( gpio.rs, OUTPUT ); // Enumerated type defined in wiringPi.
+    pinMode( gpio.en, OUTPUT ); // Enumerated type defined in wiringPi.
     // Data pins.
     for ( i = 0; i < PINS_DATA; i++ )
         pinMode( gpio.db[i], OUTPUT );
@@ -709,60 +1002,35 @@ char main( int argc, char *argv[] )
                        counter, shift,
                        mode, direction );
 
-    loadCustom( pacMan );
-
-    unsigned int numFrames = 2;
-    unsigned char pacManLeft[2] = { 0, 6 };
-    unsigned char pacManRight[2] = { 0, 1 };
-    unsigned char ghost[2] = { 2, 3 };
-    unsigned char heart[2] = { 4, 5 };
-
-
-    unsigned char i, j;
-    while ( 1 )
+    struct textStruct textTime =
     {
+        .string = NULL,
+        .row = 0,
+        .align = TEXT_ALIGN_CENTRE,
+        .ticker = TEXT_TICKER_OFF,
+        .delay = 0
+    };
 
-        for ( j = 0; j < 16; j++ )
-        {
-            gotoRowPos( 0, 1 );
-            writeDataString( "Animation Demo" );
+    // Must be an int due to typecasting of a pointer.
+    unsigned int pacManRow = 1;
 
-            for ( i = 0; i < numFrames; i++ )
-                {
-                    gotoRowPos( 0, 0 );
-                    writeData( heart[i] );
-                    gotoRowPos( 0, 15 );
-                    writeData( heart[i] );
-                    gotoRowPos( 1, j );
-                    writeData( pacManRight[i] );
-                    if (( j - 2 ) > 0 )
-                    {
-                        gotoRowPos( 1, j - 2 );
-                        writeData( ghost[i] );
-                    }
-                    if (( j - 3 ) > 0 )
-                    {
-                        gotoRowPos( 1, j - 3 );
-                        writeData( ghost[i] );
-                    }
-                    if (( j - 4 ) > 0 )
-                    {
-                        gotoRowPos( 1, j - 4 );
-                        writeData( ghost[i] );
-                    }
-                    if (( j - 5 ) > 0 )
-                    {
-                        gotoRowPos( 1, j - 5 );
-                        writeData( ghost[i] );
-                    }
-                    delay( 300 );
-                }
-            displayClear();
-        }
-    }
+    // Create threads and mutex for animated display functions.
+    pthread_mutex_init( &displayBusy, NULL );
+    pthread_t threads[2];
+    pthread_create( &threads[0], NULL, displayTimeThreaded, (void *)&textTime );
+    pthread_create( &threads[1], NULL, animatePacManThreaded, (void *)pacManRow );
+
+    while (1)
+    {
+//        animatePacMan( pacManRow );
+//        displayTime( textTime );
+    };
 
     displayClear();
     displayHome();
 
-    return 0;
+    // Clean up threads.
+    pthread_mutex_destroy( &displayBusy );
+    pthread_exit( NULL );
+
 }
