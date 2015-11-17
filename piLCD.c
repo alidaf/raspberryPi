@@ -189,7 +189,7 @@
 #define TEXT_ALIGN_RIGHT   3 // Align or rotate right.
 #define TEXT_TICKER_OFF    0 // Ticker movement off.
 #define TEXT_TICKER_ON     1 // Ticker movement on.
-#define TEXT_MAX_LENGTH  128 // Arbitrary length limit for text string.
+#define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
 
 // Enumerated types for GPIO states.
 #define GPIO_UNSET         0 // Set GPIO to low.
@@ -246,7 +246,6 @@ struct textStruct
     char string[TEXT_MAX_LENGTH]; // Display text string.
     unsigned char row;            // Row to display string.
     unsigned char align;          // Text justification.
-    unsigned char ticker;         // Ticker direction.
     unsigned int  delay;          // Ticker delay (mS).
 };
 
@@ -768,6 +767,67 @@ void *animatePacManThreaded( void *rowPtr )
 // ============================================================================
 
 // ----------------------------------------------------------------------------
+//  Returns a reversed string.
+// ----------------------------------------------------------------------------
+static void reverseString( char *text, size_t start, size_t end )
+{
+    char temp;
+    while ( start < end )
+    {
+        end--;
+        temp = text[start];
+        text[start] = text[end];
+        text[end] = temp;
+        start++;
+    }
+};
+
+// ----------------------------------------------------------------------------
+//  Returns a rotated string.
+// ----------------------------------------------------------------------------
+static void rotateString( char *text, size_t length, size_t increments )
+{
+//    if (!text || !*text ) return;
+    increments %= length;
+    reverseString( text, 0, increments );
+    reverseString( text, increments, length );
+    reverseString( text, 0, length );
+}
+
+// ----------------------------------------------------------------------------
+//  Displays a string as a tickertape.
+// ----------------------------------------------------------------------------
+static char tickerString( char *text, size_t length, char inc, size_t delay )
+/*
+    inc = number of characters to rotate. +ve value rotates left,
+    -ve value rotates right.
+*/
+{
+    if ( length + DISPLAY_COLUMNS > TEXT_MAX_LENGTH ) return -1;
+
+    // Variables for nanosleep function.
+    struct timespec sleepTime = { 0 };  // Structure defined in time.h.
+    sleepTime.tv_sec = 0;
+    sleepTime.tv_nsec = delay * 1000000;
+
+    size_t i;
+    for ( i = length; i < length + DISPLAY_COLUMNS; i++ )
+        text[i] = ' ';
+    text[i] = '\0';
+
+    char displayText[DISPLAY_COLUMNS];
+    while ( 1 )
+    {
+        rotateString( text, strlen( text ), inc );
+        strncpy( displayText, text, DISPLAY_COLUMNS );
+        gotoRowPos( 1, 0 );
+        writeDataString( displayText );
+        // Delay for readability.
+        nanosleep( &sleepTime, NULL );
+    }
+};
+
+// ----------------------------------------------------------------------------
 //  Displays time at row with justification.
 // ----------------------------------------------------------------------------
 /*
@@ -1007,7 +1067,6 @@ char main( int argc, char *argv[] )
         .string = NULL,
         .row = 0,
         .align = TEXT_ALIGN_CENTRE,
-        .ticker = TEXT_TICKER_OFF,
         .delay = 0
     };
 
@@ -1015,10 +1074,19 @@ char main( int argc, char *argv[] )
     unsigned int pacManRow = 1;
 
     // Create threads and mutex for animated display functions.
-    pthread_mutex_init( &displayBusy, NULL );
-    pthread_t threads[2];
-    pthread_create( &threads[0], NULL, displayTimeThreaded, (void *)&textTime );
-    pthread_create( &threads[1], NULL, animatePacManThreaded, (void *)pacManRow );
+//    pthread_mutex_init( &displayBusy, NULL );
+//    pthread_t threads[2];
+//    pthread_create( &threads[0], NULL, displayTimeThreaded, (void *)&textTime );
+//    pthread_create( &threads[1], NULL, animatePacManThreaded, (void *)pacManRow );
+
+    struct textStruct ticker =
+    {
+        .string = "Breaking news just in.",
+        .row = 1,
+        .align = TEXT_ALIGN_LEFT,
+        .delay = 300
+    };
+    tickerString( ticker.string, strlen( ticker.string ), 1, ticker.delay );
 
     while (1)
     {
@@ -1030,7 +1098,7 @@ char main( int argc, char *argv[] )
     displayHome();
 
     // Clean up threads.
-    pthread_mutex_destroy( &displayBusy );
-    pthread_exit( NULL );
+//    pthread_mutex_destroy( &displayBusy );
+//    pthread_exit( NULL );
 
 }
