@@ -30,7 +30,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.5"
+#define Version "Version 0.6"
 
 //  Compilation:
 //
@@ -39,7 +39,7 @@
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-//  Authors:        D.Faulke    13/11/2015  This program.
+//  Authors:        D.Faulke    17/11/2015  This program.
 //
 //  Contributors:
 //
@@ -50,6 +50,7 @@
 //  v0.3 Added custom character function.
 //  v0.4 Rewrote init and set mode functions.
 //  v0.5 Finally sorted out initialisation!
+//  v0.6 Aded ticker tape text function.
 //
 
 //  To Do:
@@ -231,22 +232,56 @@ struct gpioStruct
 };
 
 // ----------------------------------------------------------------------------
-//  Data structure for displaying strings.
+//  Data structures for displaying text.
 // ----------------------------------------------------------------------------
-struct textStruct
 /*
     .align  = TEXT_ALIGN_NULL   : No set alignment (just print at cursor ).
             = TEXT_ALIGN_LEFT   : Text aligns or rotates left.
             = TEXT_ALIGN_CENTRE : Text aligns or oscillates about centre.
             = TEXT_ALIGN_RIGHT  : Text aligns or rotates right.
-    .ticker = TEXT_TICKER_OFF   : No ticker movement.
-            = TEXT_TICKER_ON    : String rotates left.
 */
+struct textStruct
 {
-    char string[TEXT_MAX_LENGTH]; // Display text string.
-    unsigned char row;            // Row to display string.
-    unsigned char align;          // Text justification.
-    unsigned int  delay;          // Ticker delay (mS).
+    char string[DISPLAY_COLUMNS]; // Display text.
+    unsigned char row;            // Row to display text.
+    unsigned char align;          // Text alignment.
+};
+
+struct timeStruct
+{
+    unsigned char row;
+    unsigned char align;
+    unsigned int delay;
+    bool displayHours;
+    bool displayMinutes;
+    bool displaySeconds;
+};
+
+struct dateStruct
+{
+    unsigned char row;
+    unsigned char align;
+    unsigned int delay;
+    bool displayDay;
+    bool displayDate;
+    bool displayMonth;
+    bool displayYear;
+};
+
+/*
+    .increment = Number and direction of characters to rotate.
+                 +ve rotate left.
+                 -ve rotate right.
+    .length + .padding must be < TEXT_MAX_LENGTH.
+*/
+struct tickerStruct
+{
+    char text[TEXT_MAX_LENGTH];
+    unsigned int length;
+    unsigned int padding;
+    unsigned char row;
+    unsigned int  increment;
+    unsigned int  delay;
 };
 
 // ============================================================================
@@ -366,7 +401,7 @@ static char gotoRowPos( unsigned char row, unsigned char pos )
 {
     if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
     if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
-    // This doesn't properly check whther the number of display
+    // This doesn't properly check whether the number of display
     // lines has been set to 1.
 
     // Array of row start addresses
@@ -626,70 +661,12 @@ static char loadCustom( const unsigned char newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
 };
 
 // ----------------------------------------------------------------------------
-//  Simple animation demonstration.
-// ----------------------------------------------------------------------------
-static char animatePacMan( unsigned char row )
-{
-    unsigned int numFrames = 2;
-    unsigned char pacManLeft[2] = { 0, 6 };     // Animation frames.
-    unsigned char pacManRight[2] = { 1, 0 };    // Animation frames.
-    unsigned char ghost[2] = { 2, 3 };          // Animation frames.
-    unsigned char heart[2] = { 4, 5 };          // Animation frames.
-
-    // Variables for nanosleep function.
-    struct timespec sleepTime = { 0 };  // Structure defined in time.h.
-    sleepTime.tv_sec = 0;
-    sleepTime.tv_nsec = 300000000;
-
-    loadCustom( pacMan );   // Load custom characters into CGRAM.
-
-    unsigned char i, j;     // i = position counter, j = frame counter.
-
-    while ( 1 )
-    {
-        for ( i = 0; i < 16; i++ )
-        {
-            for ( j = 0; j < numFrames; j++ )
-            {
-                gotoRowPos( row, i );
-                writeData( pacManRight[j] );
-                if (( i - 2 ) > 0 )
-                {
-                    gotoRowPos( row, i - 2 );
-                    writeData( ghost[j] );
-                }
-                if (( i - 3 ) > 0 )
-                {
-                    gotoRowPos( row, i - 3 );
-                    writeData( ghost[j] );
-                }
-                if (( i - 4 ) > 0 )
-                {
-                    gotoRowPos( row, i - 4 );
-                    writeData( ghost[j] );
-                }
-                if (( i - 5 ) > 0 )
-                {
-                    gotoRowPos( row, i - 5 );
-                    writeData( ghost[j] );
-                }
-                nanosleep( &sleepTime, NULL );
-            }
-            gotoRowPos( row, 0 );
-            writeDataString( "                " );
-        }
-    }
-
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Simple animation demonstration - threaded version.
+//  Simple animation demonstration using threads.
 // ----------------------------------------------------------------------------
 /*
     Parameters passed as textStruct, cast to void.
 */
-void *animatePacManThreaded( void *rowPtr )
+static void *displayPacMan( void *rowPtr )
 {
     unsigned int numFrames = 2;
     unsigned char pacManLeft[2] = { 0, 6 };     // Animation frames.
@@ -795,88 +772,59 @@ static void rotateString( char *text, size_t length, size_t increments )
 }
 
 // ----------------------------------------------------------------------------
-//  Displays a string as a tickertape.
+//  Displays text on display row as a tickertape.
 // ----------------------------------------------------------------------------
-static char tickerString( char *text, size_t length, char inc, size_t delay )
+static void *displayTicker( void *threadTicker )
 /*
-    inc = number of characters to rotate. +ve value rotates left,
-    -ve value rotates right.
+    text:      Tickertape text.
+    length:    Length of tickertape text.
+    padding:   Number of padding spaces at the end of the ticker text.
+    row:       Row to display tickertape text.
+    increment: Direction and number of characters to rotate.
+               +ve value rotates left,
+               -ve value rotates right.
+    delay:     Controls the speed of the ticker tape. Delay in mS.
 */
 {
-    if ( length + DISPLAY_COLUMNS > TEXT_MAX_LENGTH ) return -1;
+    struct tickerStruct *ticker = threadTicker;
+
+    // Close thread if text string is too big.
+    if ( ticker->length + ticker->padding > TEXT_MAX_LENGTH ) pthread_exit( NULL );
 
     // Variables for nanosleep function.
     struct timespec sleepTime = { 0 };  // Structure defined in time.h.
     sleepTime.tv_sec = 0;
-    sleepTime.tv_nsec = delay * 1000000;
+    sleepTime.tv_nsec = ticker->delay * 1000000;
 
+    // Add some padding so rotated text looks better.
     size_t i;
-    for ( i = length; i < length + DISPLAY_COLUMNS; i++ )
-        text[i] = ' ';
-    text[i] = '\0';
+    for ( i = ticker->length; i < ticker->length + ticker->padding; i++ )
+        ticker->text[i] = ' ';
+    ticker->text[i] = '\0';
+    ticker->length = strlen( ticker->text );
 
+    // Set up a text window equal to the number of display columns.
     char displayText[DISPLAY_COLUMNS];
+
     while ( 1 )
     {
-        rotateString( text, strlen( text ), inc );
-        strncpy( displayText, text, DISPLAY_COLUMNS );
+        // Copy the display text.
+        strncpy( displayText, ticker->text, DISPLAY_COLUMNS );
+
+        // Lock thread and display ticker text.
+        pthread_mutex_lock( &displayBusy );
         gotoRowPos( 1, 0 );
         writeDataString( displayText );
+        pthread_mutex_unlock( &displayBusy );
+
         // Delay for readability.
         nanosleep( &sleepTime, NULL );
-    }
-};
 
-// ----------------------------------------------------------------------------
-//  Displays time at row with justification.
-// ----------------------------------------------------------------------------
-/*
-    Animates a blinking colon between numbers. Best called as a thread.
-    Justification = -1: Left justified.
-    Justification =  0: Centre justified.
-    Justification =  1: Right justified.
-*/
-static char displayTime( struct textStruct text )
-{
-    char timeString[8];
-
-    struct tm *timePtr; // Structure defined in time.h.
-    time_t timeVar;     // Type defined in time.h.
-
-    struct timespec sleepTime = { 0 }; // Structure defined in time.h.
-    sleepTime.tv_nsec = 500000000;     // 0.5 seconds.
-
-    unsigned char pos;
-    if ( text.align == TEXT_ALIGN_CENTRE ) pos = DISPLAY_COLUMNS / 2 - 4;
-    else
-    if ( text.align == TEXT_ALIGN_RIGHT ) pos = DISPLAY_COLUMNS - 8;
-    else pos = 0;
-
-    while ( 1 )
-    {
-        timeVar = time( NULL );
-        timePtr = localtime( &timeVar );
-
-        sprintf( timeString, "%02d:%02d:%02d", timePtr->tm_hour,
-                                               timePtr->tm_min,
-                                               timePtr->tm_sec );
-        gotoRowPos( text.row, pos );
-        writeDataString( timeString );
-        printf( "%s\n", timeString );
-        nanosleep( &sleepTime, NULL );
-
-        timeVar = time( NULL );
-        timePtr = localtime( &timeVar );
-
-        sprintf( timeString, "%02d %02d %02d", timePtr->tm_hour,
-                                               timePtr->tm_min,
-                                               timePtr->tm_sec );
-        gotoRowPos( text.row, pos );
-        writeDataString( timeString );
-        printf( "%s\n", timeString );
-        nanosleep( &sleepTime, NULL );
+        // Rotate the ticker text.
+        rotateString( ticker->text, ticker->length, ticker->increment );
     }
 
+    pthread_exit( NULL );
 };
 
 // ----------------------------------------------------------------------------
@@ -888,9 +836,9 @@ static char displayTime( struct textStruct text )
     Justification =  0: Centre justified.
     Justification =  1: Right justified.
 */
-void *displayTimeThreaded( void *threadText )
+void *displayTime( void *threadTime )
 {
-    struct textStruct *text = threadText;
+    struct timeStruct *text = threadTime;
     char timeString[8];
 
     struct tm *timePtr; // Structure defined in time.h.
@@ -1062,43 +1010,56 @@ char main( int argc, char *argv[] )
                        counter, shift,
                        mode, direction );
 
-    struct textStruct textTime =
+    struct timeStruct textTime =
     {
-        .string = NULL,
         .row = 0,
         .align = TEXT_ALIGN_CENTRE,
-        .delay = 0
+        .delay = 300,
+        .displayHours = true,
+        .displayMinutes = true,
+        .displaySeconds = false
+    };
+
+    struct dateStruct textDate =
+    {
+        .row = 0,
+        .align = TEXT_ALIGN_CENTRE,
+        .delay = 300,
+        .displayDay = true,
+        .displayDate = true,
+        .displayMonth = true,
+        .displayYear = true
+    };
+
+    struct tickerStruct ticker =
+    {
+        .text = "This text is really long and used to demonstrate the ticker!",
+        .length = strlen( ticker.text ),
+        .padding = 6,
+        .row = 1,
+        .increment = 1,
+        .delay = 300
     };
 
     // Must be an int due to typecasting of a pointer.
     unsigned int pacManRow = 1;
 
     // Create threads and mutex for animated display functions.
-//    pthread_mutex_init( &displayBusy, NULL );
-//    pthread_t threads[2];
-//    pthread_create( &threads[0], NULL, displayTimeThreaded, (void *)&textTime );
-//    pthread_create( &threads[1], NULL, animatePacManThreaded, (void *)pacManRow );
-
-    struct textStruct ticker =
-    {
-        .string = "Breaking news just in.",
-        .row = 1,
-        .align = TEXT_ALIGN_LEFT,
-        .delay = 300
-    };
-    tickerString( ticker.string, strlen( ticker.string ), 1, ticker.delay );
+    pthread_mutex_init( &displayBusy, NULL );
+    pthread_t threads[2];
+    pthread_create( &threads[0], NULL, displayTime, (void *) &textTime );
+//    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
+    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
 
     while (1)
     {
-//        animatePacMan( pacManRow );
-//        displayTime( textTime );
     };
 
     displayClear();
     displayHome();
 
     // Clean up threads.
-//    pthread_mutex_destroy( &displayBusy );
-//    pthread_exit( NULL );
+    pthread_mutex_destroy( &displayBusy );
+    pthread_exit( NULL );
 
 }
