@@ -134,6 +134,7 @@
 #define BITS_BYTE          8 // Number of bits in a byte.
 #define BITS_NIBBLE        4 // Number of bits in a nibble.
 #define PINS_DATA          4 // Number of data pins used.
+#define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
 
 // These should be replaced by command line options.
 #define DISPLAY_COLUMNS   16 // No of LCD display characters.
@@ -183,18 +184,16 @@
 #define ADDRESS_ROW_2   0x14 // Row 3 start address.
 #define ADDRESS_ROW_3   0x54 // Row 4 start address.
 
-// Enumerated types for display alignment and ticker directions.
-#define TEXT_ALIGN_NULL    0 // No specific alignment or direction.
-#define TEXT_ALIGN_LEFT    1 // Align or rotate left.
-#define TEXT_ALIGN_CENTRE  2 // Align or oscillate about centre.
-#define TEXT_ALIGN_RIGHT   3 // Align or rotate right.
-#define TEXT_TICKER_OFF    0 // Ticker movement off.
-#define TEXT_TICKER_ON     1 // Ticker movement on.
-#define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
-
-// Enumerated types for GPIO states.
+// Constants for GPIO states.
 #define GPIO_UNSET         0 // Set GPIO to low.
 #define GPIO_SET           1 // Set GPIO to high.
+
+// Constants for display alignment and ticker directions.
+enum textAlignment_t { LEFT, CENTRE, RIGHT };
+
+// Enumerated types for date and time displays.
+enum timeFormat_t { HMS, HM };
+enum dateFormat_t { DAY_DMY, DAY_DM, DAY_D, DMY };
 
 // Define a mutex to allow concurrent display routines.
 /*
@@ -242,30 +241,25 @@ struct gpioStruct
 */
 struct textStruct
 {
-    char string[DISPLAY_COLUMNS]; // Display text.
-    unsigned char row;            // Row to display text.
-    unsigned char align;          // Text alignment.
+    char string[DISPLAY_COLUMNS];
+    unsigned char row;
+    enum textAlignment_t align;
 };
 
 struct timeStruct
 {
     unsigned char row;
-    unsigned char align;
     unsigned int delay;
-    bool displayHours;
-    bool displayMinutes;
-    bool displaySeconds;
+    enum textAlignment_t align;
+    enum timeFormat_t format;
 };
 
 struct dateStruct
 {
     unsigned char row;
-    unsigned char align;
     unsigned int delay;
-    bool displayDay;
-    bool displayDate;
-    bool displayMonth;
-    bool displayYear;
+    enum textAlignment_t align;
+    enum dateFormat_t format;
 };
 
 /*
@@ -839,6 +833,8 @@ static void *displayTicker( void *threadTicker )
 void *displayTime( void *threadTime )
 {
     struct timeStruct *text = threadTime;
+
+    // Need to set the correct format.
     char timeString[8];
 
     struct tm *timePtr; // Structure defined in time.h.
@@ -848,9 +844,9 @@ void *displayTime( void *threadTime )
     sleepTime.tv_nsec = 500000000;     // 0.5 seconds.
 
     unsigned char pos;
-    if ( text->align == TEXT_ALIGN_CENTRE ) pos = DISPLAY_COLUMNS / 2 - 4;
+    if ( text->align == CENTRE ) pos = DISPLAY_COLUMNS / 2 - 4;
     else
-    if ( text->align == TEXT_ALIGN_RIGHT ) pos = DISPLAY_COLUMNS - 8;
+    if ( text->align == RIGHT ) pos = DISPLAY_COLUMNS - 8;
     else pos = 0;
 
     while ( 1 )
@@ -1013,22 +1009,17 @@ char main( int argc, char *argv[] )
     struct timeStruct textTime =
     {
         .row = 0,
-        .align = TEXT_ALIGN_CENTRE,
         .delay = 300,
-        .displayHours = true,
-        .displayMinutes = true,
-        .displaySeconds = false
+        .align = CENTRE,
+        .format = HMS
     };
 
     struct dateStruct textDate =
     {
         .row = 0,
-        .align = TEXT_ALIGN_CENTRE,
         .delay = 300,
-        .displayDay = true,
-        .displayDate = true,
-        .displayMonth = true,
-        .displayYear = true
+        .align = CENTRE,
+        .format = DAY_DMY
     };
 
     struct tickerStruct ticker =
