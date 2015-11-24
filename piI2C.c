@@ -1,9 +1,11 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    piAMG19264:
+    piI2C:
 
-    Orient Display AMG19264 LCD display driver for the Raspberry Pi.
+    Orient Display AMG19264 LCD display driver for the Raspberry Pi via a
+    MAX7325 port expander. I2C slave address is either 0x50 or 0x60 according
+    to the MAX7325 data sheet.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
     Based on the following guides and codes:
@@ -29,7 +31,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc piAMG19264.c -o piAMG19264 -lwiringPi
+//  Compile with gcc piI2C.c -o piI2C -lwiringPi
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -55,7 +57,6 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
-#include <pthread.h>
 
 // ============================================================================
 //  Information.
