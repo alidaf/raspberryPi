@@ -53,6 +53,7 @@
 #include <string.h>
 #include <argp.h>
 #include <wiringPi.h>
+#include <wiringPiI2C.h>
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -113,34 +114,29 @@
 //  Command and constant macros.
 // ============================================================================
 
-// Constants. Change these according to needs.
-#define PINS_DATA      8 // Number of data pins used.
+// I2C addresses.
+#define MAX7325_ADDR1  0x5d // I2C address for port expander.
+#define MAX7325_ADDR2  0x6d // I2C address for port expander.
+#define LM27966_ADDR   0x36 // I2C address for backlight control.
 
 // These should be replaced by command line options.
-#define DISPLAY_PMAX   8 // Max No of LCD pages.
-#define DISPLAY_XMAX  64 // Max No of LCD display rows.
-#define DISPLAY_YMAX  64 // Max No of LCD display columns.
-#define DISPLAY_NUM    1 // Number of displays.
+#define DISPLAY_PMAX      8 // Max No of LCD pages.
+#define DISPLAY_XMAX     64 // Max No of LCD display rows.
+#define DISPLAY_YMAX     64 // Max No of LCD display columns.
+#define DISPLAY_NUM       1 // Number of displays.
 
 // Display commands.
-#define DISPLAY_ON  0x3f // Turn display on.
-#define DISPLAY_OFF 0x3e // Turn display off.
+#define DISPLAY_ON     0x3f // Turn display on.
+#define DISPLAY_OFF    0x3e // Turn display off.
 
 // LCD addresses.
-#define BASE_PADDR  0xb8 // Base address for pages 0-7.
-#define BASE_XADDR  0x40 // Base address for X position.
-#define BASE_YADDR  0xc0 // Base address for Y position.
+#define BASE_PADDR     0xb8 // Base address for pages 0-7.
+#define BASE_XADDR     0x40 // Base address for X position.
+#define BASE_YADDR     0xc0 // Base address for Y position.
 
 // Constants for GPIO states.
-#define GPIO_UNSET     0 // Set GPIO to low.
-#define GPIO_SET       1 // Set GPIO to high.
-
-// Constants for display alignment and ticker directions.
-enum textAlignment_t { LEFT, CENTRE, RIGHT };
-
-// Enumerated types for date and time displays.
-enum timeFormat_t { HMS, HM };
-enum dateFormat_t { DAY_DMY, DAY_DM, DAY_D, DMY };
+#define GPIO_UNSET        0 // Set GPIO to low.
+#define GPIO_SET          1 // Set GPIO to high.
 
 // Define a mutex to allow concurrent display routines.
 /*
@@ -151,327 +147,22 @@ pthread_mutex_t displayBusy;
 // ============================================================================
 //  Data structures.
 // ============================================================================
-/*
-    Note: char is the smallest integer size (usually 8 bit) and is used to
-          keep the memory footprint as low as possible.
-*/
 
-// ----------------------------------------------------------------------------
-//  Data structure for GPIOs.
-// ----------------------------------------------------------------------------
-struct gpioStruct
-{
-    unsigned char rs;            // GPIO pin for LCD RS register.
-    unsigned char en;            // GPIO pin for LCD Enable register.
-    unsigned char rw;            // GPIO pin for R/W mode. Not used.
-    unsigned char cs1;           // GPIO pin for Chip Select 1 register.
-    unsigned char cs2;           // GPIO pin for Chip Select 2 register.
-    unsigned char cs3;           // GPIO pin for Chip Select 3 register.
-    unsigned char db[PINS_DATA]; // GPIO pins for LCD data registers.
-} gpio =
-// Default gpio numbers in case no command line parameters are passed.
-{
-    .rs    = 14,
-    .en    = 15,
-//    .rw    = xx,
-//    .cs1   = xx,  // Right hand screen.
-    .cs2   = 10, // Centre screen.
-    .cs3   =  9, // Left hand screen.
-    .db[0] = 18,
-    .db[1] = 23,
-    .db[2] = 24,
-    .db[3] = 25,
-    .db[4] =  4,
-    .db[5] = 17,
-    .db[6] = 27,
-    .db[7] = 22
-};
-
-// ============================================================================
-//  Display functions.
-// ============================================================================
-
-// ----------------------------------------------------------------------------
-//  Sends command to display registers.
-// ----------------------------------------------------------------------------
-static void writeCommand( unsigned char cs, unsigned char command )
-{
-    unsigned char i;
-
-    if ( cs == 0 )      // Left hand screen.
-    {
-        digitalWrite( gpio.cs3, GPIO_SET );
-        digitalWrite( gpio.cs2, GPIO_UNSET );
-//        digitalWrite( gpio.cs1, GPIO_UNSET );
-    }
-    else if ( cs == 1 ) // Centre screen.
-    {
-        digitalWrite( gpio.cs3, GPIO_UNSET );
-        digitalWrite( gpio.cs2, GPIO_SET );
-//        digitalWrite( gpio.cs1, GPIO_UNSET );
-    }
-    else if ( cs == 2 ) // Rigt hand screen.
-    {
-        digitalWrite( gpio.cs3, GPIO_UNSET );
-        digitalWrite( gpio.cs2, GPIO_UNSET );
-//        digitalWrite( gpio.cs1, GPIO_SET );
-    }
-
-    // Set RS and RW registers.
-    digitalWrite( gpio.rs, GPIO_UNSET );
-//    digitalWrite( gpio.rw, GPIO_UNSET );
-
-    // Load data into DB0-DB7 registers.
-    for ( i = 0; i < PINS_DATA; i++ )
-        digitalWrite( gpio.db[i], ( command << i ) & 1 );
-    delayMicroseconds( 10 );
-
-    // Toggle EN register to send data.
-    digitalWrite( gpio.en, GPIO_SET );
-    delayMicroseconds( 5 );
-    digitalWrite( gpio.en, GPIO_UNSET );
-    delayMicroseconds( 10 );
-
-    digitalWrite( gpio.cs3, GPIO_SET );
-    digitalWrite( gpio.cs2, GPIO_SET );
-};
-
-// ----------------------------------------------------------------------------
-//  Sends data to display registers.
-// ----------------------------------------------------------------------------
-static void writeData( unsigned char cs, unsigned char data )
-{
-    unsigned char i;
-
-    if ( cs == 0 )      // Left hand screen.
-    {
-        digitalWrite( gpio.cs3, GPIO_SET );
-        digitalWrite( gpio.cs2, GPIO_UNSET );
-//        digitalWrite( gpio.cs1, GPIO_UNSET );
-    }
-    else if ( cs == 1 ) // Centre screen.
-    {
-        digitalWrite( gpio.cs3, GPIO_UNSET );
-        digitalWrite( gpio.cs2, GPIO_SET );
-//        digitalWrite( gpio.cs1, GPIO_UNSET );
-    }
-    else if ( cs == 2 ) // Rigt hand screen.
-    {
-        digitalWrite( gpio.cs3, GPIO_UNSET );
-        digitalWrite( gpio.cs2, GPIO_UNSET );
-//        digitalWrite( gpio.cs1, GPIO_SET );
-    }
-
-    // Set RS and RW registers.
-    digitalWrite( gpio.rs, GPIO_SET );
-//    digitalWrite( gpio.rw, GPIO_UNSET );
-
-    // Load data into DB0-DB7 registers.
-    for ( i = 0; i < PINS_DATA; i++ )
-        digitalWrite( gpio.db[i], ( data << i ) & 1 );
-    delayMicroseconds( 10 );
-
-    // Toggle EN register to send data.
-    digitalWrite( gpio.en, GPIO_SET );
-    delayMicroseconds( 5 );
-    digitalWrite( gpio.en, GPIO_UNSET );
-    delayMicroseconds( 10 );
-
-    digitalWrite( gpio.cs3, GPIO_SET );
-    digitalWrite( gpio.cs2, GPIO_SET );
-};
-
-// ----------------------------------------------------------------------------
-//  Draws a dot.
-// ----------------------------------------------------------------------------
-static void drawDot( unsigned char x, unsigned char y )
-{
-    writeCommand( x / 64, BASE_XADDR | ( x % 64 ));
-    writeCommand( x / 64, BASE_PADDR | ( y / 8 ));
-    writeData( x / 64, 1 << ( y % 8 ));
-};
-
-// ----------------------------------------------------------------------------
-//  Initialises display.
-// ----------------------------------------------------------------------------
-static void initDisplay( void )
-{
-    writeCommand( 0, BASE_YADDR );
-    writeCommand( 1, BASE_YADDR );
-    writeCommand( 2, BASE_YADDR );
-
-    writeCommand( 0, DISPLAY_ON );
-    writeCommand( 1, DISPLAY_ON );
-    writeCommand( 2, DISPLAY_ON );
-};
-
-// ============================================================================
-//  GPIO functions.
-// ============================================================================
-
-// ----------------------------------------------------------------------------
-//  Initialises GPIOs.
-// ----------------------------------------------------------------------------
-static char initialiseGPIOs( void )
-{
-    unsigned char i;
-    wiringPiSetupGpio();
-
-    // Set all GPIO pins to 0.
-    digitalWrite( gpio.rs, GPIO_UNSET );
-    digitalWrite( gpio.en, GPIO_UNSET );
-    // Data pins.
-    for ( i = 0; i < PINS_DATA; i++ )
-        digitalWrite( gpio.db[i], GPIO_UNSET );
-
-    // Set LCD pin modes.
-    pinMode( gpio.rs, OUTPUT ); // Enumerated type defined in wiringPi.
-    pinMode( gpio.en, OUTPUT ); // Enumerated type defined in wiringPi.
-    // Data pins.
-    for ( i = 0; i < PINS_DATA; i++ )
-        pinMode( gpio.db[i], OUTPUT );
-
-    delay( 35 );
-    return 0;
-};
-
-// ============================================================================
-//  Command line option functions.
-// ============================================================================
-
-// ----------------------------------------------------------------------------
-//  argp documentation.
-// ----------------------------------------------------------------------------
-const char *argp_program_version = Version;
-const char *argp_program_bug_address = "darren@alidaf.co.uk";
-static const char doc[] = "Raspberry Pi LCD driver.";
-static const char args_doc[] = "piLCD <options>";
-
-// ----------------------------------------------------------------------------
-//  Command line argument definitions.
-// ----------------------------------------------------------------------------
-static struct argp_option options[] =
-{
-    { 0, 0, 0, 0, "Switches:" },
-    { "rs", 'r', "<int>", 0, "GPIO for RS (instruction code) register" },
-    { "en", 'n', "<int>", 0, "GPIO for EN (chip enable) register" },
-    { "rw", 'w', "<int>", 0, "GPIO for R/W (read/write) register" },
-    { 0, 0, 0, 0, "Data pins:" },
-    { "db0", 'a', "<int>", 0, "GPIO for data register bit 0." },
-    { "db1", 'b', "<int>", 0, "GPIO for data register bit 1." },
-    { "db2", 'c', "<int>", 0, "GPIO for data register bit 2." },
-    { "db3", 'd', "<int>", 0, "GPIO for data register bit 3." },
-    { "db4", 'e', "<int>", 0, "GPIO for data register bit 4." },
-    { "db5", 'f', "<int>", 0, "GPIO for data register bit 5." },
-    { "db6", 'g', "<int>", 0, "GPIO for data register bit 6." },
-    { "db7", 'h', "<int>", 0, "GPIO for data register bit 7." },
-    { 0 }
-};
-
-// ----------------------------------------------------------------------------
-//  Command line argument parser.
-// ----------------------------------------------------------------------------
-static int parse_opt( int param, char *arg, struct argp_state *state )
-{
-    char *str, *token;
-    const char delimiter[] = ",";
-    struct gpioStruct *gpio = state->input;
-
-    switch ( param )
-    {
-        case 'r' :
-            gpio->rs = atoi( arg );
-            break;
-        case 'n' :
-            gpio->en = atoi( arg );
-            break;
-        case 'w' :
-            gpio->rw = atoi( arg );
-            break;
-        case 'a' :
-            gpio->db[0] = atoi( arg );
-            break;
-        case 'b' :
-            gpio->db[1] = atoi( arg );
-            break;
-        case 'c' :
-            gpio->db[2] = atoi( arg );
-            break;
-        case 'd' :
-            gpio->db[3] = atoi( arg );
-            break;
-        case 'e' :
-            gpio->db[4] = atoi( arg );
-            break;
-        case 'f' :
-            gpio->db[5] = atoi( arg );
-            break;
-        case 'g' :
-            gpio->db[6] = atoi( arg );
-            break;
-        case 'h' :
-            gpio->db[7] = atoi( arg );
-            break;
-    }
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  argp parser parameter structure.
-// ----------------------------------------------------------------------------
-static struct argp argp = { options, parse_opt, args_doc, doc };
 
 // ============================================================================
 //  Main section.
 // ============================================================================
-char main( int argc, char *argv[] )
+void main( void )
 {
-    // ------------------------------------------------------------------------
-    //  Get command line arguments and check within bounds.
-    // ------------------------------------------------------------------------
-    argp_parse( &argp, argc, argv, 0, 0, &gpio );
-    // Need to check validity of pins.
 
     // ------------------------------------------------------------------------
-    //  Initialise wiringPi and LCD.
+    //  Initialise I2C.
     // ------------------------------------------------------------------------
-    initialiseGPIOs();  // Must be called before initialiseDisplay.
+    int displayHandle1 = wiringPiI2CSetup( MAX7325_ADDR1 );
+    int displayHandle2 = wiringPiI2CSetup( MAX7325_ADDR2 );
+    int backlightHandle = wiringPiI2CSetup( LM27966_ADDR );
 
-    // Create threads and mutex for animated display functions.
-//    pthread_mutex_init( &displayBusy, NULL );
-//    pthread_t threads[2];
-//    pthread_create( &threads[0], NULL, displayTime, (void *) &textTime );
-//    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
-//    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
-
-    initDisplay();
-
-    writeCommand( 0, DISPLAY_OFF );
-    writeCommand( 1, DISPLAY_OFF );
-
-    writeCommand( 0, DISPLAY_ON );
-    writeCommand( 1, DISPLAY_ON );
-
-    // Display on.
-
-    unsigned char i, j, k;
-    for ( i = 0; i < DISPLAY_PMAX; i++ ) // Pages
-    {
-        writeCommand( 0, BASE_PADDR + i );
-        for ( j = 0; j < DISPLAY_YMAX; j++ ) // Y coordinate
-        {
-            writeCommand( 0, BASE_YADDR + j );
-            for ( k = 0; k < DISPLAY_XMAX; k++ ) // X coordinate
-            {
-                writeCommand( 0, BASE_YADDR + k );
-                printf( "Writing at %02i,%02i,%02i.\n", i, j, k );
-                writeData( 0, 0x01 );
-                writeData( 1, 0x01 );
-            };
-        };
-    };
-    // Clean up threads.
-//    pthread_mutex_destroy( &displayBusy );
-//    pthread_exit( NULL );
+    printf( "Display handles are %d & %d.\n", displayHandle1, displayHandle2 );
+    printf( "Backlight handle is %d.\n", backlightHandle );
 
 }
