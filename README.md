@@ -37,7 +37,7 @@ Instructions for installing the rotencvol tcz package in Tiny Core Linux and der
 
 ###piLCD
 
-A program to provide LCD functions for a HD44780 based display. Enables up to 8 custom chars for animation, go to any position and display text. Currently no fancy text modes such as scrolling but theses will be added in due course. It is hoped that there will be some specific animation functions and threading support in the near future.
+A program to provide LCD functions for a HD44780 based display. Enables up to 8 custom chars for animation, go to any position and display text. Has a tickertape mode that can display text many times larger than the screen size by rotating the text left or right. Some animation examples using custom characters and threading are included.
 
 ---
 ###piListControls:
