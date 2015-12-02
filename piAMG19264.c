@@ -85,8 +85,8 @@
     |  17 |  CS2  | GPIO | Chip select (middle).                 |
     |  18 |  CS1  | GPIO | Chip select (right).                  |
     |  19 |  RST  |      | Reset signal.                         |
-    |  16 |  BLA  | +V   | Voltage for backlight (max 5V).       |
-    |  16 |  BLK  | GND  | Ground (0V) for backlight.            |
+    |  20 |  BLA  | +V   | Voltage for backlight (max 5V).       |
+    |  21 |  BLK  | GND  | Ground (0V) for backlight.            |
     +-----+-------+------+---------------------------------------+
 
     Note: Most displays are combinations of up to 3 64x64 modules, each

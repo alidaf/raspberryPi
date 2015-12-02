@@ -1,15 +1,18 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    piI2C:
+    piCorn:
 
-    Orient Display AMG19264 LCD display driver for the Raspberry Pi via a
-    MAX7325 port expander. I2C slave address is either 0x50 or 0x60 according
-    to the MAX7325 data sheet.
+    A driver for the Popcorn C200 display, which is an Orient Display AMG19264
+    LCD connected via a MAX7325 port expander and incorporating a TI LM27966
+    backlight control. I2C slave address is either 0x50 or 0x60 according to
+    the MAX7325 data sheet but i2cdetect gives 0x5d and 0x6d.
+    Slave address of the LM27966 is 0x36 but this is not detected by i2cdetect.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
     Based on the following guides and codes:
-        AMG19264C data sheet
+        AMG19264C data sheet,
+        LM27966 data sheet.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -31,12 +34,12 @@
 
 //  Compilation:
 //
-//  Compile with gcc piI2C.c -o piI2C -lwiringPi
+//  Compile with gcc piCorn.c -o piCorn -lwiringPi
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-//  Authors:        D.Faulke    24/11/2015  This program.
+//  Authors:        D.Faulke    02/12/2015  This program.
 //
 //  Contributors:
 //
@@ -87,8 +90,8 @@
     |  17 |  CS2  | GPIO | Chip select (middle).                 |
     |  18 |  CS1  | GPIO | Chip select (right).                  |
     |  19 |  RST  |      | Reset signal.                         |
-    |  16 |  BLA  | +V   | Voltage for backlight (max 5V).       |
-    |  16 |  BLK  | GND  | Ground (0V) for backlight.            |
+    |  20 |  BLA  | +V   | Voltage for backlight (max 5V).       |
+    |  21 |  BLK  | GND  | Ground (0V) for backlight.            |
     +-----+-------+------+---------------------------------------+
 
     Note: Most displays are combinations of up to 3 64x64 modules, each
@@ -109,6 +112,61 @@
     | 1 | 0 |   :   : Write Data:   :   :   |
     | 1 | 1 |   :   : Read Data :   :   :   |
     +---+---+---+---+---+---+---+---+---+---+
+
+    ---------------------------------------------------------------------------
+
+    LM27966 information:
+
+    Chip address = 0x36.
+
+    +------+------+------+------+------+------+------+------+
+    | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
+    +------+------+------+------+------+------+------+------+
+    | ADR6 | ADR5 | ADR4 | ADR3 | ADR2 | ADR1 | ADR0 | R/W  |
+    +------+------+------+------+------+------+------+------+
+
+    Internal registers:
+
+    General purpose register address = 0x10.
+
+    +--------+--------+--------+--------+--------+--------+--------+--------+
+    |  bit7  |  bit6  |  bit5  |  bit4  |  bit3  |  bit2  |  bit1  |  bit0  |
+    +--------+--------+--------+--------+--------+--------+--------+--------+
+    |    0   |    0   |    1   |   T1   | EN-D5  | EN-AUX |   T0   |EN-MAIN |
+    +--------+--------+--------+--------+--------+--------+--------+--------+
+
+    EN-MAIN : Enables Dx LED drivers (main display).
+    T0      : Must be set to 0.
+    EN-AUX  : Enables Daux LED driver (indicator lighting).
+    EN-D5   : Enables D5 LED voltage sense.
+    T1      : Must be set to 0.
+
+    Main display brightness control register address = 0xa0.
+
+    +------+------+------+------+------+------+------+------+
+    | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
+    +------+------+------+------+------+------+------+------+
+    |   1  |   1  |   1  | Dx4  | Dx3  | Dx2  | Dx1  | Dx0  |
+    +------+------+------+------+------+------+------+------+
+
+    Aux LED brightness control register address = 0xc0.
+
+    +------+------+------+------+------+------+------+------+
+    | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
+    +------+------+------+------+------+------+------+------+
+    |   1  |   1  |   1  |   1  |   1  |   1  |DAUX1 |DAUX0 |
+    +------+------+------+------+------+------+------+------+
+
+    Dx4 - Dx0   : Sets brightness for Dx pins (main display).
+    DAUX1-DAUX0 : Sets brightness for Daux pin.
+
+    Brightness code = 0x00 - 0x1f (1.25% - 100% brightness) for main display.
+    Brightness code = 0x0 - 0x3 (20%, 40%, 70%, 100% brightness).
+
+    ---------------------------------------------------------------------------
+
+
+
 */
 // ============================================================================
 //  Command and constant macros.
