@@ -14,8 +14,9 @@
         - see http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf
         An essential article on LCD initialisation by Donald Weiman.
         - see http://web.alfredstate.edu/weimandn/
-        The wiringPi project copyright 2012 Gordon Henderson
-        - see http://wiringpi.com
+        MCP23017 direct access from simple-on-off.c
+        - see https://github.com/elegantandrogyne/mcp23017-demo/blob/master/
+          simple-on-off.c
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -75,6 +76,11 @@
 #include <time.h>
 #include <pthread.h>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <linux/i2c-dev.h>
+
 // ============================================================================
 //  Information.
 // ============================================================================
@@ -124,7 +130,8 @@
     DDRAM: Display Data RAM.
     CGRAM: Character Generator RAM.
 
-    Pin layout for the MCP23017 port expander and connections used.
+    The MCP23017 is an I2C bus operated 16-bit I/O port expander.
+    The pin layout and connections used are shown below:
 
                     +------+-----+-----+------+
                     |  Fn  | pin | pin |  Fn  |
@@ -137,9 +144,9 @@
        LCD   DB5 <--| GPB5 |  06 | 23  | GPA2 |
        LCD   DB6 <--| GPB6 |  07 | 22  | GPA1 |
        LCD   DB7 <--| GPB7 |  08 | 21  | GPA0 |
-   +5V <-----{------|  VDD |  09 | 20  | INTA |
-    0V <-----{-||---|  VSS |  10 | 19  | INTB |
-             0.1uF  |   NC |  11 | 18  | RST  |-----> +5V
+  +5V <-:-----------|  VDD |  09 | 20  | INTA |
+   0V <-:-0.1uF-||--|  VSS |  10 | 19  | INTB |
+                    |   NC |  11 | 18  | RST  |-----> +5V
         Pi  SCL1 <--|  SCL |  12 | 17  | A2   |----->  0V or +5V
         Pi  SDA1 <--|  SDA |  13 | 16  | A1   |----->  0V or +5V
                     |   NC |  14 | 15  | A0   |----->  0V or +5V
@@ -155,14 +162,69 @@
 
             The RST (hardware reset) pin is kept high for normal operation.
 
-            The I2C address is defined by the A0 to A2 pins:
+            The I2C address device is addressed as follows:
 
-                +---+---+---+---+----+----+----+
-                | 0 | 1 | 0 | 0 | A2 | A1 | A0 |
-                +---+---+---+---+----+----+----+
+                +-----+-----+-----+-----+-----+-----+-----+-----+
+                |  0  |  1  |  0  |  0  |  A2 |  A1 |  A0 | R/W |
+                +-----+-----+-----+-----+-----+-----+-----+-----+
+                : <----------- slave address -----------> :     :
+                : <--------------- control byte --------------> :
 
-            i.e. 0x20 to 0x27 depending on whether pins A0 to A2 are
-                 set high or low.
+                R/W = 0: write.
+                R/W = 1: read.
+
+            The address reported by i2cdetect should be 0x20 to 0x27
+            depending on whether pins A0 to A2 are wired high or low.
+
+    Reading/writing to the MCP23017:
+
+        The MCP23017 has two 8-bit ports (PORTA & PORTB) that can operate in
+        8-bit or 16-bit modes.
+
+        The MCP23017 has 2 sets (PORTS) of 8 GPIOs; GPA0-GPA7 and GPB0-GPB7.
+        They can be written to or read as byte values to address all GPIOs
+        in a PORT simultaneously or sequentially.
+
+        The device address is sent, followed by the register address.
+
+        MCP23017 register addresses:
+
+            +-------+-------+----------+-------------------------------+
+            | BANK1 | BANK0 | Register | Description                   |
+            +-------+-------+----------+-------------------------------+
+            |  0x00 |  0x00 | IODIRA   | IO direction (port A).        |
+            |  0x10 |  0x01 | IODIRB   | IO direction (port B).        |
+            |  0x01 |  0x02 | IPOLA    | Polarity (port A).            |
+            |  0x11 |  0x03 | IPOLB    | Polarity (port B).            |
+            |  0x02 |  0x04 | GPINTENA | Interrupt on change (port A). |
+            |  0x12 |  0x05 | GPINTENB | Interrupt on change (port B). |
+            |  0x03 |  0x06 | DEFVALA  | Default compare (port A).     |
+            |  0x13 |  0x07 | DEFVALB  | Default compare (port B).     |
+            |  0x04 |  0x08 | INTCONA  | Interrupt control (port A).   |
+            |  0x14 |  0x09 | INTCONB  | Interrupt control (port B).   |
+            |  0x05 |  0x0a | IOCON    | Configuration.                |
+            |  0x15 |  0x0b | IOCON    | Configuration.                |
+            |  0x06 |  0x0c | GPPUA    | Pull-up resistors (port A).   |
+            |  0x16 |  0x0d | GPPUB    | Pull-up resistors (port B).   |
+            |  0x07 |  0x0e | INTFA    | Interrupt flag (port A).      |
+            |  0x17 |  0x0f | INTFB    | Interrupt flag (port B).      |
+            |  0x08 |  0x10 | INTCAPA  | Interrupt capture (port A).   |
+            |  0x18 |  0x11 | INTCAPB  | Interrupt capture (port B).   |
+            |  0x09 |  0x12 | GPIOA    | GPIO ports (port A).          |
+            |  0x19 |  0x13 | GPIOB    | GPIO ports (port B).          |
+            |  0x0a |  0x14 | OLATA    | Output latches (port A).      |
+            |  0x1a |  0x15 | OLATB    | Output latches (port B).      |
+            +-------+-------+----------+-------------------------------+
+
+        The IOCON register bits set various configurations including the BANK
+        bit (bit 7).
+        If BANK = 1, the ports are segregated, i.e. 8-bit mode with PORTA
+        mapped from 0x00 to 0x0a and PORTB mapped from 0x10 to 0x1a.
+        If BANK = 0, the ports are paired into 16-bit mode and the registers
+        are mapped from 0x00 - 0x15.
+
+        The pull-up resistors are 100kOhm.
+
 */
 // ============================================================================
 //  Command and constant macros.
@@ -222,6 +284,52 @@
 #define ADDRESS_ROW_2   0x14 // Row 3 start address.
 #define ADDRESS_ROW_3   0x54 // Row 4 start address.
 
+// ----------------------------------------------------------------------------
+
+// MCP23017 specific.
+#define MCP23017_CHIPS         1 // Number of MCP20317 expander chips (max 8).
+
+// I2C base addresses, set according to A0-A2. Maximum of 8.
+#define MCP23017_ADDRESS_0  0x20
+#define MCP23017_ADDRESS_1  0x21 // Dummy address for additional chip.
+#define MCP23017_ADDRESS_2  0x22 // Dummy address for additional chip.
+#define MCP23017_ADDRESS_3  0x23 // Dummy address for additional chip.
+#define MCP23017_ADDRESS_4  0x24 // Dummy address for additional chip.
+#define MCP23017_ADDRESS_5  0x25 // Dummy address for additional chip.
+#define MCP23017_ADDRESS_6  0x26 // Dummy address for additional chip.
+#define MCP23017_ADDRESS_7  0x27 // Dummy address for additional chip.
+
+// MCP23017 register addresses (BANK0).
+#define MCP23017_IODIRA     0x00
+#define MCP23017_IODIRB     0x01
+#define MCP23017_IPOLA      0x02
+#define MCP23017_IPOLB      0x03
+#define MCP23017_GPINTENA   0x04
+#define MCP23017_GPINTENB   0x05
+#define MCP23017_DEFVALA    0x06
+#define MCP23017_DEFVALB    0x07
+#define MCP23017_INTCONA    0x08
+#define MCP23017_INTCONB    0x09
+#define MCP23017_IOCONA     0x0a
+#define MCP23017_IOCONB     0x0b
+#define MCP23017_GPPUA      0x0c
+#define MCP23017_GPPUB      0x0d
+#define MCP23017_INTFA      0x0e
+#define MCP23017_INTFB      0x0f
+#define MCP23017_INTCAPA    0x10
+#define MCP23017_INTCAPB    0x11
+#define MCP23017_GPIOA      0x12
+#define MCP23017_GPIOB      0x13
+#define MCP23017_OLATA      0x14
+#define MCP23017_OLATB      0x15
+
+static const char *device = "/dev/i2c-1";       // Path to I2C file system.
+unsigned char ioBuffer[2];                      // MCP23017 write buffer.
+unsigned char mcp23017Handle[MCP23017_CHIPS];   // Handles for each chip.
+unsigned char mcp23017Address[ MCP23017_CHIPS ] = { MCP23017_ADDRESS_0 }
+
+// ----------------------------------------------------------------------------
+
 // Constants for GPIO states.
 #define GPIO_UNSET         0 // Set GPIO to low.
 #define GPIO_SET           1 // Set GPIO to high.
@@ -248,24 +356,28 @@ pthread_mutex_t displayBusy;
 */
 
 // ----------------------------------------------------------------------------
-//  Data structure for GPIOs.
+//  Data structure for MCP23017 pins.
 // ----------------------------------------------------------------------------
-struct gpioStruct
+struct lcdStruct
 {
-    unsigned char rs;            // GPIO pin for LCD RS pin.
-    unsigned char en;            // GPIO pin for LCD Enable pin.
-    unsigned char rw;            // GPIO pin for R/W mode. Not used.
-    unsigned char db[PINS_DATA]; // GPIO pins for LCD data pins.
-} gpio =
+    unsigned char rs;  // LCD RS pin.
+    unsigned char en;  // LCD Enable pin.
+    unsigned char rw;  // R/W mode pin.
+    unsigned char db4; // LCD data pin.
+    unsigned char db5; // LCD data pin.
+    unsigned char db6; // LCD data pin.
+    unsigned char db7; // LCD data pin.
+} lcdPin =
 // Default values in case no command line parameters are passed.
 {
-    .rs    = 7,   // Pin 26 (RS).
-    .en    = 8,   // Pin 24 (E).
-    .rw    = 11,  // Pin 23 (RW).
-    .db[0] = 25,  // Pin 12 (DB4).
-    .db[1] = 24,  // Pin 16 (DB5).
-    .db[2] = 23,  // Pin 18 (DB6).
-    .db[3] = 18   // Pin 22 (DB7).
+    .rs  = 0x80, // MCP23017 GPB0 -> LCD RS.
+    .en  = 0x40, // MCP23017 GPB1 -> LCD E.
+    .rw  = 0x20, // MCP23017 GPB2 -> LCD RW.
+                 // MCP23017 GPB3 -> not used.
+    .db4 = 0x08, // MCP23017 GPB4 -> LCD DB4.
+    .db5 = 0x04, // MCP23017 GPB5 -> LCD DB5.
+    .db6 = 0x02, // MCP23017 GPB6 -> LCD DB6.
+    .db7 = 0x01  // MCP23017 GPB7 -> LCD DB7.
 };
 
 // ----------------------------------------------------------------------------
@@ -372,7 +484,7 @@ static char writeCommand( unsigned char data )
     unsigned char i;
 
     // Set to command mode.
-    digitalWrite( gpio.rs, GPIO_UNSET );
+    digitalWrite( I2C_BASE_PINS + mcp.lcdRS, GPIO_UNSET );
     delayMicroseconds( 41 );
 
     // High nibble.
@@ -917,15 +1029,20 @@ void *displayTime( void *threadTime )
 };
 
 // ============================================================================
-//  GPIO functions.
+//  MCP23017 functions.
 // ============================================================================
 
 // ----------------------------------------------------------------------------
 //  Initialises GPIOs.
 // ----------------------------------------------------------------------------
-static char initialiseGPIOs( void )
+static char MCP23017init( void )
 {
+    // I2C communication is via device file (/dev/i2c-1)
+
     unsigned char i;
+    for ( i = 0; i < MCP23017_CHIPS; i++ )
+        mcp[i] = open( device, O_RDWR );
+
     wiringPiSetupGpio();
 
     // Set all GPIO pins to 0.
