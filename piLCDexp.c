@@ -137,24 +137,32 @@
        LCD   DB5 <--| GPB5 |  06 | 23  | GPA2 |
        LCD   DB6 <--| GPB6 |  07 | 22  | GPA1 |
        LCD   DB7 <--| GPB7 |  08 | 21  | GPA0 |
-      +5V <--{------|  VDD |  09 | 20  | INTA |
-       0V <--{-||---|  VSS |  10 | 19  | INTB |
-             0.1uF  |   NC |  11 | 18  | RST  |--> +5V
-        Pi  SCL1 <--|  SCL |  12 | 17  | A2   |-->  0V
-        Pi  SDA1 <--|  SDA |  13 | 16  | A1   |-->  0V
-                    |   NC |  14 | 15  | A0   |-->  0V
+   +5V <-----{------|  VDD |  09 | 20  | INTA |
+    0V <-----{-||---|  VSS |  10 | 19  | INTB |
+             0.1uF  |   NC |  11 | 18  | RST  |-----> +5V
+        Pi  SCL1 <--|  SCL |  12 | 17  | A2   |----->  0V or +5V
+        Pi  SDA1 <--|  SDA |  13 | 16  | A1   |----->  0V or +5V
+                    |   NC |  14 | 15  | A0   |----->  0V or +5V
                     +------+-----+-----+------+
 
-    Note: There is a 0.1uF ceramic capaictor across pins 09 and 10
-          for stability.
-          SCL1 and SDA1 are connected to the pi via a logic level shifter
-          to protect the Pi from +5V reads at the pins since I2C is
-          bidirectional. It may be possible to limit the logic levels by
-          attaching VDD to +3.3V instead of 5V, but this may affect
-          responsiveness.
-          The RST (hardware reset) pin is kept high for normal operation.
-          Grounding A0 to A2 sets the I2C address to 0x20.
+    Notes:  There is a 0.1uF ceramic capaictor across pins 09 and 10
+            for stability.
 
+            SCL1 and SDA1 are connected to the pi via a logic level shifter
+            to protect the Pi from +5V reads at the pins since I2C is
+            bidirectional, however, the Pi has resistors to 'pull' the voltage
+            to +3.3V on these pins so the shifter can probably be dropped.
+
+            The RST (hardware reset) pin is kept high for normal operation.
+
+            The I2C address is defined by the A0 to A2 pins:
+
+                +---+---+---+---+----+----+----+
+                | 0 | 1 | 0 | 0 | A2 | A1 | A0 |
+                +---+---+---+---+----+----+----+
+
+            i.e. 0x20 to 0x27 depending on whether pins A0 to A2 are
+                 set high or low.
 */
 // ============================================================================
 //  Command and constant macros.
