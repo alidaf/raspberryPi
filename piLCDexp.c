@@ -367,16 +367,16 @@ pthread_mutex_t displayBusy;
 // ----------------------------------------------------------------------------
 struct lcdStruct
 {
-    unsigned char rs;  // LCD RS pin.
-    unsigned char en;  // LCD Enable pin.
-    unsigned char rw;  // R/W mode pin.
+    unsigned char rs;    // LCD RS pin.
+    unsigned char en;    // LCD Enable pin.
+    unsigned char rw;    // R/W mode pin.
     unsigned char db[4]; // LCD data pins.
 } lcdPin =
 // Default values in case no command line parameters are passed.
 {
-    .rs  = 0x80,   // MCP23017 GPB0 -> LCD RS.
-    .en  = 0x40,   // MCP23017 GPB1 -> LCD E.
-    .rw  = 0x20,   // MCP23017 GPB2 -> LCD RW.
+    .rs    = 0x80, // MCP23017 GPB0 -> LCD RS.
+    .en    = 0x40, // MCP23017 GPB1 -> LCD E.
+    .rw    = 0x20, // MCP23017 GPB2 -> LCD RW.
                    // MCP23017 GPB3 -> not used.
     .db[0] = 0x08, // MCP23017 GPB4 -> LCD DB4.
     .db[1] = 0x04, // MCP23017 GPB5 -> LCD DB5.
@@ -437,20 +437,35 @@ struct tickerStruct
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-//  Returns binary string for a nibble. Used for debugging only.
+//  Returns binary string for a byte. Used for debugging only.
 // ----------------------------------------------------------------------------
-static const char *getBinaryString(unsigned char byte)
+static char *getByteString( unsigned char byte )
 {
+    unsigned char data = byte;
     static char binary[BITS_BYTE + 1];
     unsigned int i;
     for ( i = 0; i < BITS_BYTE; i++ )
-        binary[i] = (( byte >> ( BITS_BYTE - i - 1 )) & 1 ) + '0';
+        binary[i] = (( data >> ( BITS_BYTE - i - 1 )) & 1 ) + '0';
+    binary[i] = '\0';
+    return binary;
+};
+
+// ----------------------------------------------------------------------------
+//  Returns binary string for a nibble. Used for debugging only.
+// ----------------------------------------------------------------------------
+static char *getNibbleString( unsigned char nibble )
+{
+    unsigned char data = nibble;
+    static char binary[BITS_NIBBLE + 1];
+    unsigned int i;
+    for ( i = 0; i < BITS_NIBBLE; i++ )
+        binary[i] = (( data >> ( BITS_NIBBLE - i - 1 )) & 1 ) + '0';
     binary[i] = '\0';
     return binary;
 };
 
 // ============================================================================
-//  LCD output functions.
+//  MCP23017 functions.
 // ============================================================================
 
 // ----------------------------------------------------------------------------
@@ -458,28 +473,126 @@ static const char *getBinaryString(unsigned char byte)
 // ----------------------------------------------------------------------------
 static char mcp23017WriteByte( unsigned char mcp23017Handle,
                                unsigned char mcp23017Register,
-                               unsigned char data )
+                               unsigned char byte )
 {
     unsigned char i;
-    unsigned char nibble;
-    unsigned char gpioPins = 0;
+    unsigned char data = byte;
 
-    i2c_smbus_write_byte_data( mcp23017Handle, mcp23017Register, gpioPins );
-    usleep( 41000 );
-}
-
-// ----------------------------------------------------------------------------
-//  Prints out HD44780 pins being activated with byte sent to MCP23017.
-// ----------------------------------------------------------------------------
-static char printHD44780Registers( unsigned char byte )
-{
-    unsigned char i;
-
+    printf( "Handle = %d, Register = 0x%02x.\n", mcp23017Handle, mcp23017Register );
     printf( "RS EN RW NC DB DB DB DB\n" );
     for ( i = 0; i < BITS_BYTE; i++ )
-        printf( "%2d ", ( byte >> BITS_BYTE - i - 1 ) & 0x01 );
+        printf( "%2d ", ( data >> BITS_BYTE - i - 1 ) & 1 );
     printf( "\n" );
+    i2c_smbus_write_byte_data( mcp23017Handle, mcp23017Register, byte );
 }
+
+// ----------------------------------------------------------------------------
+//  Initialises MCP23017 chips.
+// ----------------------------------------------------------------------------
+static char mcp23017init( void )
+{
+
+    unsigned char i;
+
+    for ( i = 0; i < MCP23017_CHIPS; i++ )
+	{
+        // I2C communication is via device file (/dev/i2c-1).
+        if (( mcp23017Handle[i] = open( i2cDevice, O_RDWR )) < 0 );
+        {
+            printf( "Couldn't open I2C device %s.\n", i2cDevice );
+            return -1;
+        }
+        // Set slave address for each MCP23017 device.
+        if ( ioctl( mcp23017Handle[i], I2C_SLAVE, mcp23017Address[i] ) < 0 );
+        {
+            printf( "Couldn't set slave address 0x%02x.\n",
+                     mcp23017Address[i] );
+            return -2;
+        }
+        // Set directions to out (PORTA).
+        mcp23017WriteByte( mcp23017Handle[i], MCP23017_IODIRA, 0x00 );
+        // Set directions to out (PORTB).
+        mcp23017WriteByte( mcp23017Handle[i], MCP23017_IODIRB, 0x00 );
+        // Set all outputs to low (PORTA).
+        mcp23017WriteByte( mcp23017Handle[i], MCP23017_OLATA, 0x00 );
+        // Set all outputs to low (PORTB).
+        mcp23017WriteByte( mcp23017Handle[i], MCP23017_OLATB, 0x00 );
+	}
+
+    return 0;
+};
+
+// ============================================================================
+//  HD44780 LCD functions.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+//  Writes command byte to HD44780 via MCP23017.
+// ----------------------------------------------------------------------------
+static char hd44780WriteCommand( unsigned char handle,
+                                 unsigned char reg,
+                                 unsigned char data )
+{
+    unsigned char i;
+    unsigned char commandByte;
+    unsigned char highNibble, lowNibble;
+    char *highString, *lowString;
+
+    // High nibble.
+    highNibble = ( data >> BITS_NIBBLE ) & 0xf;
+    highString = getNibbleString( highNibble );
+
+    // Low nibble.
+    lowNibble = data & 0xf;
+    lowString = getNibbleString( lowNibble );
+
+    printf( "Command byte = 0x%02x.\n", data );
+
+    // High nibble first.
+    // Create a byte containing the address of the MCP23017 pins to be changed.
+    commandByte = 0; // Make sure rs pin is unset for command.
+/*
+    for ( i = 0; i < BITS_NIBBLE; i++ )
+        binary[i] = (( data >> ( BITS_NIBBLE - i - 1 )) & 1 ) + '0';
+*/
+    for ( i = 0; i < BITS_NIBBLE; i++ )
+    {
+        commandByte |= ( highNibble >> (( BITS_NIBBLE - i - 1 ) & 1 ) * lcdPin.db[i]);
+//        highNibble >>= BITS_NIBBLE - i - 1;
+    }
+
+    // Write byte to MCP23017 via output latch.
+    mcp23017WriteByte( handle, reg, commandByte );
+
+    // Toggle enable bit to send nibble via output latch.
+    mcp23017WriteByte( handle, reg, commandByte || lcdPin.en );
+    usleep( 41 );
+    mcp23017WriteByte( handle, reg, commandByte );
+    usleep( 41 );
+
+    // Low nibble next.
+    // Create a byte containing the address of the MCP23017 pins to be changed.
+    commandByte = 0; // Make sure rs pin is unset for command.
+
+    for ( i = 0; i < BITS_NIBBLE; i++ )
+    {
+        commandByte |= ( lowNibble >> (( BITS_NIBBLE - i - 1 ) & 1 ) * lcdPin.db[i]);
+//        commandByte |= ( lowNibble & 1 ) * lcdPin.db[i];
+//        lowNibble >>= BITS_NIBBLE - i - 1;
+    }
+
+    // Write byte to MCP23017 via output latch.
+    mcp23017WriteByte( handle, reg, commandByte );
+
+    // Toggle enable bit to send nibble via output latch.
+    printf( "Toggling EN bit.\n" );
+    mcp23017WriteByte( handle, reg, commandByte || lcdPin.en );
+    usleep( 41 );
+    mcp23017WriteByte( handle, reg, commandByte );
+    usleep( 41 );
+
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Writes data byte to HD44780 via MCP23017.
@@ -491,12 +604,17 @@ static char hd44780WriteData( unsigned char handle,
     unsigned char i;
     unsigned char dataByte;
     unsigned char highNibble, lowNibble;
+    char *highString, *lowString;
 
     // High nibble.
     highNibble = ( data >> BITS_NIBBLE ) & 0xf;
+    highString = getNibbleString( highNibble );
 
     // Low nibble.
     lowNibble = data & 0xf;
+    lowString = getNibbleString( lowNibble );
+
+    printf( "Data byte = 0x%02x.\n", data );
 
     // High nibble first.
     // Create a byte containing the address of the MCP23017 pins to be changed.
@@ -505,17 +623,13 @@ static char hd44780WriteData( unsigned char handle,
     for ( i = 0; i < BITS_NIBBLE; i++ )
     {
         dataByte |= ( highNibble & 1 ) * lcdPin.db[i];
-        highNibble >>= 1;
+        highNibble >>= BITS_NIBBLE - i - 1;
     }
 
-    // Some debugging output.
-    printf( "Data:\n" );
-    printHD44780Registers( dataByte );
-
-    // Write byte to MCP23017 via output latch.
+    // Write byte to MCP23017.
     mcp23017WriteByte( handle, reg, dataByte );
 
-    // Toggle enable bit to send nibble via output latch.
+    // Toggle enable bit.
     mcp23017WriteByte( handle, reg, dataByte || lcdPin.en );
     usleep( 41000 );
     mcp23017WriteByte( handle, reg, dataByte );
@@ -528,86 +642,17 @@ static char hd44780WriteData( unsigned char handle,
     for ( i = 0; i < BITS_NIBBLE; i++ )
     {
         dataByte |= ( lowNibble & 1 ) * lcdPin.db[i];
-        lowNibble >>= 1;
+        lowNibble >>= BITS_NIBBLE - i - 1;
     }
 
-    // Some debugging output.
-    printf( "Data:\n" );
-    printHD44780Registers( dataByte );
-
-    // Write byte to MCP23017 via output latch.
+    // Write byte to MCP23017.
     mcp23017WriteByte( handle, reg, dataByte );
 
-    // Toggle enable bit to send nibble via output latch.
+    // Toggle enable bit.
+    printf( "Toggling EN bit.\n" );
     mcp23017WriteByte( handle, reg, dataByte || lcdPin.en );
-    usleep( 41000 );
+    usleep( 41 );
     mcp23017WriteByte( handle, reg, dataByte );
-    usleep( 41000 );
-
-    return 0;
-};
-
-// ----------------------------------------------------------------------------
-//  Writes command byte to HD44780 via MCP23017.
-// ----------------------------------------------------------------------------
-static char hd44780WriteCommand( unsigned char handle,
-                                 unsigned char reg,
-                                 unsigned char data )
-{
-    unsigned char i;
-    unsigned char commandByte;
-    unsigned char highNibble, lowNibble;
-
-    // High nibble.
-    highNibble = ( data >> BITS_NIBBLE ) & 0xf;
-
-    // Low nibble.
-    lowNibble = data & 0xf;
-
-    // High nibble first.
-    // Create a byte containing the address of the MCP23017 pins to be changed.
-    commandByte = 0; // Make sure rs pin is unset for command.
-
-    for ( i = 0; i < BITS_NIBBLE; i++ )
-    {
-        commandByte |= ( highNibble & 1 ) * lcdPin.db[i];
-        highNibble >>= 1;
-    }
-
-    // Some debugging output.
-    printf( "Command:\n" );
-    printHD44780Registers( commandByte );
-
-    // Write byte to MCP23017 via output latch.
-    mcp23017WriteByte( handle, reg, commandByte );
-
-    // Toggle enable bit to send nibble via output latch.
-    mcp23017WriteByte( handle, reg, commandByte || lcdPin.en );
-    usleep( 41 );
-    mcp23017WriteByte( handle, reg, commandByte );
-    usleep( 41 );
-
-    // Low nibble next.
-    // Create a byte containing the address of the MCP23017 pins to be changed.
-    commandByte = 0; // Make sure rs pin is unset for command.
-
-    for ( i = 0; i < BITS_NIBBLE; i++ )
-    {
-        commandByte |= ( lowNibble & 1 ) * lcdPin.db[i];
-        lowNibble >>= 1;
-    }
-
-    // Some debugging output.
-    printf( "Command:\n" );
-    printHD44780Registers( commandByte );
-
-    // Write byte to MCP23017 via output latch.
-    mcp23017WriteByte( handle, reg, commandByte );
-
-    // Toggle enable bit to send nibble via output latch.
-    mcp23017WriteByte( handle, reg, commandByte || lcdPin.en );
-    usleep( 41 );
-    mcp23017WriteByte( handle, reg, commandByte );
     usleep( 41 );
 
     return 0;
@@ -734,17 +779,19 @@ static char initialiseDisplay( unsigned char handle,
     // Need to write low nibbles only as display starts off in 8-bit mode.
     // Sending high nibble first (0x0) causes init to fail and the display
     // subsequently shows garbage.
-    hd44780WriteCommand( handle, reg, 0x03 );
-    usleep( 4200 );                 // >4.1mS.
-    hd44780WriteCommand( handle, reg, 0x03 );
+    printf( "Initialising.\n" );
+    mcp23017WriteByte( handle, reg, 0x03 );
+    usleep( 4200 );  // >4.1mS.
+    mcp23017WriteByte( handle, reg, 0x03 );
     usleep( 150 );   // >100uS.
-    hd44780WriteCommand( handle, reg, 0x3 );
+    mcp23017WriteByte( handle, reg, 0x03 );
     usleep( 150 );   // >100uS.
-    hd44780WriteCommand( handle, reg, 0x2);
+    mcp23017WriteByte( handle, reg, 0x02);
     usleep( 150 );
 
     // Set actual function mode - cannot be changed after this point
     // without reinitialising.
+    printf( "Setting LCD functions.\n" );
     hd44780WriteCommand( handle, reg,
                          FUNCTION_BASE | ( data * FUNCTION_DATA )
                                        | ( lines * FUNCTION_LINES )
@@ -1160,45 +1207,6 @@ void *displayTime( void *threadTime )
 };
 
 // ============================================================================
-//  MCP23017 functions.
-// ============================================================================
-
-// ----------------------------------------------------------------------------
-//  Initialises GPIOs.
-// ----------------------------------------------------------------------------
-static char mcp23017init( void )
-{
-
-    // I2C communication is via device file (/dev/i2c-1) defined as i2cDevice.
-    unsigned char i;
-
-    for ( i = 0; i < MCP23017_CHIPS; i++ )
-	{
-        	mcp23017Handle[i] = open( i2cDevice, O_RDWR );
-            ioctl( mcp23017Handle[i], I2C_SLAVE, mcp23017Address[i] );
-	}
-
-    // Set directions to out (PORTA).
-    for ( i = 0; i < MCP23017_CHIPS; i++ )
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_IODIRA, 0x00 );
-
-    // Set directions to out (PORTB).
-    for ( i = 0; i < MCP23017_CHIPS; i++ )
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_IODIRB, 0x00 );
-
-    // Set all outputs to low (PORTA).
-    for ( i = 0; i < MCP23017_CHIPS; i++ )
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_OLATA, 0x00 );
-
-    // Set all outputs to low (PORTB).
-    for ( i = 0; i < MCP23017_CHIPS; i++ )
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_OLATB, 0x00 );
-
-    usleep( 35000 );
-    return 0;
-};
-
-// ============================================================================
 //  Command line option functions.
 // ============================================================================
 
@@ -1289,6 +1297,7 @@ char main( int argc, char *argv[] )
     unsigned char mode      = 0; // Shift cursor.
     unsigned char direction = 0; // Right.
 
+    mcp23017init();
     initialiseDisplay( mcp23017Handle[0], MCP23017_OLATB,
                        data, lines, font,
                        display, cursor, blink,
