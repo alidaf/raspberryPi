@@ -14,12 +14,8 @@
         - see http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf
         An essential article on LCD initialisation by Donald Weiman.
         - see http://web.alfredstate.edu/weimandn/
-        MCP23017 direct access from simple-on-off.c
-        - see https://github.com/elegantandrogyne/mcp23017-demo/blob/master/
-          simple-on-off.c
-       Unified LCD driver by Dougie Lawson.
-       - see https://github.com/DougieLawson/RaspberryPi/blob/master/
-         Unified_LCD/i2cLcd.c
+        Interfacing with I2C Devices.
+        - see http://elinux.org/Interfacing_with_I2C_Devices
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -330,10 +326,10 @@
 #define MCP23017_OLATA      0x14
 #define MCP23017_OLATB      0x15
 
-static const char *i2cDevice = "/dev/i2c-1";  // Path to I2C file system.
-unsigned char ioBuffer[2];                    // MCP23017 write buffer.
-unsigned char mcp23017Handle[MCP23017_CHIPS]; // Handles for each chip.
-unsigned char mcp23017Address[MCP23017_CHIPS] = { MCP23017_ADDRESS_0 };
+static char *i2cDevice = "/dev/i2c-1";  // Path to I2C file system.
+//static unsigned char ioBuffer[2];                    // MCP23017 write buffer.
+static int mcp23017Handle[MCP23017_CHIPS]; // Handles for each chip.
+static unsigned char mcp23017Address[MCP23017_CHIPS] = { MCP23017_ADDRESS_0 };
 
 // ----------------------------------------------------------------------------
 
@@ -500,14 +496,16 @@ static char mcp23017init( void )
         if (( mcp23017Handle[i] = open( i2cDevice, O_RDWR )) < 0 );
         {
             printf( "Couldn't open I2C device %s.\n", i2cDevice );
-            return -1;
+            printf( "Error code = %d.\n", errno );
+//            return -1;
         }
         // Set slave address for each MCP23017 device.
         if ( ioctl( mcp23017Handle[i], I2C_SLAVE, mcp23017Address[i] ) < 0 );
         {
             printf( "Couldn't set slave address 0x%02x.\n",
                      mcp23017Address[i] );
-            return -2;
+            printf( "Error code = %d.\n", errno );
+//            return -2;
         }
         // Set directions to out (PORTA).
         mcp23017WriteByte( mcp23017Handle[i], MCP23017_IODIRA, 0x00 );
