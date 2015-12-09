@@ -415,6 +415,15 @@ struct lcdStruct
     .db[1] = 0x04, // MCP23017 GPB5 -> LCD DB5.
     .db[2] = 0x02, // MCP23017 GPB6 -> LCD DB6.
     .db[3] = 0x01  // MCP23017 GPB7 -> LCD DB7.
+
+//    .rs    = 0x01, // MCP23017 GPB0 -> LCD RS.
+//    .en    = 0x02, // MCP23017 GPB1 -> LCD E.
+//    .rw    = 0x04, // MCP23017 GPB2 -> LCD RW.
+//                   // MCP23017 GPB3 -> not used.
+//    .db[0] = 0x10, // MCP23017 GPB4 -> LCD DB4.
+//    .db[1] = 0x20, // MCP23017 GPB5 -> LCD DB5.
+//    .db[2] = 0x40, // MCP23017 GPB6 -> LCD DB6.
+//    .db[3] = 0x80  // MCP23017 GPB7 -> LCD DB7.
 };
 /*
     For multiple LCD displays, only the EN pin needs to be unique for each
@@ -554,6 +563,19 @@ static char mcp23017init( void )
 // ============================================================================
 
 // ----------------------------------------------------------------------------
+//  Toggles E (enable) bit in byte mode without changing other bits.
+// ----------------------------------------------------------------------------
+static void hd44780ToggleEnable( unsigned char handle,
+                                 unsigned char reg,
+                                 unsigned char byte )
+{
+    mcp23017WriteByte( handle, reg, byte + lcdPin.en );
+    usleep( 5000 ); // 5mS.
+    mcp23017WriteByte( handle, reg, byte );
+    usleep( 5000 ); // 5mS.
+}
+
+// ----------------------------------------------------------------------------
 //  Writes a command or data byte (according to mode) to HD44780 via MCP23017.
 // ----------------------------------------------------------------------------
 static char hd44780WriteByte( unsigned char handle,
@@ -577,7 +599,8 @@ static char hd44780WriteByte( unsigned char handle,
     mcp23017Byte = mode * lcdPin.rs;    // Set RS pin according to mode.
     for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits.
     {
-        mcp23017Byte |= ((( highNibble >>  i ) & 0x1 ) * lcdPin.db[BITS_NIBBLE - i - 1] );
+        mcp23017Byte |= ((( highNibble >>  i ) & 0x1 ) *
+                            lcdPin.db[BITS_NIBBLE - i - 1] );
     }
 
     // Write byte to MCP23017 via output latch.
@@ -586,17 +609,19 @@ static char hd44780WriteByte( unsigned char handle,
 
     // Toggle enable bit to send nibble via output latch.
     printf( "Toggling EN bit for high nibble.\n" );
-    mcp23017WriteByte( handle, reg, mcp23017Byte + lcdPin.en );
-    usleep( 41 );
-    mcp23017WriteByte( handle, reg, mcp23017Byte );
-    usleep( 41 );
+    hd44780ToggleEnable( handle, reg, mcp23017Byte );
+//    mcp23017WriteByte( handle, reg, mcp23017Byte + lcdPin.en );
+//    usleep( 41 );
+//    mcp23017WriteByte( handle, reg, mcp23017Byte );
+//    usleep( 41 );
 
     // Low nibble next.
     // Create a byte containing the address of the MCP23017 pins to be changed.
     mcp23017Byte = mode * lcdPin.rs;    // Set RS pin according to mode.
     for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits
     {
-        mcp23017Byte |= ((( lowNibble >>  i ) & 0x1 ) * lcdPin.db[BITS_NIBBLE - i - 1] );
+        mcp23017Byte |= ((( lowNibble >>  i ) & 0x1 ) *
+                            lcdPin.db[BITS_NIBBLE - i - 1] );
     }
 
     // Write byte to MCP23017 via output latch.
@@ -605,10 +630,11 @@ static char hd44780WriteByte( unsigned char handle,
 
     // Toggle enable bit to send nibble via output latch.
     printf( "Toggling EN bit for low nibble.\n" );
-    mcp23017WriteByte( handle, reg, mcp23017Byte + lcdPin.en );
-    usleep( 41 );
-    mcp23017WriteByte( handle, reg, mcp23017Byte );
-    usleep( 41 );
+    hd44780ToggleEnable( handle, reg, mcp23017Byte );
+//    mcp23017WriteByte( handle, reg, mcp23017Byte + lcdPin.en );
+//    usleep( 41 );
+//    mcp23017WriteByte( handle, reg, mcp23017Byte );
+//    usleep( 41 );
 
     return 0;
 };
@@ -737,13 +763,17 @@ static char initialiseDisplay( unsigned char handle,
     // subsequently shows garbage.
     printf( "\nInitialising LCD display.\n\n" );
     mcp23017WriteByte( handle, reg, 0x03 );
+    hd44780ToggleEnable( handle, reg, 0x03 );
     usleep( 4200 );  // >4.1mS.
     mcp23017WriteByte( handle, reg, 0x03 );
+    hd44780ToggleEnable( handle, reg, 0x03 );
     usleep( 150 );   // >100uS.
     mcp23017WriteByte( handle, reg, 0x03 );
+    hd44780ToggleEnable( handle, reg, 0x03 );
     usleep( 150 );   // >100uS.
     mcp23017WriteByte( handle, reg, 0x02);
-    usleep( 150 );
+    hd44780ToggleEnable( handle, reg, 0x03 );
+    usleep( 50 );   // >37uS.
 
     // Set actual function mode - cannot be changed after this point
     // without reinitialising.
