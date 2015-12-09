@@ -166,11 +166,11 @@ static struct cmdOptionsStruct cmdOptions =
 {
     .card = "hw:0",         // 1st ALSA card.
     .mixer = "PCM",         // Default ALSA control.
-    .volumeGPIO1 = 14,      // GPIO 1 for volume encoder.
-    .volumeGPIO2 = 15,      // GPIO 2 for volume encoder.
+    .volumeGPIO1 = 23,      // GPIO 1 for volume encoder.
+    .volumeGPIO2 = 24,      // GPIO 2 for volume encoder.
     .volMuteGPIO = 2,       // GPIO for mute/unmute button.
-    .balanceGPIO1 = 23,     // GPIO1 for balance encoder.
-    .balanceGPIO2 = 24,     // GPIO2 for balance encoder.
+    .balanceGPIO1 = 14,     // GPIO1 for balance encoder.
+    .balanceGPIO2 = 15,     // GPIO2 for balance encoder.
     .balResetGPIO = 3,      // GPIO for balance reset button.
     .volume = 0,            // Start muted.
     .minimum = 0,           // 0% of Maximum output level.
