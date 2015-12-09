@@ -231,6 +231,12 @@
 //  Command and constant macros.
 // ============================================================================
 
+// Debugging ------------------------------------------------------------------
+
+#define DEBUG 1 // 0 = no output, 1 = print output
+
+// LCD display ----------------------------------------------------------------
+
 // Constants. Change these according to needs.
 #define BITS_BYTE          8 // Number of bits in a byte.
 #define BITS_NIBBLE        4 // Number of bits in a nibble.
@@ -285,9 +291,8 @@
 #define ADDRESS_ROW_2   0x14 // Row 3 start address.
 #define ADDRESS_ROW_3   0x54 // Row 4 start address.
 
-// ----------------------------------------------------------------------------
+// MCP23017 -------------------------------------------------------------------
 
-// MCP23017 specific.
 #define MCP23017_CHIPS         1 // Number of MCP20317 expander chips (max 8).
 
 // I2C base addresses, set according to A0-A2. Maximum of 8.
@@ -300,7 +305,7 @@
 #define MCP23017_ADDRESS_6  0x26 // Dummy address for additional chip.
 #define MCP23017_ADDRESS_7  0x27 // Dummy address for additional chip.
 
-// MCP23017 register addresses (BANK0).
+// MCP23017 register addresses ( IOCON.BANK = 0).
 #define MCP23017_IODIRA     0x00
 #define MCP23017_IODIRB     0x01
 #define MCP23017_IPOLA      0x02
@@ -324,11 +329,49 @@
 #define MCP23017_OLATA      0x14
 #define MCP23017_OLATB      0x15
 
-static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
-static int mcp23017Handle[MCP23017_CHIPS];   // Handles for each chip.
-static unsigned char mcp23017Address[MCP23017_CHIPS] = { MCP23017_ADDRESS_0 };
+// MCP23017 register addresses (IOCON.BANK = 1).
+/* Not used.
+#define MCP23017_IODIRA     0x00
+#define MCP23017_IODIRB     0x10
+#define MCP23017_IPOLA      0x01
+#define MCP23017_IPOLB      0x11
+#define MCP23017_GPINTENA   0x02
+#define MCP23017_GPINTENB   0x12
+#define MCP23017_DEFVALA    0x03
+#define MCP23017_DEFVALB    0x13
+#define MCP23017_INTCONA    0x04
+#define MCP23017_INTCONB    0x14
+#define MCP23017_IOCONA     0x05
+#define MCP23017_IOCONB     0x15
+#define MCP23017_GPPUA      0x06
+#define MCP23017_GPPUB      0x16
+#define MCP23017_INTFA      0x07
+#define MCP23017_INTFB      0x17
+#define MCP23017_INTCAPA    0x08
+#define MCP23017_INTCAPB    0x18
+#define MCP23017_GPIOA      0x09
+#define MCP23017_GPIOB      0x19
+#define MCP23017_OLATA      0x0a
+#define MCP23017_OLATB      0x1a
+*/
 
-// ----------------------------------------------------------------------------
+static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
+static int mcp23017ID[MCP23017_CHIPS];       // IDs (handles) for each chip.
+
+// Array of addresses for each MCP23017.
+static unsigned char mcp23017Addr[MCP23017_CHIPS] = { MCP23017_ADDRESS_0 };
+/*
+    = { MCP23017_ADDRESS_0,
+        MCP23017_ADDRESS_1,
+        MCP23017_ADDRESS_2,
+        MCP23017_ADDRESS_3,
+        MCP23017_ADDRESS_4,
+        MCP23017_ADDRESS_5,
+        MCP23017_ADDRESS_6,
+        MCP23017_ADDRESS_7 }
+*/
+
+// Text -----------------------------------------------------------------------
 
 // Constants for display alignment and ticker directions.
 enum textAlignment_t { LEFT, CENTRE, RIGHT };
@@ -337,10 +380,10 @@ enum textAlignment_t { LEFT, CENTRE, RIGHT };
 enum timeFormat_t { HMS, HM };
 enum dateFormat_t { DAY_DMY, DAY_DM, DAY_D, DMY };
 
+// Multithreading -------------------------------------------------------------
+
 // Define a mutex to allow concurrent display routines.
-/*
-    Mutex needs to lock before any cursor positioning or write functions.
-*/
+// Mutex needs to lock before any cursor positioning or write functions.
 pthread_mutex_t displayBusy;
 
 // ============================================================================
@@ -373,6 +416,10 @@ struct lcdStruct
     .db[2] = 0x02, // MCP23017 GPB6 -> LCD DB6.
     .db[3] = 0x01  // MCP23017 GPB7 -> LCD DB7.
 };
+/*
+    For multiple LCD displays, only the EN pin needs to be unique for each
+    display. The data pins (DB4-DB7) and the RS and RW pins can be shared.
+*/
 
 // ----------------------------------------------------------------------------
 //  Data structures for displaying text.
@@ -448,13 +495,13 @@ static char *getBinaryString( unsigned char data, unsigned char bits )
 //  Writes byte to register of MCP23017.
 // ----------------------------------------------------------------------------
 static char mcp23017WriteByte( unsigned char handle,
-                               unsigned char reg,
-                               unsigned char byte )
+                                  unsigned char reg,
+                                  unsigned char byte )
 {
     unsigned char i;
     unsigned char data = byte;
 
-    printf( "Handle = %d, Register = 0x%02x.\n", handle, reg );
+    printf( "I2C handle = %d, MCP23017 register = 0x%02x.\n", handle, reg );
     printf( "RS EN RW NC DB DB DB DB\n" );
     for ( i = 0; i < BITS_BYTE; i++ )
         printf( "%2d ", ( data >> BITS_BYTE - i - 1 ) & 1 );
@@ -473,30 +520,30 @@ static char mcp23017init( void )
     for ( i = 0; i < MCP23017_CHIPS; i++ )
 	{
         // I2C communication is via device file (/dev/i2c-1).
-        if (( mcp23017Handle[i] = open( i2cDevice, O_RDWR )) < 0 )
+        if (( mcp23017ID[i] = open( i2cDevice, O_RDWR )) < 0 )
         {
             printf( "Couldn't open I2C device %s.\n", i2cDevice );
             printf( "Error code = %d.\n", errno );
             return -1;
         }
         // Set slave address for each MCP23017 device.
-        if ( ioctl( mcp23017Handle[i], I2C_SLAVE, mcp23017Address[i] ) < 0 )
+        if ( ioctl( mcp23017ID[i], I2C_SLAVE, mcp23017Addr[i] ) < 0 )
         {
             printf( "Couldn't set slave address 0x%02x.\n",
-                     mcp23017Address[i] );
+                     mcp23017Addr[i] );
             printf( "Error code = %d.\n", errno );
             return -2;
         }
 
         printf( "\nSetting up MCP23017.\n\n" );
         // Set directions to out (PORTA).
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_IODIRA, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_IODIRA, 0x00 );
         // Set directions to out (PORTB).
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_IODIRB, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_IODIRB, 0x00 );
         // Set all outputs to low (PORTA).
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_OLATA, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_OLATA, 0x00 );
         // Set all outputs to low (PORTB).
-        mcp23017WriteByte( mcp23017Handle[i], MCP23017_OLATB, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_OLATB, 0x00 );
 	}
 
     return 0;
@@ -517,63 +564,48 @@ static char hd44780WriteByte( unsigned char handle,
     unsigned char i;
     unsigned char mcp23017Byte;
     unsigned char highNibble, lowNibble;
-    char *highString, *lowString;
 
     // LCD is in 4-bit mode so byte needs to be separated into nibbles.
-
-    // High nibble.
     highNibble = ( data >> BITS_NIBBLE ) & 0xf;
-    highString = getBinaryString( highNibble, BITS_NIBBLE );
-
-    // Low nibble.
     lowNibble = data & 0xf;
-    lowString = getBinaryString( lowNibble, BITS_NIBBLE );
 
     if ( !mode ) printf( "\nCommand byte = 0x%02x.\n", data );
     else printf( "\nData byte = 0x%02x.\n", data );
 
     // High nibble first.
     // Create a byte containing the address of the MCP23017 pins to be changed.
-    mcp23017Byte = mode * lcdPin.rs; // Make sure rs pin is set appropriately.
-/*
-    for ( i = 0; i < BITS_NIBBLE; i++ )
-        binary[i] = (( data >> ( BITS_NIBBLE - i - 1 )) & 1 ) + '0';
-*/
-    for ( i = 0; i < BITS_NIBBLE; i++ )
+    mcp23017Byte = mode * lcdPin.rs;    // Set RS pin according to mode.
+    for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits.
     {
-        mcp23017Byte |= ( highNibble >>
-                        (( BITS_NIBBLE - i - 1 ) & 1 ) * lcdPin.db[i]);
-//        highNibble >>= BITS_NIBBLE - i - 1;
+        mcp23017Byte |= ((( highNibble >>  i ) & 0x1 ) * lcdPin.db[BITS_NIBBLE - i - 1] );
     }
 
     // Write byte to MCP23017 via output latch.
+    printf( "Writing high nibble 0x%x.\n", highNibble );
     mcp23017WriteByte( handle, reg, mcp23017Byte );
 
     // Toggle enable bit to send nibble via output latch.
     printf( "Toggling EN bit for high nibble.\n" );
-    mcp23017WriteByte( handle, reg, mcp23017Byte || lcdPin.en );
+    mcp23017WriteByte( handle, reg, mcp23017Byte + lcdPin.en );
     usleep( 41 );
     mcp23017WriteByte( handle, reg, mcp23017Byte );
     usleep( 41 );
 
     // Low nibble next.
     // Create a byte containing the address of the MCP23017 pins to be changed.
-    mcp23017Byte = mode * lcdPin.rs; // Make sure rs pin is set appropriately.
-
-    for ( i = 0; i < BITS_NIBBLE; i++ )
+    mcp23017Byte = mode * lcdPin.rs;    // Set RS pin according to mode.
+    for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits
     {
-        mcp23017Byte |= ( lowNibble >>
-                        (( BITS_NIBBLE - i - 1 ) & 1 ) * lcdPin.db[i]);
-//        commandByte |= ( lowNibble & 1 ) * lcdPin.db[i];
-//        lowNibble >>= BITS_NIBBLE - i - 1;
+        mcp23017Byte |= ((( lowNibble >>  i ) & 0x1 ) * lcdPin.db[BITS_NIBBLE - i - 1] );
     }
 
     // Write byte to MCP23017 via output latch.
+    printf( "Writing low nibble 0x%x.\n", lowNibble );
     mcp23017WriteByte( handle, reg, mcp23017Byte );
 
     // Toggle enable bit to send nibble via output latch.
     printf( "Toggling EN bit for low nibble.\n" );
-    mcp23017WriteByte( handle, reg, mcp23017Byte || lcdPin.en );
+    mcp23017WriteByte( handle, reg, mcp23017Byte + lcdPin.en );
     usleep( 41 );
     mcp23017WriteByte( handle, reg, mcp23017Byte );
     usleep( 41 );
@@ -703,7 +735,7 @@ static char initialiseDisplay( unsigned char handle,
     // Need to write low nibbles only as display starts off in 8-bit mode.
     // Sending high nibble first (0x0) causes init to fail and the display
     // subsequently shows garbage.
-    printf( "\nInitialising.\n\n" );
+    printf( "\nInitialising LCD display.\n\n" );
     mcp23017WriteByte( handle, reg, 0x03 );
     usleep( 4200 );  // >4.1mS.
     mcp23017WriteByte( handle, reg, 0x03 );
@@ -715,7 +747,7 @@ static char initialiseDisplay( unsigned char handle,
 
     // Set actual function mode - cannot be changed after this point
     // without reinitialising.
-    printf( "\nSetting LCD functions.\n\n" );
+    printf( "\nSetting LCD functions.\n" );
     hd44780WriteByte( handle, reg,
                       FUNCTION_BASE | ( data * FUNCTION_DATA )
                                     | ( lines * FUNCTION_LINES )
@@ -752,6 +784,7 @@ static char initialiseDisplay( unsigned char handle,
     // Wipe any previous display.
     displayClear( handle, reg );
 
+    printf( "\nFinished initialising LCD display.\n" );
     return 0;
 };
 
@@ -917,7 +950,7 @@ static void *displayPacMan( void *rowPtr )
 
     // Load custom characters into CGRAM.
     pthread_mutex_lock( &displayBusy );
-    loadCustom( mcp23017Handle[0], MCP23017_OLATB, pacMan );
+    loadCustom( mcp23017ID[0], MCP23017_OLATB, pacMan );
     pthread_mutex_unlock( &displayBusy );
 
     unsigned char i, j;     // i = position counter, j = frame counter.
@@ -929,9 +962,9 @@ static void *displayPacMan( void *rowPtr )
             for ( j = 0; j < numFrames; j++ )
             {
                 pthread_mutex_lock( &displayBusy );
-                hd44780Goto( mcp23017Handle[0],
+                hd44780Goto( mcp23017ID[0],
                              MCP23017_OLATB, row, i );
-                hd44780WriteByte( mcp23017Handle[0],
+                hd44780WriteByte( mcp23017ID[0],
                                   MCP23017_OLATB,
                                   pacManRight[j],
                                   MODE_DATA );
@@ -939,9 +972,9 @@ static void *displayPacMan( void *rowPtr )
             if (( i - 2 ) > 0 )
                 {
                     pthread_mutex_lock( &displayBusy );
-                    hd44780Goto( mcp23017Handle[0],
+                    hd44780Goto( mcp23017ID[0],
                                  MCP23017_OLATB, row, i - 2 );
-                    hd44780WriteByte( mcp23017Handle[0],
+                    hd44780WriteByte( mcp23017ID[0],
                                       MCP23017_OLATB,
                                       ghost[j],
                                       MODE_DATA );
@@ -950,9 +983,9 @@ static void *displayPacMan( void *rowPtr )
                 if (( i - 3 ) > 0 )
                 {
                     pthread_mutex_lock( &displayBusy );
-                    hd44780Goto( mcp23017Handle[0],
+                    hd44780Goto( mcp23017ID[0],
                                  MCP23017_OLATB, row, i - 3 );
-                    hd44780WriteByte( mcp23017Handle[0],
+                    hd44780WriteByte( mcp23017ID[0],
                                       MCP23017_OLATB,
                                       ghost[j],
                                       MODE_DATA );
@@ -961,9 +994,9 @@ static void *displayPacMan( void *rowPtr )
                 if (( i - 4 ) > 0 )
                 {
                     pthread_mutex_lock( &displayBusy );
-                    hd44780Goto( mcp23017Handle[0],
+                    hd44780Goto( mcp23017ID[0],
                                  MCP23017_OLATB, row, i - 4 );
-                    hd44780WriteByte( mcp23017Handle[0],
+                    hd44780WriteByte( mcp23017ID[0],
                                       MCP23017_OLATB,
                                       ghost[j],
                                       MODE_DATA );
@@ -972,9 +1005,9 @@ static void *displayPacMan( void *rowPtr )
                 if (( i - 5 ) > 0 )
                 {
                     pthread_mutex_lock( &displayBusy );
-                    hd44780Goto( mcp23017Handle[0],
+                    hd44780Goto( mcp23017ID[0],
                                  MCP23017_OLATB, row, i - 5 );
-                    hd44780WriteByte( mcp23017Handle[0],
+                    hd44780WriteByte( mcp23017ID[0],
                                       MCP23017_OLATB,
                                       ghost[j],
                                       MODE_DATA );
@@ -983,8 +1016,8 @@ static void *displayPacMan( void *rowPtr )
                 nanosleep( &sleepTime, NULL );
             }
             pthread_mutex_lock( &displayBusy );
-            hd44780Goto( mcp23017Handle[0], MCP23017_OLATB, row, 0 );
-            hd44780WriteString( mcp23017Handle[0],
+            hd44780Goto( mcp23017ID[0], MCP23017_OLATB, row, 0 );
+            hd44780WriteString( mcp23017ID[0],
                                 MCP23017_OLATB,
                                 "                " );
             pthread_mutex_unlock( &displayBusy );
@@ -1069,8 +1102,8 @@ static void *displayTicker( void *threadTicker )
 
         // Lock thread and display ticker text.
         pthread_mutex_lock( &displayBusy );
-        hd44780Goto( mcp23017Handle[0], MCP23017_OLATB, 1, 0 );
-        hd44780WriteString( mcp23017Handle[0], MCP23017_OLATB, displayText );
+        hd44780Goto( mcp23017ID[0], MCP23017_OLATB, 1, 0 );
+        hd44780WriteString( mcp23017ID[0], MCP23017_OLATB, displayText );
         pthread_mutex_unlock( &displayBusy );
 
         // Delay for readability.
@@ -1120,8 +1153,8 @@ void *displayTime( void *threadTime )
                                                timePtr->tm_min,
                                                timePtr->tm_sec );
         pthread_mutex_lock( &displayBusy );
-        hd44780Goto( mcp23017Handle[0], MCP23017_OLATB, text->row, pos );
-        hd44780WriteString( mcp23017Handle[0], MCP23017_OLATB, timeString );
+        hd44780Goto( mcp23017ID[0], MCP23017_OLATB, text->row, pos );
+        hd44780WriteString( mcp23017ID[0], MCP23017_OLATB, timeString );
         pthread_mutex_unlock( &displayBusy );
         nanosleep( &sleepTime, NULL );
 
@@ -1132,8 +1165,8 @@ void *displayTime( void *threadTime )
                                                timePtr->tm_min,
                                                timePtr->tm_sec );
         pthread_mutex_lock( &displayBusy );
-        hd44780Goto( mcp23017Handle[0], MCP23017_OLATB, text->row, pos );
-        hd44780WriteString( mcp23017Handle[0], MCP23017_OLATB, timeString );
+        hd44780Goto( mcp23017ID[0], MCP23017_OLATB, text->row, pos );
+        hd44780WriteString( mcp23017ID[0], MCP23017_OLATB, timeString );
         pthread_mutex_unlock( &displayBusy );
         nanosleep( &sleepTime, NULL );
     }
@@ -1232,7 +1265,7 @@ char main( int argc, char *argv[] )
     unsigned char direction = 0; // Right.
 
     mcp23017init();
-    initialiseDisplay( mcp23017Handle[0], MCP23017_OLATB,
+    initialiseDisplay( mcp23017ID[0], MCP23017_OLATB,
                        data, lines, font,
                        display, cursor, blink,
                        counter, shift,
@@ -1278,8 +1311,8 @@ char main( int argc, char *argv[] )
     {
     };
 
-    displayClear( mcp23017Handle[0], MCP23017_OLATB );
-    displayHome( mcp23017Handle[0], MCP23017_OLATB );
+    displayClear( mcp23017ID[0], MCP23017_OLATB );
+    displayHome( mcp23017ID[0], MCP23017_OLATB );
 
     // Clean up threads.
     pthread_mutex_destroy( &displayBusy );
