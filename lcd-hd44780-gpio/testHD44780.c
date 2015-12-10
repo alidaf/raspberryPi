@@ -27,8 +27,9 @@
 
 //  Compilation:
 //
-//  Compile with gcc testHD44780.c -o testHD44780 -lwiringPi -lpthread
-//                                                -lhd44780Pi
+//  Compile with gcc testHD44780.c hd44780.c -Wall -o testHD44780
+//                   -lwiringPi -lpthread -lhd44780Pi
+//
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
