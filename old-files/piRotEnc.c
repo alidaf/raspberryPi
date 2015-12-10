@@ -245,12 +245,12 @@ long getSoftValue( float volume, float min, float max )
 // ============================================================================
 static void setVolumeMixer( struct volumeStruct volume, char body )
 {
-    snd_ctl_t *ctlHandle;               // Simple control handle.
-    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
-    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
-    snd_ctl_elem_type_t ctlType;        // Simple control element type.
-    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
-    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
+//    snd_ctl_t *ctlHandle;               // Simple control handle.
+//    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
+//    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
+//    snd_ctl_elem_type_t ctlType;        // Simple control element type.
+//    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
+//    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
 
     snd_mixer_t *mixerHandle;           // Mixer handle.
     snd_mixer_selem_id_t *mixerId;      // Mixer simple element identifier.
@@ -276,7 +276,7 @@ static void setVolumeMixer( struct volumeStruct volume, char body )
     // Hardware volume limits.
     long hardMin, hardMax;
     snd_mixer_selem_get_playback_volume_range( mixerElem, &hardMin, &hardMax );
-    long hardRange = hardMax - hardMin;
+//    long hardRange = hardMax - hardMin;
 
     // Soft volume limits.
     long softMin = getSoftValue( volume.minimum, hardMin, hardMax );
@@ -345,14 +345,14 @@ static void setVolumeMixer( struct volumeStruct volume, char body )
             printf( "\t+-----+-----+--------+--------+--------+--------+\n" );
             printf( "\t| L   | R   | L      | R      | L      | R      |\n" );
             printf( "\t+-----+-----+--------+--------+--------+--------+\n" );
-            printf( "\t| %3i | %3i | %6d | %6d | %6d | %6d |\n",
+            printf( "\t| %3i | %3i | %6ld | %6ld | %6ld | %6ld |\n",
                     indexLeft, indexRight,
                     linearLeft, linearRight,
                     mappedLeft, mappedRight );
         }
         else
         {
-            printf( "\t| %3i | %3i | %6d | %6d | %6d | %6d |\n",
+            printf( "\t| %3i | %3i | %6ld | %6ld | %6ld | %6ld |\n",
                     indexLeft, indexRight,
                     linearLeft, linearRight,
                     mappedLeft, mappedRight );
@@ -705,9 +705,9 @@ static int checkParams ( struct cmdOptionsStruct cmdOptions,
 // ============================================================================
 //  Main section.
 // ============================================================================
-char main( int argc, char *argv[] )
+int main( int argc, char *argv[] )
 {
-    static int error = 0; // Error trapping flag.
+//    static int error = 0; // Error trapping flag.
 
     // ------------------------------------------------------------------------
     //  Get command line arguments and check within bounds.
