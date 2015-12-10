@@ -1,9 +1,9 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    libsoundPi:
+    alsaPi:
 
-    Sound control driver for the Raspberry Pi.
+    ALSA based sound driver for the Raspberry Pi.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
         ALSA routines based on amixer, 2000 Jaroslev Kysela.
@@ -24,6 +24,13 @@
 */
 // ****************************************************************************
 // ****************************************************************************
+
+//  Compilation:
+//
+//  Compile with gcc -c -fpic alsaPi.c -lasound -lm
+//  Also use the following flags for Raspberry Pi optimisation:
+//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+//         -ffast-math -pipe -O3
 
 #define Version "Version 0.1"
 
@@ -51,52 +58,14 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include "alsaPi.h"
 
 // ============================================================================
 // Data structures and types.
 // ============================================================================
-
-struct soundStruct
-{
-    char *card;          // ALSA card ID.
-    char *mixer;         // ALSA mixer ID.
-    float factor;        // Volume mapping factor.
-    unsigned char index; // Relative index for volume level.
-    unsigned char incs;  // Number of increments over volume range.
-    int min;             // Minimum volume (hardware dependent).
-    int max;             // Maximum volume (hardware dependent).
-    int range;           // Volume range (hardware dependent).
-    int volume;          // Volume level.
-    char balance;         // Relative balance -100(%) to +100(%).
-    bool mute;           // Mute switch.
-    bool print;          // Print output switch.
-} sound =
-//  Set default values.
-{
-    .card = "hw:0",
-    .mixer = "default",
-    .factor = 1.0,
-    .index = 0,
-    .incs = 20,
-    .volume = 0,
-    .mute = false,
-    .print = false
-};
-
-// ALSA control types.
-snd_ctl_t *ctlHandle;             // Simple control handle.
-snd_ctl_elem_id_t *ctlId;         // Simple control element id.
-snd_ctl_elem_value_t *ctlControl; // Simple control element value.
-snd_ctl_elem_type_t ctlType;      // Simple control element type.
-snd_ctl_elem_info_t *ctlInfo;     // Simple control element info container.
-snd_ctl_card_info_t *ctlCard;     // Simple control card info container.
-
-// ALSA mixer types.
-snd_mixer_t *mixerHandle;         // Mixer handle.
-snd_mixer_selem_id_t *mixerId;    // Mixer simple element identifier.
-snd_mixer_elem_t *mixerElem;      // Mixer element handle.
-
-bool header = false; // Flag to print header on 1st set volume.
+/*
+    Global types are defined in libsoundPi.h
+*/
 
 // ============================================================================
 //  Functions.
@@ -105,7 +74,28 @@ bool header = false; // Flag to print header on 1st set volume.
 // ----------------------------------------------------------------------------
 //  Initialises hardware and returns info in soundStruct.
 // ----------------------------------------------------------------------------
-void soundOpen( struct soundStruct sound );
+void soundOpen( struct soundStruct sound )
+{
+    //  Set up ALSA mixer.
+    snd_mixer_open( &mixerHandle, 0 );
+    snd_mixer_attach( mixerHandle, sound.card );
+    snd_mixer_load( mixerHandle );
+    snd_mixer_selem_register( mixerHandle, NULL, NULL );
+
+    snd_mixer_selem_id_alloca( &mixerId );
+    snd_mixer_selem_id_set_name( mixerId, sound.mixer );
+    mixerElem = snd_mixer_find_selem( mixerHandle, mixerId );
+    snd_mixer_selem_get_id( mixerElem, mixerId );
+
+    // Get hardware volume limits.
+    long min, max;
+    snd_mixer_selem_get_playback_volume_range( mixerElem, &min, &max );
+    sound.min = min;
+    sound.max = max;
+    sound.range = max - min;
+
+    return;
+}
 
 // ----------------------------------------------------------------------------
 //  Sets soundStruct.index for a given volume.
@@ -116,7 +106,14 @@ void soundOpen( struct soundStruct sound );
     number of increments over the possible range.
     Should be called after soundOpen if the starting volume is not zero.
 */
-void setIndex( int volume );
+void setIndex( int volume )
+    // Get closest volume index for starting volume.
+{
+    sound.index = ( sound.incs - ( sound.max - volume ) *
+                    sound.incs / ( sound.max - sound.min ));
+    return;
+};
+
 
 // ----------------------------------------------------------------------------
 //  Calculates volume based on index. Returns value in soundStruct.
@@ -130,24 +127,92 @@ void setIndex( int volume );
     factor = 1, linear.
     factor > 1, exponential.
 */
-long calcVol( float index, float incs, float range, float min, float factor );
+long calcVol( float index, float incs, float range, float min, float factor )
+{
+    long volume;
+
+    if ( factor == 1 )
+         volume = lroundf(( sound.index / sound.incs * sound.range ) + sound.min );
+    else volume = lroundf((( pow( factor, index / incs ) - 1 ) /
+                                ( sound.factor - 1 ) * sound.range + sound.min ));
+    return volume;
+};
 
 // ----------------------------------------------------------------------------
 //  Set volume using ALSA mixers.
 // ----------------------------------------------------------------------------
-void setVol( void );
+void setVol( void )
+{
+
+    long linearVol; // Linear volume. Used for debugging.
+
+    sound.volume = calcVol( sound.index,
+                            sound.incs,
+                            sound.range,
+                            sound.min,
+                            sound.factor );
+
+    // If control is mono then FL will set volume.
+    snd_mixer_selem_set_playback_volume( mixerElem,
+            SND_MIXER_SCHN_FRONT_LEFT, sound.volume );
+    snd_mixer_selem_set_playback_volume( mixerElem,
+            SND_MIXER_SCHN_FRONT_RIGHT, sound.volume );
+
+    if ( sound.print ) // Print output if requested. For debugging.
+    {
+        linearVol = calcVol( sound.index,
+                             sound.incs,
+                             sound.range,
+                             sound.min,
+                             sound.factor );
+
+        if ( header == false ) // Print out header block.
+        {
+            printf( "\n" );
+            printf( "\t+-----------+-----------------+-----------------+\n" );
+            printf( "\t| indices   | Linear Volume   | Mapped Volume   |\n" );
+            printf( "\t+-----+-----+--------+--------+--------+--------+\n" );
+            printf( "\t| L   | R   | L      | R      | L      | R      |\n" );
+            printf( "\t+-----+-----+--------+--------+--------+--------+\n" );
+
+            header = true;
+        }
+        printf( "\t| %3i | %3i | %6ld | %6ld | %6d | %6d |\n",
+                sound.index, sound.index,
+                linearVol, linearVol,
+                sound.volume, sound.volume );
+    }
+
+    return;
+};
 
 // ----------------------------------------------------------------------------
 //  Increases volume.
 // ----------------------------------------------------------------------------
-void incVol( void );
+void incVol( void )
+{
+    if ( sound.index >= sound.incs ) sound.index = sound.incs;
+    else sound.index++;
+    setVol();
+};
 
 // ----------------------------------------------------------------------------
 //  Increases volume.
 // ----------------------------------------------------------------------------
-void decVol( void );
+void decVol( void )
+{
+    if ( sound.index <= 0 ) sound.index = 0;
+    else sound.index--;
+    setVol();
+};
 
 // ----------------------------------------------------------------------------
 //  Detaches and closes ALSA.
 // ----------------------------------------------------------------------------
-void soundClose( void );
+void soundClose( void )
+{
+    snd_mixer_detach( mixerHandle, sound.card );
+    snd_mixer_close( mixerHandle );
+
+    return;
+};

@@ -1,7 +1,7 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    piSetVolMixer:
+    setVolMixer:
 
     Simple app to set volume using ALSA mixer controls.
 
@@ -27,7 +27,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc piSetVolMixer.c -o piSetVolMixer -lasound -lm
+//  Compile with gcc setVolMixer.c -Wall -o setVolMixer -lasound -lm
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -49,19 +49,17 @@
 #include <argp.h>
 #include <math.h>
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  argp documentation.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 const char *argp_program_version = Version;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
 static char doc[] = "A short test program to set ALSA mixer values.";
 static char args_doc[] = "alsavolmixer <options>";
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  Data definitions.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 // Data structure to hold command line arguments.
 struct volumeStruct
 {
@@ -72,10 +70,9 @@ struct volumeStruct
     unsigned int right;
 };
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  Command line argument definitions.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 static struct argp_option options[] =
 {
     { 0, 0, 0, 0, "Card information:" },
@@ -87,10 +84,9 @@ static struct argp_option options[] =
     { 0 }
 };
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  Command line argument parser.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 static int parse_opt( int param, char *arg, struct argp_state *state )
 {
     char *str;
@@ -123,15 +119,14 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
     return 0;
 };
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  argp parser parameter structure.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 //  Returns mapped volume based on shaping factor.
-// ============================================================================
+// ----------------------------------------------------------------------------
 /*
     mappedVolume = ( factor^fraction - 1 ) / ( base - 1 )
     fraction = linear volume / volume range.
@@ -153,23 +148,21 @@ static long getVolume( float volume, float factor,
     return mappedVolume;
 };
 
-
-// ============================================================================
+// ----------------------------------------------------------------------------
 //  Set volume using ALSA mixers.
-// ============================================================================
+// ----------------------------------------------------------------------------
 static void setVolume( struct volumeStruct volume )
 {
-    snd_ctl_t *ctlHandle;               // Simple control handle.
-    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
-    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
-    snd_ctl_elem_type_t ctlType;        // Simple control element type.
-    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
-    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
+//    snd_ctl_t *ctlHandle;               // Simple control handle.
+//    snd_ctl_elem_id_t *ctlId;           // Simple control element id.
+//    snd_ctl_elem_value_t *ctlControl;   // Simple control element value.
+//    snd_ctl_elem_type_t ctlType;        // Simple control element type.
+//    snd_ctl_elem_info_t *ctlInfo;       // Simple control element info container.
+//    snd_ctl_card_info_t *ctlCard;       // Simple control card info container.
 
     snd_mixer_t *mixerHandle;           // Mixer handle.
     snd_mixer_selem_id_t *mixerId;      // Mixer simple element identifier.
     snd_mixer_elem_t *mixerElem;        // Mixer element handle.
-
 
     // ------------------------------------------------------------------------
     //  Set up ALSA mixer.
@@ -190,8 +183,6 @@ static void setVolume( struct volumeStruct volume )
     // Hardware volume limits.
     long minimum, maximum;
     snd_mixer_selem_get_playback_volume_range( mixerElem, &minimum, &maximum );
-    long range = maximum - minimum;
-
 
     // ------------------------------------------------------------------------
     //  Calculate volume and check bounds.
@@ -202,7 +193,6 @@ static void setVolume( struct volumeStruct volume )
     mappedLeft = getVolume( volume.left, volume.factor, minimum, maximum );
     mappedRight = getVolume( volume.right, volume.factor, minimum, maximum );
 
-
     // ------------------------------------------------------------------------
     //  Set volume.
     // ------------------------------------------------------------------------
@@ -211,7 +201,6 @@ static void setVolume( struct volumeStruct volume )
                 SND_MIXER_SCHN_FRONT_LEFT, mappedLeft );
     snd_mixer_selem_set_playback_volume( mixerElem,
                 SND_MIXER_SCHN_FRONT_RIGHT, mappedRight );
-
 
     // ------------------------------------------------------------------------
     //  Clean up.
@@ -222,14 +211,11 @@ static void setVolume( struct volumeStruct volume )
     return;
 }
 
-
-// ****************************************************************************
+// ============================================================================
 //  Main routine.
-// ****************************************************************************
-
-void main( int argc, char *argv[] )
+// ============================================================================
+int main( int argc, char *argv[] )
 {
-
     struct volumeStruct volume =
     {
         .card = "hw:0",
@@ -239,13 +225,12 @@ void main( int argc, char *argv[] )
         .right = 0
     };
 
-
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  Get command line parameters.
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     argp_parse( &argp, argc, argv, 0, 0, &volume );
 
     setVolume( volume );
 
-    return;
+    return 0;
 }

@@ -1,7 +1,7 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    piSetVolControl:
+    setVolControl:
 
     Simple app to set volume using ALSA controls.
 
@@ -27,7 +27,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc piSetVolControl.c -o piSetVolControl -lasound
+//  Compile with gcc setVolControl.c -Wall -o setVolControl -lasound
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -46,18 +46,17 @@
 #include <alsa/asoundlib.h>
 #include <argp.h>
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  argp documentation.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 const char *argp_program_version = Version;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
 static char doc[] = "A short test program to set ALSA control values.";
 static char args_doc[] = "alsavol <options>";
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  Data definitions.
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 
 // Data structure to hold command line arguments.
 struct structArgs
@@ -69,10 +68,9 @@ struct structArgs
     int value2;
 };
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  Command line argument definitions.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 static struct argp_option options[] =
 {
     { 0, 0, 0, 0, "Card information:" },
@@ -83,10 +81,9 @@ static struct argp_option options[] =
     { 0 }
 };
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  Command line argument parser.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 static int parse_opt( int param, char *arg, struct argp_state *state )
 {
     char *str;
@@ -116,36 +113,30 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
     return 0;
 };
 
-// ****************************************************************************
+// ----------------------------------------------------------------------------
 //  argp parser parameter structure.
-// ****************************************************************************
-
+// ----------------------------------------------------------------------------
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
-// ****************************************************************************
+// ============================================================================
 //  Main section.
-// ****************************************************************************
-
-void main( int argc, char *argv[] )
+// ============================================================================
+int main( int argc, char *argv[] )
 {
-
     struct structArgs cmdArgs;
-    int errNum;
 
-
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  ALSA control elements.
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     snd_ctl_t *ctl;                 // Simple control handle.
     snd_ctl_elem_id_t *id;          // Simple control element id.
     snd_ctl_elem_value_t *control;  // Simple control element value.
     snd_ctl_elem_type_t type;       // Simple control element type.
     snd_ctl_elem_info_t *info;      // Simple control info container.
 
-
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  Get command line parameters.
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     argp_parse( &argp, argc, argv, 0, 0, &cmdArgs );
 
     printf( "Card = %i\n", cmdArgs.card );
@@ -153,17 +144,16 @@ void main( int argc, char *argv[] )
     printf( "Value 1 = %i\n", cmdArgs.value1 );
     printf( "Value 2 = %i\n", cmdArgs.value2 );
 
-
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  Set up ALSA control.
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     sprintf( cmdArgs.deviceID, "hw:%i", cmdArgs.card );
     printf( "Device ID = %s.\n", cmdArgs.deviceID );
 
     if ( snd_ctl_open( &ctl, cmdArgs.deviceID, 1 ) < 0 )
     {
         printf( "Error opening control.\n" );
-        return;
+        return -1;
     }
     // Initialise a simple control element id structure.
     snd_ctl_elem_id_alloca( &id );
@@ -177,7 +167,7 @@ void main( int argc, char *argv[] )
     if ( snd_ctl_elem_info( ctl, info ) < 0 )
     {
         printf( "Error getting control element info.\n" );
-        return;
+        return -2;
     }
 
     // Find type of control.
@@ -190,26 +180,24 @@ void main( int argc, char *argv[] )
     if ( type != SND_CTL_ELEM_TYPE_INTEGER )
     {
         printf( "Control type is not integer.\n" );
-        printf( "Type = %s\n", type );
-        return;
+        printf( "Type = %u\n", type );
+        return -3;
     }
 
-
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  Get some information for selected control.
-    // ************************************************************************
-    printf( "Min value for control = %d\n", snd_ctl_elem_info_get_min( info ));
-    printf( "Max value for control = %d\n", snd_ctl_elem_info_get_max( info ));
-    printf( "Step value for control = %d\n", snd_ctl_elem_info_get_step( info ));
+    // ------------------------------------------------------------------------
+    printf( "Min value for control = %ld\n", snd_ctl_elem_info_get_min( info ));
+    printf( "Max value for control = %ld\n", snd_ctl_elem_info_get_max( info ));
+    printf( "Step value for control = %ld\n", snd_ctl_elem_info_get_step( info ));
 
     // Initialise the control element value container.
     snd_ctl_elem_value_alloca( &control );
     snd_ctl_elem_value_set_id( control, id );
 
-
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  Set values for selected control.
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     snd_ctl_elem_value_set_integer( control, 0, cmdArgs.value1 );
     if ( snd_ctl_elem_write( ctl, control ) < 0 )
         printf( "Error setting L volume" );
@@ -221,11 +209,10 @@ void main( int argc, char *argv[] )
     else
         printf( "Set R volume to %d.\n", cmdArgs.value2 );
 
-
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  Clean up.
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     snd_ctl_close( ctl );
 
-    return;
+    return 0;
 }

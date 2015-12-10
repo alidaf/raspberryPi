@@ -1,7 +1,7 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    listmixer:
+    listMixers:
 
     Simple test program to list all ALSA cards and mixers.
 
@@ -27,7 +27,7 @@
 
 //  Compilation:
 //
-//  Compile with gcc listmixer.c -o listmixer -lasound
+//  Compile with gcc listMixers.c -Wall -o listMixers -lasound
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -48,41 +48,33 @@
 #include <alsa/asoundlib.h>
 #include <alsa/mixer.h>
 
-// ***************************************************************************/
+// ============================================================================
 //  Main routine.
-// ***************************************************************************/
-
-void main()
+// ============================================================================
+int main()
 {
-
     int cardNumber = -1;
-    int mixerNumber = -1;
     char deviceID[8];
     char channelStr[3];
     unsigned int channels;
     long volMin, volMax;
-
     int errNum;
-    int body = 1;
 
-    // ************************************************************************
+    // ------------------------------------------------------------------------
     //  ALSA mixer elements.
-    // ************************************************************************
-    snd_mixer_t *handle;            // Mixer handle.
-    snd_mixer_selem_id_t *sid;      // Mixer simple element identifier.
-    snd_mixer_elem_t *elem;         // Mixer element handle.
-
+    // ------------------------------------------------------------------------
+    snd_mixer_t *handle;       // Mixer handle.
+    snd_mixer_selem_id_t *sid; // Mixer simple element identifier.
+    snd_mixer_elem_t *elem;    // Mixer element handle.
 
     //  We are cycling through the mixers without knowing the CTL names so
     //  we need some control elements.
     //  Using CTL or HCTL  elements should be avoided for 'safe' ALSA!
-    snd_ctl_t *ctl;                 // Simple control handle.
-    snd_ctl_elem_id_t *id;          // Control element identifier.
-
+    snd_ctl_t *ctl;            // Simple control handle.
 
     //  ALSA info elements for retrieving certain information. Should also
     //  be avoided for 'safe' ALSA.
-    snd_ctl_card_info_t *card;      //  Control card info container.
+    snd_ctl_card_info_t *card; //  Control card info container.
 
     printf( "\nKey:" );
     printf( "\tVol = Volume Control.\n" );
@@ -106,10 +98,9 @@ void main()
         errNum = snd_ctl_card_info( ctl, card );
         if (errNum < 0 ) continue;
 
-
-        // ********************************************************************
+        // --------------------------------------------------------------------
         //  Print header block and some card specific info.
-        // ********************************************************************
+        // --------------------------------------------------------------------
         printf( "Card: %s.\n", snd_ctl_card_info_get_name( card ));
         printf( "\t+------------------------------------------" );
         printf( "+---+---+---+-------+-------+\n" );
@@ -118,38 +109,36 @@ void main()
         printf( "\t+------------------------------------------" );
         printf( "+---+---+---+-------+-------+\n" );
 
-
-        // ********************************************************************
+        // --------------------------------------------------------------------
         //  Set up control and mixer.
-        // ********************************************************************
+        // --------------------------------------------------------------------
         // Open an empty mixer and attach a control.
         if ( snd_mixer_open( &handle, 0 ) < 0 )
         {
             printf( "Error opening mixer.\n" );
-            return;
+            return -1;
         }
         if ( snd_mixer_attach( handle, deviceID ) < 0 )
         {
             printf( "Error attaching control to mixer.\n" );
-            return;
+            return -2;
         }
         // Register the mixer simple element class and load mixer.
         if ( snd_mixer_selem_register( handle, NULL, NULL ) < 0 )
         {
             printf( "Error registering element class.\n" );
-            return;
+            return -3;
         }
         if ( snd_mixer_load( handle ) < 0 )
         {
             printf( "Error loading mixer.\n" );
-            return;
+            return -4;
         }
         snd_mixer_selem_id_alloca( &sid );
 
-
-        // ********************************************************************
+        // --------------------------------------------------------------------
         //  For each mixer element.
-        // ********************************************************************
+        // --------------------------------------------------------------------
         for ( elem = snd_mixer_first_elem( handle );
               elem;
               elem = snd_mixer_elem_next( elem ))
@@ -180,7 +169,6 @@ void main()
                 sprintf( channelStr, " 1 " );
             else
             {
-
                 if ( snd_mixer_selem_has_playback_channel( elem,
                             SND_MIXER_SCHN_FRONT_LEFT ))
                     channels++;
@@ -212,7 +200,7 @@ void main()
                              SND_MIXER_SCHN_WOOFER ));
             }
 
-            printf( "\t| %-40s | %s | %s |%s|%+7d|%+7d|\n",
+            printf( "\t| %-40s | %s | %s |%s|%+7ld|%+7ld|\n",
                     snd_mixer_selem_id_get_name( sid ),
                     hasVolume,
                     hasSwitch,
@@ -225,5 +213,5 @@ void main()
 
     snd_mixer_close( handle );
 
-    return;
+    return 0;
 }
