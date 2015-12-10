@@ -1,9 +1,9 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    libhd44780Pi:
+    hd44780Pi:
 
-    HD44780 LCD display driver library for the Raspberry Pi.
+    HD44780 LCD display driver for the Raspberry Pi.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
     Based on the following guides and codes:
@@ -54,6 +54,8 @@
 //      Improve error trapping and return codes for all functions.
 //      Write GPIO and interrupt routines to replace wiringPi.
 //
+#ifndef HD44780PI_H
+#define HD44780PI_H
 
 #include <stdio.h>
 #include <string.h>
@@ -192,13 +194,9 @@ pthread_mutex_t displayBusy;
 // ============================================================================
 //  Data structures.
 // ============================================================================
-/*
-    Note: char is the smallest integer size (usually 8 bit) and is used to
-          keep the memory footprint as low as possible.
-*/
 
 // ----------------------------------------------------------------------------
-//  Data structure for GPIOs.
+//  Data structure for displays.
 // ----------------------------------------------------------------------------
 struct hd44780Struct
 {
@@ -209,18 +207,6 @@ struct hd44780Struct
     unsigned char gpioEN;            // GPIO pin for LCD Enable pin.
     unsigned char gpioRW;            // GPIO pin for R/W mode. Not used.
     unsigned char gpioDB[PINS_DATA]; // GPIO pins for LCD data pins.
-} hd44780 =
-// Default values in case no command line parameters are passed.
-{
-    .cols      = 16,  // Display columns.
-    .rows      = 2,   // Display rows.
-    .gpioRS    = 7,   // Pin 26 (RS).
-    .gpioEN    = 8,   // Pin 24 (E).
-    .gpioRW    = 11,  // Pin 23 (RW).
-    .gpioDB[0] = 25,  // Pin 12 (DB4).
-    .gpioDB[1] = 24,  // Pin 16 (DB5).
-    .gpioDB[2] = 23,  // Pin 18 (DB6).
-    .gpioDB[3] = 18   // Pin 22 (DB7).
 };
 
 // ----------------------------------------------------------------------------
@@ -415,46 +401,12 @@ char setMoveMode( bool mode, bool direction );
 
 #define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
 #define CUSTOM_MAX   8 // Max number of custom chars allowed.
-// ----------------------------------------------------------------------------
-//  example: Pac Man and pulsing heart.
-// ----------------------------------------------------------------------------
-/*
-    PacMan 1        PacMan 2        Ghost 1         Ghost 2
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    00000 = 0x00,   00000 = 0x00,   01110 = 0x0e,   01110 = 0x0e
-    01110 = 0x0e,   01111 = 0x0f,   11001 = 0x19,   11001 = 0x13
-    11011 = 0x1b,   10110 = 0x16,   11101 = 0x1d,   11011 = 0x17
-    11111 = 0x1f,   11100 = 0x1c,   11111 = 0x1f,   11111 = 0x1f
-    11111 = 0x1f,   11110 = 0x1e,   11111 = 0x1f,   11111 = 0x1f
-    01110 = 0x0e,   01111 = 0x0f,   10101 = 0x15,   01010 = 0x1b
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
 
-    Heart 1         Heart 2         Pac Man 3
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    01010 = 0x0a,   00000 = 0x00,   00000 = 0x00
-    11111 = 0x1f,   01010 = 0x0a,   11110 = 0x1e
-    11111 = 0x1f,   01110 = 0x0e,   01101 = 0x0d
-    11111 = 0x1f,   01110 = 0x0e,   00111 = 0x07
-    01110 = 0x0e,   00100 = 0x04,   01111 = 0x0f
-    00100 = 0x04,   00000 = 0x00,   11110 = 0x1e
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-*/
 struct customCharsStruct
 {
     unsigned char num; // Number of custom chars (max 8).
     unsigned char data[CUSTOM_MAX][CUSTOM_SIZE];
 
-} customChars =
-{
-    .num = 7,
-    .data = {{ 0x00, 0x00, 0x0e, 0x1b, 0x1f, 0x1f, 0x0e, 0x00 },
-             { 0x00, 0x00, 0x0f, 0x16, 0x1c, 0x1e, 0x0f, 0x00 },
-             { 0x00, 0x0e, 0x19, 0x1d, 0x1f, 0x1f, 0x15, 0x00 },
-             { 0x00, 0x0e, 0x13, 0x17, 0x1f, 0x1f, 0x1b, 0x00 },
-             { 0x00, 0x0a, 0x1f, 0x1f, 0x1f, 0x0e, 0x04, 0x00 },
-             { 0x00, 0x00, 0x0a, 0x0e, 0x0e, 0x04, 0x00, 0x00 },
-             { 0x00, 0x00, 0x1e, 0x0d, 0x07, 0x0f, 0x1e, 0x00 },
-             { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }},
 };
 
 // ----------------------------------------------------------------------------
@@ -470,18 +422,8 @@ struct customCharsStruct
 char loadCustom( const unsigned char newChar[CUSTOM_MAX][CUSTOM_SIZE] );
 
 // ============================================================================
-//  Some display functions.
+//  Display functions.
 // ============================================================================
-
-// ----------------------------------------------------------------------------
-//  Returns a reversed string.
-// ----------------------------------------------------------------------------
-static void reverseString( char *text, size_t start, size_t end );
-
-// ----------------------------------------------------------------------------
-//  Returns a rotated string.
-// ----------------------------------------------------------------------------
-static void rotateString( char *text, size_t length, size_t increments );
 
 // ----------------------------------------------------------------------------
 //  Displays text on display row as a tickertape.
@@ -508,3 +450,5 @@ void *displayTicker( void *threadTicker );
     Justification =  1: Right justified.
 */
 void *displayTime( void *threadTime );
+
+#endif

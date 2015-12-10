@@ -49,7 +49,7 @@
 #include <time.h>
 #include <pthread.h>
 
-#include "../include/hd44780Pi.h"
+#include "hd44780Pi.h"
 
 // Define a mutex to allow concurrent display routines.
 /*
@@ -57,7 +57,7 @@
 */
 pthread_mutex_t displayBusy;
 
-void main()
+int main()
 {
     unsigned char data      = 0; // 4-bit mode.
     unsigned char lines     = 1; // 2 display lines.
@@ -98,9 +98,6 @@ void main()
         .increment = 1,
         .delay = 300
     };
-
-    // Must be an int due to typecasting of a pointer.
-    unsigned int pacManRow = 1;
 
     // Create threads and mutex for animated display functions.
     pthread_mutex_init( &displayBusy, NULL );
