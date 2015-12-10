@@ -30,6 +30,13 @@
 // ****************************************************************************
 // ****************************************************************************
 
+//  Compilation:
+//
+//  Compile with gcc -c -fpic libhd44780.c -lwiringPi lpthread
+//  Also use the following flags for Raspberry Pi optimisation:
+//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+//         -ffast-math -pipe -O3
+
 #define Version "Version 0.6"
 
 //  Authors:        D.Faulke    17/11/2015  This program.
@@ -67,11 +74,13 @@
 #include <time.h>
 #include <pthread.h>
 
+#include "../include/hd44780Pi.h"
+
 // ============================================================================
 //  Information.
 // ============================================================================
 /*
-    Pin layout for Hitachi HD44780 based 16x2 LCD.
+    Pin layout for Hitachi HD44780 based 16x2 LCD display.
 
     +-----+-------+------+---------------------------------------+
     | Pin | Label | Pi   | Description                           |
@@ -116,161 +125,23 @@
     DDRAM: Display Data RAM.
     CGRAM: Character Generator RAM.
 */
-// ============================================================================
-//  Command and constant macros.
-// ============================================================================
-
-// Constants. Change these according to needs.
-#define BITS_BYTE          8 // Number of bits in a byte.
-#define BITS_NIBBLE        4 // Number of bits in a nibble.
-#define PINS_DATA          4 // Number of data pins used.
-#define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
-
-// These should be replaced by command line options.
-#define DISPLAY_COLUMNS   16 // No of LCD display characters.
-#define DISPLAY_ROWS       2 // No of LCD display lines.
-#define DISPLAY_NUM        1 // Number of displays.
-#define DISPLAY_ROWS_MAX   4 // Max known number of rows for this type of LCD.
-
-// Modes
-#define MODE_COMMAND       0 // Enable command mode for RS pin.
-#define MODE_DATA          1 // Enable character mode for RS pin.
-
-// Clear and reset.
-#define DISPLAY_CLEAR   0x01 // Clears DDRAM and sets address counter to start.
-#define DISPLAY_HOME    0x02 // Sets DDRAM address counter to start.
-
-// Character entry modes.
-// ENTRY_BASE = command, decrement DDRAM counter, display shift off.
-#define ENTRY_BASE      0x04 // OR this with the options below:
-#define ENTRY_COUNTER   0x02 // Increment DDRAM counter (cursor position).
-#define ENTRY_SHIFT     0x01 // Display shift on.
-
-// Screen and cursor commands.
-// DISPLAY_BASE = command, display off, underline cursor off, block cursor off.
-#define DISPLAY_BASE    0x08 // OR this with the options below:
-#define DISPLAY_ON      0x04 // Display on.
-#define DISPLAY_CURSOR  0x02 // Cursor on.
-#define DISPLAY_BLINK   0x01 // Block cursor on.
-
-// Screen and cursor movement.
-// MOVE_BASE = command, move cursor left.
-#define MOVE_BASE       0x10 // OR this with the options below:
-#define MOVE_DISPLAY    0x08 // Move screen.
-#define MOVE_DIRECTION  0x04 // Move screen/cursor right.
-
-// LCD function modes.
-// FUNCTION_BASE = command, 4-bit mode, 1 line, 5x8 font.
-#define FUNCTION_BASE   0x20 // OR this with the options below:
-#define FUNCTION_DATA   0x10 // 8-bit (byte) mode.
-#define FUNCTION_LINES  0x08 // Use 2 display lines.
-#define FUNCTION_FONT   0x04 // 5x10 font.
-
-// LCD character generator and display memory addresses.
-#define ADDRESS_CGRAM   0x40 // Character generator start address.
-#define ADDRESS_DDRAM   0x80 // Display data start address.
-#define ADDRESS_ROW_0   0x00 // Row 1 start address.
-#define ADDRESS_ROW_1   0x40 // Row 2 start address.
-#define ADDRESS_ROW_2   0x14 // Row 3 start address.
-#define ADDRESS_ROW_3   0x54 // Row 4 start address.
-
-// Constants for GPIO states.
-#define GPIO_UNSET         0 // Set GPIO to low.
-#define GPIO_SET           1 // Set GPIO to high.
-
-// Constants for display alignment and ticker directions.
-enum textAlignment_t { LEFT, CENTRE, RIGHT };
-
-// Enumerated types for date and time displays.
-enum timeFormat_t { HMS, HM };
-enum dateFormat_t { DAY_DMY, DAY_DM, DAY_D, DMY };
-
-// Define a mutex to allow concurrent display routines.
-/*
-    Mutex needs to lock before any cursor positioning or write functions.
-*/
-pthread_mutex_t displayBusy;
 
 // ============================================================================
-//  Data structures.
+//  Some helpful functions.
 // ============================================================================
-/*
-    Note: char is the smallest integer size (usually 8 bit) and is used to
-          keep the memory footprint as low as possible.
-*/
 
 // ----------------------------------------------------------------------------
-//  Data structure for GPIOs.
+//  Returns binary string for a number of bits. Used for debugging only.
 // ----------------------------------------------------------------------------
-struct hd44780Struct
+static char *getBinaryString( unsigned char data, unsigned char bits )
 {
-    unsigned char id;                // Handle for multiple displays.
-    unsigned char cols;              // Number of display columns (x).
-    unsigned char rows;              // Number of display rows (y).
-    unsigned char gpioRS;            // GPIO pin for LCD RS pin.
-    unsigned char gpioEN;            // GPIO pin for LCD Enable pin.
-    unsigned char gpioRW;            // GPIO pin for R/W mode. Not used.
-    unsigned char gpioDB[PINS_DATA]; // GPIO pins for LCD data pins.
-} hd44780 =
-// Default values in case no command line parameters are passed.
-{
-    .cols      = 16,  // Display columns.
-    .rows      = 2,   // Display rows.
-    .gpioRS    = 7,   // Pin 26 (RS).
-    .gpioEN    = 8,   // Pin 24 (E).
-    .gpioRW    = 11,  // Pin 23 (RW).
-    .gpioDB[0] = 25,  // Pin 12 (DB4).
-    .gpioDB[1] = 24,  // Pin 16 (DB5).
-    .gpioDB[2] = 23,  // Pin 18 (DB6).
-    .gpioDB[3] = 18   // Pin 22 (DB7).
-};
-
-// ----------------------------------------------------------------------------
-//  Data structures for displaying text.
-// ----------------------------------------------------------------------------
-/*
-    .align  = TEXT_ALIGN_NULL   : No set alignment (just print at cursor ).
-            = TEXT_ALIGN_LEFT   : Text aligns or rotates left.
-            = TEXT_ALIGN_CENTRE : Text aligns or oscillates about centre.
-            = TEXT_ALIGN_RIGHT  : Text aligns or rotates right.
-*/
-struct textStruct
-{
-    char string[DISPLAY_COLUMNS];
-    unsigned char row;
-    enum textAlignment_t align;
-};
-
-struct timeStruct
-{
-    unsigned char row;
-    unsigned int delay;
-    enum textAlignment_t align;
-    enum timeFormat_t format;
-};
-
-struct dateStruct
-{
-    unsigned char row;
-    unsigned int delay;
-    enum textAlignment_t align;
-    enum dateFormat_t format;
-};
-
-/*
-    .increment = Number and direction of characters to rotate.
-                 +ve rotate left.
-                 -ve rotate right.
-    .length + .padding must be < TEXT_MAX_LENGTH.
-*/
-struct tickerStruct
-{
-    char text[TEXT_MAX_LENGTH];
-    unsigned int length;
-    unsigned int padding;
-    unsigned char row;
-    unsigned int  increment;
-    unsigned int  delay;
+    static char binary[128]; // Arbitrary limit.
+    if ( bits > 128 ) bits = 128;
+    unsigned int i;
+    for ( i = 0; i < bits; i++ )
+        binary[i] = (( data >> ( bits - i - 1 )) & 1 ) + '0';
+    binary[i] = '\0';
+    return binary;
 };
 
 // ============================================================================
@@ -280,22 +151,98 @@ struct tickerStruct
 // ----------------------------------------------------------------------------
 //  Writes byte value of a char to display in nibbles.
 // ----------------------------------------------------------------------------
-char writeNibble( unsigned char data );
+char writeNibble( unsigned char data )
+{
+    unsigned char i;
+    unsigned char nibble;
+
+    // Write nibble to GPIOs
+    nibble = data;
+    for ( i = 0; i < BITS_NIBBLE; i++ )
+    {
+        digitalWrite( hd44780.gpioDB[i], ( nibble & 1 ));
+        delayMicroseconds( 41 );
+        nibble >>= 1;
+    }
+
+    // Toggle enable bit to send nibble.
+    digitalWrite( hd44780.gpioEN, GPIO_SET );
+    delayMicroseconds( 41 );
+    digitalWrite( hd44780.gpioEN, GPIO_UNSET );
+    delayMicroseconds( 41 ); // Commands should take 5mS!
+
+    /*
+        Need to add routine to read ready bit.
+    */
+
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Writes byte value of a command to display in nibbles.
 // ----------------------------------------------------------------------------
-char writeCommand( unsigned char data );
+char writeCommand( unsigned char data )
+{
+    unsigned char nibble;
+    unsigned char i;
+
+    // Set to command mode.
+    digitalWrite( hd44780.gpioRS, GPIO_UNSET );
+    delayMicroseconds( 41 );
+
+    // High nibble.
+    nibble = ( data >> BITS_NIBBLE ) & 0x0f;
+    writeNibble( nibble );
+
+    // Low nibble.
+    nibble = data & 0x0f;
+    writeNibble( nibble );
+
+    /*
+        Need to add routine to read ready bit.
+    */
+
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Writes byte value of data to display in nibbles.
 // ----------------------------------------------------------------------------
-char writeData( unsigned char data );
+char writeData( unsigned char data )
+{
+    unsigned char i;
+    unsigned char nibble;
+
+    // Set to character mode.
+    digitalWrite( hd44780.gpioRS, GPIO_SET );
+    delayMicroseconds( 41 );
+
+    // High nibble.
+    nibble = ( data >> BITS_NIBBLE ) & 0xf;
+    writeNibble( nibble );
+
+    // Low nibble.
+    nibble = data & 0xf;
+    writeNibble( nibble );
+
+    /*
+        Need to add routine to read ready bit.
+    */
+
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Writes a string of data to display.
 // ----------------------------------------------------------------------------
-char writeDataString( char *string );
+char writeDataString( char *string )
+{
+    unsigned int i;
+
+    for ( i = 0; i < strlen( string ); i++ )
+        writeData( string[i] );
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Moves cursor to row, position.
@@ -305,7 +252,20 @@ char writeDataString( char *string );
     row due to common architecture. Moving from the end of a line to the start
     of the next is not contiguous memory.
 */
-char gotoRowPos( unsigned char row, unsigned char pos );
+char gotoRowPos( unsigned char row, unsigned char pos )
+{
+    if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
+    if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
+    // This doesn't properly check whether the number of display
+    // lines has been set to 1.
+
+    // Array of row start addresses
+    unsigned char rows[DISPLAY_ROWS_MAX] = { ADDRESS_ROW_0, ADDRESS_ROW_1,
+                                             ADDRESS_ROW_2, ADDRESS_ROW_3 };
+
+    writeCommand(( ADDRESS_DDRAM | rows[row] ) + pos );
+    return 0;
+};
 
 // ============================================================================
 //  Display init and mode functions.
@@ -314,12 +274,22 @@ char gotoRowPos( unsigned char row, unsigned char pos );
 // ----------------------------------------------------------------------------
 //  Clears display.
 // ----------------------------------------------------------------------------
-char displayClear( void );
+char displayClear( void )
+{
+    writeCommand( DISPLAY_CLEAR );
+    delayMicroseconds( 1600 ); // Data sheet doesn't give execution time!
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Clears memory and returns cursor/screen to original position.
 // ----------------------------------------------------------------------------
-char displayHome( void );
+char displayHome( void )
+{
+    writeCommand( DISPLAY_HOME );
+    delayMicroseconds( 1600 ); // Needs 1.52ms to execute.
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Initialises display. Must be called before any other display functions.
@@ -344,7 +314,7 @@ char displayHome( void );
 */
 char hd44780Init( bool data, bool lines, bool font, bool display,
                   bool cursor, bool blink, bool counter, bool shift,
-                  bool mode, bool direction );
+                  bool mode, bool direction )
 /*
     data      = 0: 4-bit mode.
     data      = 1: 8-bit mode.
@@ -367,6 +337,74 @@ char hd44780Init( bool data, bool lines, bool font, bool display,
     direction = 0: Left.
     direction = 1: Right.
 */
+{
+    unsigned char i;
+
+    // Set up GPIOs with wiringPi.
+    wiringPiSetupGpio();
+
+    // Set all GPIO pins to 0.
+    digitalWrite( hd44780.gpioRS, GPIO_UNSET );
+    digitalWrite( hd44780.gpioEN, GPIO_UNSET );
+
+    // Data pins.
+    for ( i = 0; i < PINS_DATA; i++ )
+        digitalWrite( hd44780.gpioDB[i], GPIO_UNSET );
+
+    // Set LCD pin modes.
+    pinMode( hd44780.gpioRS, OUTPUT );
+    pinMode( hd44780.gpioEN, OUTPUT );
+    // Data pins.
+    for ( i = 0; i < PINS_DATA; i++ )
+        pinMode( hd44780.gpioDB[i], OUTPUT );
+
+    // Allow a start-up delay for display initialisation.
+    delay( 50 ); // >40mS@3V.
+
+    // Need to write low nibbles only as display starts off in 8-bit mode.
+    // Sending high nibble first (0x0) causes init to fail and the display
+    // subsequently shows garbage.
+    writeNibble( 0x3 );
+    delay( 5 );                 // >4.1mS.
+    writeNibble( 0x3 );
+    delayMicroseconds( 150 );   // >100uS.
+    writeNibble( 0x3 );
+    delayMicroseconds( 150 );   // >100uS.
+    writeNibble( 0x2);
+    delayMicroseconds( 150 );
+
+    // Set actual function mode - cannot be changed after this point
+    // without reinitialising.
+    writeCommand( FUNCTION_BASE | ( data * FUNCTION_DATA )
+                                | ( lines * FUNCTION_LINES )
+                                | ( font * FUNCTION_FONT ));
+    // Display off.
+    writeCommand( DISPLAY_BASE );
+
+    // Set entry mode.
+    writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
+                             | ( shift * ENTRY_SHIFT ));
+
+    // Display should be initialised at this point. Function can no longer
+    // be changed without re-initialising.
+
+    // Set display properties.
+    writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
+                               | ( cursor * DISPLAY_CURSOR )
+                               | ( blink * DISPLAY_BLINK ));
+
+    // Set initial display/cursor movement mode.
+    writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
+                            | ( direction * MOVE_DIRECTION ));
+
+    // Goto start of DDRAM.
+    writeCommand( ADDRESS_DDRAM );
+
+    // Wipe any previous display.
+    displayClear();
+
+    return 0;
+};
 
 // ============================================================================
 //  Mode settings.
@@ -381,7 +419,15 @@ char hd44780Init( bool data, bool lines, bool font, bool display,
     shift =   0: Do not shift display after data write.
     shift =   1: Shift display after data write.
 */
-char setEntryMode( bool counter, bool shift );
+char setEntryMode( bool counter, bool shift )
+{
+    writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
+                             | ( shift * ENTRY_SHIFT ));
+    // Clear display.
+    writeCommand( DISPLAY_CLEAR );
+
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Sets display mode.
@@ -394,7 +440,16 @@ char setEntryMode( bool counter, bool shift );
     blink   = 0: Blink (block cursor) on.
     blink   = 0: Blink (block cursor) off.
 */
-char setDisplayMode( bool display, bool cursor, bool blink );
+char setDisplayMode( bool display, bool cursor, bool blink )
+{
+    writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
+                               | ( cursor * DISPLAY_CURSOR )
+                               | ( blink * DISPLAY_BLINK ));
+    // Clear display.
+    writeCommand( DISPLAY_CLEAR );
+
+    return 0;
+};
 
 // ----------------------------------------------------------------------------
 //  Shifts cursor or display.
@@ -405,7 +460,15 @@ char setDisplayMode( bool display, bool cursor, bool blink );
     direction = 0: Left.
     direction = 1: Right.
 */
-char setMoveMode( bool mode, bool direction );
+char setMoveMode( bool mode, bool direction )
+{
+    writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
+                            | ( direction * MOVE_DIRECTION ));
+    // Clear display.
+    writeCommand( DISPLAY_CLEAR );
+
+    return 0;
+};
 
 // ============================================================================
 //  Custom characters and animation.
@@ -415,50 +478,6 @@ char setMoveMode( bool mode, bool direction );
     for the cursor. It is therefore possible to define 8 5x8 characters.
 */
 
-#define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
-#define CUSTOM_MAX   8 // Max number of custom chars allowed.
-// ----------------------------------------------------------------------------
-//  example: Pac Man and pulsing heart.
-// ----------------------------------------------------------------------------
-/*
-    PacMan 1        PacMan 2        Ghost 1         Ghost 2
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    00000 = 0x00,   00000 = 0x00,   01110 = 0x0e,   01110 = 0x0e
-    01110 = 0x0e,   01111 = 0x0f,   11001 = 0x19,   11001 = 0x13
-    11011 = 0x1b,   10110 = 0x16,   11101 = 0x1d,   11011 = 0x17
-    11111 = 0x1f,   11100 = 0x1c,   11111 = 0x1f,   11111 = 0x1f
-    11111 = 0x1f,   11110 = 0x1e,   11111 = 0x1f,   11111 = 0x1f
-    01110 = 0x0e,   01111 = 0x0f,   10101 = 0x15,   01010 = 0x1b
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-
-    Heart 1         Heart 2         Pac Man 3
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-    01010 = 0x0a,   00000 = 0x00,   00000 = 0x00
-    11111 = 0x1f,   01010 = 0x0a,   11110 = 0x1e
-    11111 = 0x1f,   01110 = 0x0e,   01101 = 0x0d
-    11111 = 0x1f,   01110 = 0x0e,   00111 = 0x07
-    01110 = 0x0e,   00100 = 0x04,   01111 = 0x0f
-    00100 = 0x04,   00000 = 0x00,   11110 = 0x1e
-    00000 = 0x00,   00000 = 0x00,   00000 = 0x00
-*/
-struct customCharsStruct
-{
-    unsigned char num; // Number of custom chars (max 8).
-    unsigned char data[CUSTOM_MAX][CUSTOM_SIZE];
-
-} customChars =
-{
-    .num = 7,
-    .data = {{ 0x00, 0x00, 0x0e, 0x1b, 0x1f, 0x1f, 0x0e, 0x00 },
-             { 0x00, 0x00, 0x0f, 0x16, 0x1c, 0x1e, 0x0f, 0x00 },
-             { 0x00, 0x0e, 0x19, 0x1d, 0x1f, 0x1f, 0x15, 0x00 },
-             { 0x00, 0x0e, 0x13, 0x17, 0x1f, 0x1f, 0x1b, 0x00 },
-             { 0x00, 0x0a, 0x1f, 0x1f, 0x1f, 0x0e, 0x04, 0x00 },
-             { 0x00, 0x00, 0x0a, 0x0e, 0x0e, 0x04, 0x00, 0x00 },
-             { 0x00, 0x00, 0x1e, 0x0d, 0x07, 0x0f, 0x1e, 0x00 },
-             { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }},
-};
-
 // ----------------------------------------------------------------------------
 //  Loads custom characters into CGRAM.
 // ----------------------------------------------------------------------------
@@ -467,9 +486,16 @@ struct customCharsStruct
     pointer is auto-incremented. Set command to point to start of DDRAM to
     finish.
 */
-#define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
-#define CUSTOM_MAX   8 // Max number of custom chars allowed.
-char loadCustom( const unsigned char newChar[CUSTOM_MAX][CUSTOM_SIZE] );
+char loadCustomChar( const unsigned char newChar[CUSTOM_MAX][CUSTOM_SIZE] )
+{
+    writeCommand( ADDRESS_CGRAM );
+    unsigned char i, j;
+    for ( i = 0; i < customChars.num; i++ )
+        for ( j = 0; j < CUSTOM_SIZE; j++ )
+            writeData( newChar[i][j] );
+    writeCommand( ADDRESS_DDRAM );
+    return 0;
+};
 
 // ============================================================================
 //  Some display functions.
@@ -478,17 +504,35 @@ char loadCustom( const unsigned char newChar[CUSTOM_MAX][CUSTOM_SIZE] );
 // ----------------------------------------------------------------------------
 //  Returns a reversed string.
 // ----------------------------------------------------------------------------
-static void reverseString( char *text, size_t start, size_t end );
+static void reverseString( char *text, size_t start, size_t end )
+{
+    char temp;
+    while ( start < end )
+    {
+        end--;
+        temp = text[start];
+        text[start] = text[end];
+        text[end] = temp;
+        start++;
+    }
+};
 
 // ----------------------------------------------------------------------------
 //  Returns a rotated string.
 // ----------------------------------------------------------------------------
-static void rotateString( char *text, size_t length, size_t increments );
+static void rotateString( char *text, size_t length, size_t increments )
+{
+//    if (!text || !*text ) return;
+    increments %= length;
+    reverseString( text, 0, increments );
+    reverseString( text, increments, length );
+    reverseString( text, 0, length );
+}
 
 // ----------------------------------------------------------------------------
 //  Displays text on display row as a tickertape.
 // ----------------------------------------------------------------------------
-void *displayTicker( void *threadTicker );
+void *displayTicker( void *threadTicker )
 /*
     text:      Tickertape text.
     length:    Length of tickertape text.
@@ -499,6 +543,47 @@ void *displayTicker( void *threadTicker );
                -ve value rotates right.
     delay:     Controls the speed of the ticker tape. Delay in mS.
 */
+{
+    struct tickerStruct *ticker = threadTicker;
+
+    // Close thread if text string is too big.
+    if ( ticker->length + ticker->padding > TEXT_MAX_LENGTH ) pthread_exit( NULL );
+
+    // Variables for nanosleep function.
+    struct timespec sleepTime = { 0 };  // Structure defined in time.h.
+    sleepTime.tv_sec = 0;
+    sleepTime.tv_nsec = ticker->delay * 1000000;
+
+    // Add some padding so rotated text looks better.
+    size_t i;
+    for ( i = ticker->length; i < ticker->length + ticker->padding; i++ )
+        ticker->text[i] = ' ';
+    ticker->text[i] = '\0';
+    ticker->length = strlen( ticker->text );
+
+    // Set up a text window equal to the number of display columns.
+    char displayText[DISPLAY_COLUMNS];
+
+    while ( 1 )
+    {
+        // Copy the display text.
+        strncpy( displayText, ticker->text, DISPLAY_COLUMNS );
+
+        // Lock thread and display ticker text.
+        pthread_mutex_lock( &displayBusy );
+        gotoRowPos( 1, 0 );
+        writeDataString( displayText );
+        pthread_mutex_unlock( &displayBusy );
+
+        // Delay for readability.
+        nanosleep( &sleepTime, NULL );
+
+        // Rotate the ticker text.
+        rotateString( ticker->text, ticker->length, ticker->increment );
+    }
+
+    pthread_exit( NULL );
+};
 
 // ----------------------------------------------------------------------------
 //  Displays time at row with justification. Threaded version.
@@ -509,4 +594,50 @@ void *displayTicker( void *threadTicker );
     Justification =  0: Centre justified.
     Justification =  1: Right justified.
 */
-void *displayTime( void *threadTime );
+void *displayTime( void *threadTime )
+{
+    struct timeStruct *text = threadTime;
+
+    // Need to set the correct format.
+    char timeString[8];
+
+    struct tm *timePtr; // Structure defined in time.h.
+    time_t timeVar;     // Type defined in time.h.
+
+    struct timespec sleepTime = { 0 }; // Structure defined in time.h.
+    sleepTime.tv_nsec = 500000000;     // 0.5 seconds.
+
+    unsigned char pos;
+    if ( text->align == CENTRE ) pos = DISPLAY_COLUMNS / 2 - 4;
+    else
+    if ( text->align == RIGHT ) pos = DISPLAY_COLUMNS - 8;
+    else pos = 0;
+
+    while ( 1 )
+    {
+        timeVar = time( NULL );
+        timePtr = localtime( &timeVar );
+
+        sprintf( timeString, "%02d:%02d:%02d", timePtr->tm_hour,
+                                               timePtr->tm_min,
+                                               timePtr->tm_sec );
+        pthread_mutex_lock( &displayBusy );
+        gotoRowPos( text->row, pos );
+        writeDataString( timeString );
+        pthread_mutex_unlock( &displayBusy );
+        nanosleep( &sleepTime, NULL );
+
+        timeVar = time( NULL );
+        timePtr = localtime( &timeVar );
+
+        sprintf( timeString, "%02d %02d %02d", timePtr->tm_hour,
+                                               timePtr->tm_min,
+                                               timePtr->tm_sec );
+        pthread_mutex_lock( &displayBusy );
+        gotoRowPos( text->row, pos );
+        writeDataString( timeString );
+        pthread_mutex_unlock( &displayBusy );
+        nanosleep( &sleepTime, NULL );
+    }
+    pthread_exit( NULL );
+};
