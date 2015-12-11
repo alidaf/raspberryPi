@@ -1,9 +1,8 @@
 // ****************************************************************************
-// ****************************************************************************
 /*
     piLCD:
 
-    HD44780 LCD display driver for the Raspberry Pi.
+    HD44780 LCD display demonstration app for the Raspberry Pi.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
     Based on the following guides and codes:
@@ -27,7 +26,6 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-// ****************************************************************************
 // ****************************************************************************
 
 #define piLCDVersion "Version 0.6"
@@ -56,15 +54,12 @@
 //  To Do:
 //      Add animation functions.
 //      Add routine to check validity of GPIOs.
-//      Multithread display lines?
 //      Add support for multiple displays.
-//      Multithread displays.
 //      Convert to a library.
 //      Add read function to check ready (replace delays?).
 //          - most hobbyists may ground the ready pin.
 //      Improve error trapping and return codes for all functions.
 //      Write GPIO and interrupt routines to replace wiringPi.
-//      Remove all global variables.
 //
 
 #include <stdio.h>
@@ -77,9 +72,7 @@
 #include <time.h>
 #include <pthread.h>
 
-// ============================================================================
-//  Information.
-// ============================================================================
+//  Information. --------------------------------------------------------------
 /*
     Pin layout for Hitachi HD44780 based 16x2 LCD.
 
@@ -108,6 +101,7 @@
           will likely damage the Pi unless V is reduced or grounded.
 
     LCD register bits:
+
     +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
     |RS |RW |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|   |Key|Effect         |
     +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
@@ -126,9 +120,8 @@
     DDRAM: Display Data RAM.
     CGRAM: Character Generator RAM.
 */
-// ============================================================================
-//  Command and constant macros.
-// ============================================================================
+
+//  Macros. -------------------------------------------------------------------
 
 // Constants. Change these according to needs.
 #define BITS_BYTE          8 // Number of bits in a byte.
@@ -188,6 +181,9 @@
 #define GPIO_UNSET         0 // Set GPIO to low.
 #define GPIO_SET           1 // Set GPIO to high.
 
+
+//  Types. --------------------------------------------------------------------
+
 // Constants for display alignment and ticker directions.
 enum textAlignment_t { LEFT, CENTRE, RIGHT };
 
@@ -195,23 +191,15 @@ enum textAlignment_t { LEFT, CENTRE, RIGHT };
 enum timeFormat_t { HMS, HM };
 enum dateFormat_t { DAY_DMY, DAY_DM, DAY_D, DMY };
 
-// Define a mutex to allow concurrent display routines.
-/*
-    Mutex needs to lock before any cursor positioning or write functions.
-*/
-pthread_mutex_t displayBusy;
 
-// ============================================================================
-//  Data structures.
-// ============================================================================
-/*
-    Note: char is the smallest integer size (usually 8 bit) and is used to
-          keep the memory footprint as low as possible.
-*/
+//  Mutexes. ------------------------------------------------------------------
 
-// ----------------------------------------------------------------------------
+pthread_mutex_t displayBusy; // Locks further writes to display until finished.
+
+
+//  Data structures. ----------------------------------------------------------
+
 //  Data structure for GPIOs.
-// ----------------------------------------------------------------------------
 struct gpioStruct
 {
     unsigned char rs;            // GPIO pin for LCD RS pin.
@@ -230,9 +218,7 @@ struct gpioStruct
     .db[3] = 18   // Pin 22 (DB7).
 };
 
-// ----------------------------------------------------------------------------
 //  Data structures for displaying text.
-// ----------------------------------------------------------------------------
 /*
     .align  = TEXT_ALIGN_NULL   : No set alignment (just print at cursor ).
             = TEXT_ALIGN_LEFT   : Text aligns or rotates left.
@@ -278,9 +264,8 @@ struct tickerStruct
     unsigned int  delay;
 };
 
-// ============================================================================
-//  Some helpful functions.
-// ============================================================================
+
+//  Debugging functions. ------------------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  Returns binary string for a nibble. Used for debugging only.
@@ -295,9 +280,8 @@ static const char *getBinaryString(unsigned char nibble)
     return nibbles[nibble & 0xff];
 };
 
-// ============================================================================
-//  LCD output functions.
-// ============================================================================
+
+//  LCD output functions. -----------------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  Writes byte value of a char to LCD in nibbles.
@@ -331,7 +315,6 @@ static char writeNibble( unsigned char data )
 static char writeCommand( unsigned char data )
 {
     unsigned char nibble;
-    unsigned char i;
 
     // Set to command mode.
     digitalWrite( gpio.rs, GPIO_UNSET );
@@ -353,7 +336,6 @@ static char writeCommand( unsigned char data )
 // ----------------------------------------------------------------------------
 static char writeData( unsigned char data )
 {
-    unsigned char i;
     unsigned char nibble;
 
     // Set to character mode.
@@ -406,9 +388,8 @@ static char gotoRowPos( unsigned char row, unsigned char pos )
     return 0;
 };
 
-// ============================================================================
-//  LCD init and mode functions.
-// ============================================================================
+
+//  LCD init and mode functions. ----------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  Clears LCD screen.
@@ -526,9 +507,8 @@ static char initialiseDisplay( bool data, bool lines, bool font,
     return 0;
 };
 
-// ============================================================================
-//  Mode settings.
-// ============================================================================
+
+//  Mode settings. ------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  Sets entry mode.
@@ -590,16 +570,14 @@ static char setMoveMode( bool mode, bool direction )
     return 0;
 };
 
-// ============================================================================
-//  Custom characters and animation.
-// ============================================================================
+//  Custom characters and animation. ------------------------------------------
 /*
     Default characters actually have an extra row at the bottom, reserved
     for the cursor. It is therefore possible to define 8 5x8 characters.
 */
 
 // ----------------------------------------------------------------------------
-//  Pac Man 5x8.
+//  Pac Man and pulsing heart.
 // ----------------------------------------------------------------------------
 #define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
 #define CUSTOM_MAX   8 // Max number of custom chars allowed.
@@ -733,9 +711,8 @@ static void *displayPacMan( void *rowPtr )
 
 };
 
-// ============================================================================
-//  Some display functions.
-// ============================================================================
+
+//  Some display functions. ---------------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  Returns a reversed string.
@@ -878,9 +855,7 @@ void *displayTime( void *threadTime )
     pthread_exit( NULL );
 };
 
-// ============================================================================
-//  GPIO functions.
-// ============================================================================
+//  GPIO functions. -----------------------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  Initialises GPIOs.
@@ -908,14 +883,13 @@ static char initialiseGPIOs( void )
     return 0;
 };
 
-// ============================================================================
-//  Command line option functions.
-// ============================================================================
+
+//  Command line option functions. --------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  argp documentation.
 // ----------------------------------------------------------------------------
-const char *argp_program_version = Version;
+const char *argp_program_version = piLCDVersion;
 const char *argp_program_bug_address = "darren@alidaf.co.uk";
 static const char doc[] = "Raspberry Pi LCD driver.";
 static const char args_doc[] = "piLCD <options>";
@@ -974,20 +948,15 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
 // ----------------------------------------------------------------------------
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
-// ============================================================================
-//  Main section.
-// ============================================================================
-char main( int argc, char *argv[] )
-{
-    // ------------------------------------------------------------------------
-    //  Get command line arguments and check within bounds.
-    // ------------------------------------------------------------------------
-    argp_parse( &argp, argc, argv, 0, 0, &gpio );
-    // Need to check validity of pins.
 
-    // ------------------------------------------------------------------------
+//  Main section. -------------------------------------------------------------
+
+int main( int argc, char *argv[] )
+{
+    //  Get command line arguments and check within bounds.
+    argp_parse( &argp, argc, argv, 0, 0, &gpio );
+
     //  Initialise wiringPi and LCD.
-    // ------------------------------------------------------------------------
     initialiseGPIOs();  // Must be called before initialiseDisplay.
 
     unsigned char data      = 0; // 4-bit mode.
