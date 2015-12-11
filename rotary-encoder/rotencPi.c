@@ -1,7 +1,7 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    librotencPi:
+    rotencPi:
 
     Rotary encoder driver for the Raspberry Pi.
 
@@ -25,11 +25,11 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.1"
+#define rotencPiVersion "Version 0.1"
 
 //  Compilation:
 //
-//  Compile with gcc librotencPi.c -o librotencPi -lwiringPi
+//  Compile with gcc -c -fpic rotencPi.c -lwiringPi
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -53,20 +53,13 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include "rotencPi.h"
 
 // ============================================================================
 // Data structures
 // ============================================================================
 
-struct encoderStruct
-{
-    unsigned char gpioA;
-    unsigned char gpioB;
-    unsigned char state;
-    char direction;
-} encoder;
-
-pthread_mutex_t encoderBusy;
+//struct encoderStruct encoder;
 
 // ============================================================================
 //  Encoder functions.
@@ -104,10 +97,6 @@ pthread_mutex_t encoderBusy;
     +---------+---------+---------+---------+
 */
 
-// ----------------------------------------------------------------------------
-//  State table for decoding direction.
-// ----------------------------------------------------------------------------
-
 const unsigned char encoderStateTable[7][4] = {{ 0x0, 0x2, 0x4, 0x0 },
                                                { 0x3, 0x0, 0x1, 0x10 },
                                                { 0x3, 0x2, 0x0, 0x0 },
@@ -124,7 +113,7 @@ const unsigned char encoderStateTable[7][4] = {{ 0x0, 0x2, 0x4, 0x0 },
               0 = no change determined.
              -1 = -ve direction.
 */
-static void encoderDirection()
+void encoderDirection()
 {
     // Lock thread
 //    pthread_mutex_lock( &encoderBusy );
@@ -148,7 +137,7 @@ static void encoderDirection()
 // ----------------------------------------------------------------------------
 //  Initialises encoder gpio pins.
 // ----------------------------------------------------------------------------
-static void encoderInit( unsigned char gpioA, unsigned char gpioB )
+void encoderInit( unsigned char gpioA, unsigned char gpioB )
 {
     wiringPiSetupGpio();
 

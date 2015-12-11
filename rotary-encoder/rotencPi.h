@@ -1,7 +1,7 @@
 // ****************************************************************************
 // ****************************************************************************
 /*
-    librotencpi:
+    rotencPi:
 
     Rotary encoder driver for the Raspberry Pi.
 
@@ -25,11 +25,9 @@
 // ****************************************************************************
 // ****************************************************************************
 
-#define Version "Version 0.1"
-
 //  Compilation:
 //
-//  Compile with gcc -c -fpic librotencPi.c -lwiringPi
+//  Compile with gcc -c -fpic rotencPi.c -lwiringPi
 //  Also use the following flags for Raspberry Pi optimisation:
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
@@ -45,6 +43,8 @@
 //  To Do:
 //      Write GPIO and interrupt routines to replace wiringPi.
 //
+#ifndef ROTENCPI_H
+#define ROTENCPI_H
 
 #include <stdio.h>
 #include <string.h>
@@ -63,7 +63,7 @@ struct encoderStruct
     unsigned char gpioA;
     unsigned char gpioB;
     unsigned char state;
-    char direction;
+    int direction;
 } encoder;
 
 pthread_mutex_t encoderBusy;
@@ -105,18 +105,6 @@ pthread_mutex_t encoderBusy;
 */
 
 // ----------------------------------------------------------------------------
-//  State table for decoding direction.
-// ----------------------------------------------------------------------------
-
-const unsigned char encoderStateTable[7][4] = {{ 0x0, 0x2, 0x4, 0x0 },
-                                               { 0x3, 0x0, 0x1, 0x10 },
-                                               { 0x3, 0x2, 0x0, 0x0 },
-                                               { 0x3, 0x2, 0x1, 0x0 },
-                                               { 0x6, 0x0, 0x4, 0x0 },
-                                               { 0x6, 0x5, 0x0, 0x20 },
-                                               { 0x6, 0x5, 0x4, 0x0 }};
-
-// ----------------------------------------------------------------------------
 //  Returns encoder direction - should be called by an interrupt function.
 // ----------------------------------------------------------------------------
 /*
@@ -124,10 +112,12 @@ const unsigned char encoderStateTable[7][4] = {{ 0x0, 0x2, 0x4, 0x0 },
               0 = no change determined.
              -1 = -ve direction.
 */
-static void encoderDirection();
+void encoderDirection();
 
 
 // ----------------------------------------------------------------------------
 //  Initialises encoder gpio pins.
 // ----------------------------------------------------------------------------
-static void encoderInit( unsigned char gpioA, unsigned char gpioB );
+void encoderInit( unsigned char gpioA, unsigned char gpioB );
+
+#endif

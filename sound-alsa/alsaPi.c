@@ -32,7 +32,7 @@
 //         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
 //         -ffast-math -pipe -O3
 
-#define Version "Version 0.1"
+#define alsaPiVersion "Version 0.1"
 
 //  Authors:        D.Faulke    10/12/2015
 //
@@ -63,9 +63,20 @@
 // ============================================================================
 // Data structures and types.
 // ============================================================================
-/*
-    Global types are defined in libsoundPi.h
-*/
+//  Set default values.
+//struct soundStruct sound =
+//{
+//    sound.card = "hw:0";
+//    sound.mixer = "default";
+//    sound.factor = 1.0;
+//    sound.index = 0;
+//    sound.incs = 20;
+//    sound.volume = 0;
+//    sound.mute = false;
+//    sound.print = false;
+//};
+
+bool header = false; // Flag to print header on 1st set volume.
 
 // ============================================================================
 //  Functions.
@@ -74,46 +85,61 @@
 // ----------------------------------------------------------------------------
 //  Initialises hardware and returns info in soundStruct.
 // ----------------------------------------------------------------------------
-void soundOpen( struct soundStruct sound )
+int soundOpen( void )
 {
+    int err;
+
     //  Set up ALSA mixer.
-    snd_mixer_open( &mixerHandle, 0 );
-    snd_mixer_attach( mixerHandle, sound.card );
-    snd_mixer_load( mixerHandle );
-    snd_mixer_selem_register( mixerHandle, NULL, NULL );
+    err = snd_mixer_open( &mixerHandle, 0 );
+    if ( err < 0 )
+    {
+        printf( "%s.\n", snd_strerror( err ));
+        return err;
+    }
+    err = snd_mixer_attach( mixerHandle, sound.card );
+    if ( err < 0 )
+    {
+        printf( "%s.\n", snd_strerror( err ));
+        return err;
+    }
+    err = snd_mixer_load( mixerHandle );
+    if ( err < 0 )
+    {
+        printf( "%s.\n", snd_strerror( err ));
+        return err;
+    }
+    err = snd_mixer_selem_register( mixerHandle, NULL, NULL );
+    if ( err < 0 )
+    {
+        printf( "%s.\n", snd_strerror( err ));
+        return err;
+    }
 
     snd_mixer_selem_id_alloca( &mixerId );
     snd_mixer_selem_id_set_name( mixerId, sound.mixer );
+
     mixerElem = snd_mixer_find_selem( mixerHandle, mixerId );
+    if ( mixerElem == NULL )
+    {
+        printf( "Couldn't find mixer" );
+        return -1;
+    }
     snd_mixer_selem_get_id( mixerElem, mixerId );
 
     // Get hardware volume limits.
     long min, max;
-    snd_mixer_selem_get_playback_volume_range( mixerElem, &min, &max );
+    err = snd_mixer_selem_get_playback_volume_range( mixerElem, &min, &max );
+    if ( err < 0 )
+    {
+        printf( "%s.\n", snd_strerror( err ));
+        return err;
+    }
     sound.min = min;
     sound.max = max;
     sound.range = max - min;
 
-    return;
+    return 0;
 }
-
-// ----------------------------------------------------------------------------
-//  Sets soundStruct.index for a given volume.
-// ----------------------------------------------------------------------------
-/*
-    To avoid rounding errors, volume is set based on an index value. This
-    function sets the closest index value for a given volume based on the
-    number of increments over the possible range.
-    Should be called after soundOpen if the starting volume is not zero.
-*/
-void setIndex( int volume )
-    // Get closest volume index for starting volume.
-{
-    sound.index = ( sound.incs - ( sound.max - volume ) *
-                    sound.incs / ( sound.max - sound.min ));
-    return;
-};
-
 
 // ----------------------------------------------------------------------------
 //  Calculates volume based on index. Returns value in soundStruct.
@@ -132,19 +158,43 @@ long calcVol( float index, float incs, float range, float min, float factor )
     long volume;
 
     if ( factor == 1 )
-         volume = lroundf(( sound.index / sound.incs * sound.range ) + sound.min );
+         volume = lroundf(( index / incs * range ) + min );
     else volume = lroundf((( pow( factor, index / incs ) - 1 ) /
-                                ( sound.factor - 1 ) * sound.range + sound.min ));
+                                ( factor - 1 ) * range + min ));
+//    printf( "Calculated volume for index %d as %ld.\n", lroundf( index ), volume );
     return volume;
+};
+
+// ----------------------------------------------------------------------------
+//  Sets soundStruct.index for a given volume.
+// ----------------------------------------------------------------------------
+/*
+    To avoid rounding errors, volume is set based on an index value. This
+    function sets the closest index value for a given volume based on the
+    number of increments over the possible range.
+    Should be called after soundOpen if the starting volume is not zero.
+*/
+void setIndex( float volume, float incs, float min, float max )
+//void setIndex( int volume )
+    // Get closest volume index for starting volume.
+{
+//    sound.index = lroundf( sound.incs - ( sound.max - volume ) *
+//                    sound.incs / ( sound.max - sound.min ));
+    sound.index = lroundf( incs - ( max - volume ) * incs / ( max - min ));
+
+    // Ensure volume represents calculated index.
+    sound.volume = calcVol( sound.index, sound.incs, sound.range,
+                            sound.min, sound.factor );
+    return;
 };
 
 // ----------------------------------------------------------------------------
 //  Set volume using ALSA mixers.
 // ----------------------------------------------------------------------------
-void setVol( void )
+int setVol( void )
 {
-
     long linearVol; // Linear volume. Used for debugging.
+    int err;
 
     sound.volume = calcVol( sound.index,
                             sound.incs,
@@ -153,9 +203,9 @@ void setVol( void )
                             sound.factor );
 
     // If control is mono then FL will set volume.
-    snd_mixer_selem_set_playback_volume( mixerElem,
+    err=snd_mixer_selem_set_playback_volume( mixerElem,
             SND_MIXER_SCHN_FRONT_LEFT, sound.volume );
-    snd_mixer_selem_set_playback_volume( mixerElem,
+    err=snd_mixer_selem_set_playback_volume( mixerElem,
             SND_MIXER_SCHN_FRONT_RIGHT, sound.volume );
 
     if ( sound.print ) // Print output if requested. For debugging.
@@ -177,13 +227,16 @@ void setVol( void )
 
             header = true;
         }
-        printf( "\t| %3i | %3i | %6ld | %6ld | %6d | %6d |\n",
-                sound.index, sound.index,
-                linearVol, linearVol,
-                sound.volume, sound.volume );
+        if ( err < 0 )
+            printf( "\t| %-45s |\n", snd_strerror( err ));
+        else
+            printf( "\t| %3i | %3i | %6ld | %6ld | %6d | %6d |\n",
+                        sound.index, sound.index,
+                        linearVol, linearVol,
+                        sound.volume, sound.volume );
     }
 
-    return;
+    return err;
 };
 
 // ----------------------------------------------------------------------------
@@ -216,3 +269,4 @@ void soundClose( void )
 
     return;
 };
+

@@ -41,6 +41,9 @@
 //      Add soft limits.
 //
 
+#ifndef ALSAPI_H
+#define ALSAPI_H
+
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
@@ -53,7 +56,6 @@
 // ============================================================================
 // Data structures and types.
 // ============================================================================
-
 struct soundStruct
 {
     char *card;          // ALSA card ID.
@@ -68,18 +70,7 @@ struct soundStruct
     char balance;         // Relative balance -100(%) to +100(%).
     bool mute;           // Mute switch.
     bool print;          // Print output switch.
-} sound =
-//  Set default values.
-{
-    .card = "hw:0",
-    .mixer = "default",
-    .factor = 1.0,
-    .index = 0,
-    .incs = 20,
-    .volume = 0,
-    .mute = false,
-    .print = false
-};
+} sound;
 
 // ALSA control types.
 snd_ctl_t *ctlHandle;             // Simple control handle.
@@ -94,8 +85,6 @@ snd_mixer_t *mixerHandle;         // Mixer handle.
 snd_mixer_selem_id_t *mixerId;    // Mixer simple element identifier.
 snd_mixer_elem_t *mixerElem;      // Mixer element handle.
 
-bool header = false; // Flag to print header on 1st set volume.
-
 // ============================================================================
 //  Functions.
 // ============================================================================
@@ -103,7 +92,7 @@ bool header = false; // Flag to print header on 1st set volume.
 // ----------------------------------------------------------------------------
 //  Initialises hardware and returns info in soundStruct.
 // ----------------------------------------------------------------------------
-void soundOpen( struct soundStruct sound );
+int soundOpen( void );
 
 // ----------------------------------------------------------------------------
 //  Sets soundStruct.index for a given volume.
@@ -114,7 +103,8 @@ void soundOpen( struct soundStruct sound );
     number of increments over the possible range.
     Should be called after soundOpen if the starting volume is not zero.
 */
-void setIndex( int volume );
+void setIndex( float volume, float incs, float min, float max );
+//void setIndex( int volume );
 
 // ----------------------------------------------------------------------------
 //  Calculates volume based on index. Returns value in soundStruct.
@@ -133,7 +123,7 @@ long calcVol( float index, float incs, float range, float min, float factor );
 // ----------------------------------------------------------------------------
 //  Set volume using ALSA mixers.
 // ----------------------------------------------------------------------------
-void setVol( void );
+int setVol( void );
 
 // ----------------------------------------------------------------------------
 //  Increases volume.
@@ -149,3 +139,5 @@ void decVol( void );
 //  Detaches and closes ALSA.
 // ----------------------------------------------------------------------------
 void soundClose( void );
+
+#endif
