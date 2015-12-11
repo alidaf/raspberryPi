@@ -1,9 +1,9 @@
-// ****************************************************************************
-// ****************************************************************************
 /*
-    testHD44780:
+//  ===========================================================================
 
-    Tests HD44780 LCD display driver for the Raspberry Pi.
+    testHD44780gpio:
+
+    Tests HD44780 LCD display driver for the Raspberry Pi (GPIO version).
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
 
@@ -19,29 +19,37 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+//  ===========================================================================
 */
-// ****************************************************************************
-// ****************************************************************************
 
-#define Version "Version 0.1"
+#define Version "Version 0.2"
 
-//  Compilation:
-//
-//  Compile with gcc testHD44780.c hd44780.c -Wall -o testHD44780
-//                   -lwiringPi -lpthread -lhd44780Pi
-//
-//  Also use the following flags for Raspberry Pi optimisation:
-//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
-//         -ffast-math -pipe -O3
+/*
+//  ---------------------------------------------------------------------------
 
-//  Authors:        D.Faulke    10/12/2015  This program.
-//
-//  Contributors:
-//
-//  Changelog:
-//
-//  v0.1 Original version.
-//
+    Compile with:
+
+    gcc testHD44780gpio.c hd44780.c -Wall -o testHD44780gpio
+                     -lwiringPi -lpthread -lhd44780Pi
+
+    Also use the following flags for Raspberry Pi optimisation:
+        -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+        -ffast-math -pipe -O3
+
+//  ---------------------------------------------------------------------------
+
+    Authors:        D.Faulke    11/12/2015  This program.
+
+    Contributors:
+
+    Changelog:
+
+        v0.1    Original version.
+        v0.2    Rewrote code into libraries.
+
+//  ---------------------------------------------------------------------------
+*/
 
 #include <stdio.h>
 #include <string.h>
@@ -52,28 +60,24 @@
 
 #include "hd44780Pi.h"
 
-// Define a mutex to allow concurrent display routines.
-/*
-    Mutex needs to lock before any cursor positioning or write functions.
-*/
-pthread_mutex_t displayBusy;
-
 int main()
 {
-    unsigned char data      = 0; // 4-bit mode.
-    unsigned char lines     = 1; // 2 display lines.
-    unsigned char font      = 1; // 5x8 font.
-    unsigned char display   = 1; // Display on.
-    unsigned char cursor    = 0; // Cursor off.
-    unsigned char blink     = 0; // Blink (block cursor) off.
-    unsigned char counter   = 1; // Increment DDRAM counter after data write
-    unsigned char shift     = 0; // Do not shift display after data write.
-    unsigned char mode      = 0; // Shift cursor.
-    unsigned char direction = 0; // Right.
+    uint8_t data      = 0;  // 4-bit mode.
+    uint8_t lines     = 1;  // 2 display lines.
+    uint8_t font      = 1;  // 5x8 font.
+    uint8_t display   = 1;  // Display on.
+    uint8_t cursor    = 0;  // Cursor off.
+    uint8_t blink     = 0;  // Blink (block cursor) off.
+    uint8_t counter   = 1;  // Increment DDRAM counter after data write
+    uint8_t shift     = 0;  // Do not shift display after data write.
+    uint8_t mode      = 0;  // Shift cursor.
+    uint8_t direction = 0;  // Right.
 
+    // Initialise display.
     hd44780Init( data, lines, font, display, cursor, blink,
                  counter, shift, mode, direction );
 
+    // Set time display properties.
     struct timeStruct textTime =
     {
         .row = 0,
@@ -82,6 +86,7 @@ int main()
         .format = HMS
     };
 
+    // Set text display properties.
     struct dateStruct textDate =
     {
         .row = 0,
@@ -90,6 +95,7 @@ int main()
         .format = DAY_DMY
     };
 
+    // Set ticker tape properties.
     struct tickerStruct ticker =
     {
         .text = "This text is really long and used to demonstrate the ticker!",
