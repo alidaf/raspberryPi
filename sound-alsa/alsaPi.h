@@ -1,5 +1,4 @@
 // ****************************************************************************
-// ****************************************************************************
 /*
     alsaPi:
 
@@ -23,7 +22,6 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 // ****************************************************************************
-// ****************************************************************************
 
 //  Authors:        D.Faulke    10/12/2015
 //
@@ -44,18 +42,18 @@
 #ifndef ALSAPI_H
 #define ALSAPI_H
 
-#include <stdio.h>
-#include <string.h>
-#include <alsa/asoundlib.h>
-#include <alsa/mixer.h>
-#include <math.h>
-#include <stdbool.h>
-#include <ctype.h>
-#include <stdlib.h>
+//#include <stdio.h>
+//#include <string.h>
+//#include <alsa/asoundlib.h>
+//#include <alsa/mixer.h>
+//#include <math.h>
+//#include <stdbool.h>
+//#include <ctype.h>
+//#include <stdlib.h>
 
-// ============================================================================
-// Data structures and types.
-// ============================================================================
+
+//  Data structures. ----------------------------------------------------------
+
 struct soundStruct
 {
     char *card;          // ALSA card ID.
@@ -72,7 +70,9 @@ struct soundStruct
     bool print;          // Print output switch.
 } sound;
 
-// ALSA control types.
+
+//  ALSA control types. -------------------------------------------------------
+
 snd_ctl_t *ctlHandle;             // Simple control handle.
 snd_ctl_elem_id_t *ctlId;         // Simple control element id.
 snd_ctl_elem_value_t *ctlControl; // Simple control element value.
@@ -80,38 +80,27 @@ snd_ctl_elem_type_t ctlType;      // Simple control element type.
 snd_ctl_elem_info_t *ctlInfo;     // Simple control element info container.
 snd_ctl_card_info_t *ctlCard;     // Simple control card info container.
 
-// ALSA mixer types.
+
+// ALSA mixer types. ----------------------------------------------------------
+
 snd_mixer_t *mixerHandle;         // Mixer handle.
 snd_mixer_selem_id_t *mixerId;    // Mixer simple element identifier.
 snd_mixer_elem_t *mixerElem;      // Mixer element handle.
 
-// ============================================================================
-//  Functions.
-// ============================================================================
+
+//  Functions. ----------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
-//  Initialises hardware and returns info in soundStruct.
+//  Initialises hardware and returns info in sound struct.
 // ----------------------------------------------------------------------------
 int soundOpen( void );
-
-// ----------------------------------------------------------------------------
-//  Sets soundStruct.index for a given volume.
-// ----------------------------------------------------------------------------
-/*
-    To avoid rounding errors, volume is set based on an index value. This
-    function sets the closest index value for a given volume based on the
-    number of increments over the possible range.
-    Should be called after soundOpen if the starting volume is not zero.
-*/
-void setIndex( float volume, float incs, float min, float max );
-//void setIndex( int volume );
 
 // ----------------------------------------------------------------------------
 //  Calculates volume based on index. Returns value in soundStruct.
 // ----------------------------------------------------------------------------
 /*
     linear volume = ratio * range + min.
-    mapped volume = ( factor^ratio - 1 ) / ( base - 1 ) * range + min.
+    mapped volume = ( factor^ratio - 1 ) / ( factor - 1 ) * range + min.
     ratio = index / incs.
 
     factor < 1, logarithmic.

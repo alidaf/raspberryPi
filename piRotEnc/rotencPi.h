@@ -1,5 +1,4 @@
 // ****************************************************************************
-// ****************************************************************************
 /*
     rotencPi:
 
@@ -23,14 +22,6 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 // ****************************************************************************
-// ****************************************************************************
-
-//  Compilation:
-//
-//  Compile with gcc -c -fpic rotencPi.c -lwiringPi
-//  Also use the following flags for Raspberry Pi optimisation:
-//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
-//         -ffast-math -pipe -O3
 
 //  Authors:        D.Faulke    10/12/2015
 //  Contributors:
@@ -43,37 +34,29 @@
 //  To Do:
 //      Write GPIO and interrupt routines to replace wiringPi.
 //
+
 #ifndef ROTENCPI_H
 #define ROTENCPI_H
 
-#include <stdio.h>
-#include <string.h>
-#include <argp.h>
-#include <wiringPi.h>
-#include <stdbool.h>
-#include <ctype.h>
-#include <stdlib.h>
-
-// ============================================================================
-// Data structures
-// ============================================================================
+// Data structures ------------------------------------------------------------
 
 struct encoderStruct
 {
-    unsigned char gpioA;
-    unsigned char gpioB;
-    unsigned char state;
-    int direction;
+    uint8_t gpioA;
+    uint8_t gpioB;
+    uint8_t state;
+    int8_t  direction;
 } encoder;
 
-pthread_mutex_t encoderBusy;
+struct buttonStruct
+{
+    uint8_t gpio;
+    bool    state;
+} button;
 
-// ============================================================================
-//  Encoder functions.
-// ============================================================================
+/*  Description of rotary encoder function. -----------------------------------
 
-/*
-    Quadrature encoding for rotary encoder:
+    Quadrature encoding:
 
           :   :   :   :   :   :   :   :   :
           :   +-------+   :   +-------+   :         +---+-------+-------+
@@ -91,33 +74,41 @@ pthread_mutex_t encoderBusy;
           :   :   :   :   :   :   :   :   :
 
     State table for full step mode:
-    +---------+---------+---------+---------+
-    | AB = 00 | AB = 01 | AB = 10 | AB = 11 |
-    +---------+---------+---------+---------+
-    | START   | C/W 1   | A/C 1   | START   |
-    | C/W +   | START   | C/W X   | C/W DIR |
-    | C/W +   | C/W 1   | START   | START   |
-    | C/W +   | C/W 1   | C/W X   | START   |
-    | A/C +   | START   | A/C 1   | START   |
-    | A/C +   | A/C X   | START   | A/C DIR |
-    | A/C +   | A/C X   | A/C 1   | START   |
-    +---------+---------+---------+---------+
+
+            +---------+---------+---------+---------+
+            | AB = 00 | AB = 01 | AB = 10 | AB = 11 |
+            +---------+---------+---------+---------+
+            | START   | C/W 1   | A/C 1   | START   |
+            | C/W +   | START   | C/W X   | C/W DIR |
+            | C/W +   | C/W 1   | START   | START   |
+            | C/W +   | C/W 1   | C/W X   | START   |
+            | A/C +   | START   | A/C 1   | START   |
+            | A/C +   | A/C X   | START   | A/C DIR |
+            | A/C +   | A/C X   | A/C 1   | START   |
+            +---------+---------+---------+---------+
 */
 
 // ----------------------------------------------------------------------------
-//  Returns encoder direction - should be called by an interrupt function.
+//  Returns encoder direction in encoderStruct. Call by interrupt on GPIOs.
 // ----------------------------------------------------------------------------
 /*
-    Returns: +1 = +ve direction.
-              0 = no change determined.
-             -1 = -ve direction.
+    direction = +1: +ve direction.
+              =  0: no change determined.
+              = -1: -ve direction.
 */
-void encoderDirection();
-
+void encoderDirection( void );
 
 // ----------------------------------------------------------------------------
-//  Initialises encoder gpio pins.
+//  Returns button state in buttonStruct. Call by interrupt on GPIO.
 // ----------------------------------------------------------------------------
-void encoderInit( unsigned char gpioA, unsigned char gpioB );
+void buttonState( void );
+
+// ----------------------------------------------------------------------------
+//  Initialises encoder and button GPIOs.
+// ----------------------------------------------------------------------------
+/*
+    Send 0xFF for button if no GPIO present.
+*/
+void encoderInit( uint8_t encoderA, uint8_t encoderB, uint8_t button );
 
 #endif
