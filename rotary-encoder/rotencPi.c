@@ -6,8 +6,9 @@
     Rotary encoder driver for the Raspberry Pi.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
-        Rotary encoder state machine based on algorithm by Ben Buxton.
-            - see http://www.buxtronix.net.
+
+    Based on state machine algorithm by Michael Kellet.
+        -see www.mkesc.co.uk/ise.pdf
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -56,12 +57,8 @@
 
 #include <stdio.h>
 #include <stdint.h>
-//#include <string.h>
-//#include <argp.h>
 #include <wiringPi.h>
 #include <stdbool.h>
-//#include <ctype.h>
-//#include <stdlib.h>
 #include <pthread.h>
 
 #include "rotencPi.h"
@@ -77,64 +74,26 @@ pthread_mutex_t encoderBBusy;   // Mutex lock for encoder interrupt function.
 
 //  Data types ----------------------------------------------------------------
 
-static const uint8_t encoderStateTable[7][4] = {{ 0x00, 0x02, 0x04, 0x00 },
-                                                { 0x03, 0x00, 0x01, 0x10 },
-                                                { 0x03, 0x02, 0x00, 0x00 },
-                                                { 0x03, 0x02, 0x01, 0x00 },
-                                                { 0x06, 0x00, 0x04, 0x00 },
-                                                { 0x06, 0x05, 0x00, 0x20 },
-                                                { 0x06, 0x05, 0x04, 0x00 }};
-
-// ----------------------------------------------------------------------------
-//  Called by interrupt on encoder pin A. Used for debugging.
-// ----------------------------------------------------------------------------
-void encoderA( void )
-{
-    pthread_mutex_lock( &encoderABusy );
-    printf( "Called by trigger on A.\n" );
-    encoder.state = ( digitalRead( encoder.gpioB ) << 1 ) |
-                      digitalRead( encoder.gpioA );
-
-    printf( "AB = 0x%x.\n", encoder.state );
-    pthread_mutex_unlock( &encoderABusy );
-    delay( 100 );
-    return;
-}
-
-// ----------------------------------------------------------------------------
-//  Called by interrupt on encoder pin B. Used for debugging.
-// ----------------------------------------------------------------------------
-void encoderB( void )
-{
-    pthread_mutex_lock( &encoderBBusy );
-    printf( "Called by trigger on B.\n" );
-    encoder.state = ( digitalRead( encoder.gpioB ) << 1 ) |
-                      digitalRead( encoder.gpioA );
-
-    printf( "AB = 0x%x.\n", encoder.state );
-    pthread_mutex_unlock( &encoderBBusy );
-    delay( 100 );
-    return;
-}
+static const uint8_t encoderStateTable[STATE_TABLE_SIZE] = STATE_TABLE;
 
 // ----------------------------------------------------------------------------
 //  Returns encoder direction in encoder struct. Call by interrupt on GPIOs.
 // ----------------------------------------------------------------------------
-void encoderDirection( void )
+void setEncoderDirection( void )
 {
     // Lock thread.
     pthread_mutex_lock( &encoderBusy );
 
-    // Get GPIO values and combine to form code.
-    uint8_t code = ( digitalRead( encoder.gpioB ) << 1 ) |
-                     digitalRead( encoder.gpioA );
+    // Shift old AB into high nibble and read current AB into low nibble.
+    uint8_t code = (( encoderState << 2 ) |
+                   (( digitalRead( encoder.gpioA ) << 1 ) & 0x3 ) |
+                    ( digitalRead( encoder.gpioB ) & 0x1 ));
 
-    encoder.state = encoderStateTable[ encoder.state & 0xf ][ code ];
+    // Assign result to volatile EncoderState variable.
+    encoderState = ( code & 0xf );
 
-    // Determine direction.
-    uint8_t direction = encoder.state & 0x30;
-    if ( direction ) encoder.direction = ( direction == 0x10 ? -1 : 1 );
-    else encoder.direction = 0;
+    // Get direction from state table.
+    encoderDirection = encoderStateTable[ encoderState ];
 
     // Unlock thread.
     pthread_mutex_unlock( &encoderBusy );
@@ -145,14 +104,14 @@ void encoderDirection( void )
 // ----------------------------------------------------------------------------
 //  Returns button state in button struct. Call by interrupt on GPIO.
 // ----------------------------------------------------------------------------
-void buttonState( void )
+void setButtonState( void )
 {
     // Lock thread.
     pthread_mutex_lock( &buttonBusy );
 
     // Read GPIO state.
     int buttonRead = digitalRead( button.gpio );
-    if ( buttonRead ) button.state = !button.state;
+    if ( buttonRead ) buttonState = !buttonState;
 
     // Unlock thread.
     pthread_mutex_unlock( &buttonBusy );
@@ -181,14 +140,20 @@ void encoderInit( uint8_t gpioA, uint8_t gpioB, uint8_t gpioC )
     pullUpDnControl( encoder.gpioB, PUD_UP );
 
     //  Register interrupt functions.
-//    wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &encoderDirection );
-//    wiringPiISR( encoder.gpioB, INT_EDGE_RISING, &encoderDirection );
-    wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &encoderA );
-    wiringPiISR( encoder.gpioB, INT_EDGE_RISING, &encoderB );
+    if ( encoder.mode == SIMPLE )
+        wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &setEncoderDirection );
+    else
+    if ( encoder.mode == HALF )
+        wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setEncoderDirection );
+    else
+    {
+        wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setEncoderDirection );
+        wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &setEncoderDirection );
+    }
 
     // Set states.
-    encoder.direction = 0;
-    encoder.state = 0;
+    encoderDirection = 0;
+    encoderState = 0;
 
     // Only set up a button if there is one.
     if ( gpioC != 0xFF )
@@ -204,10 +169,10 @@ void encoderInit( uint8_t gpioA, uint8_t gpioB, uint8_t gpioC )
         pullUpDnControl( button.gpio, PUD_UP );
 
         // Register interrupt function.
-        wiringPiISR( button.gpio, INT_EDGE_FALLING, &buttonState );
+        wiringPiISR( button.gpio, INT_EDGE_FALLING, &setButtonState );
 
         // Set state.
-        button.state = 0;
+        buttonState = 0;
     }
 
     return;

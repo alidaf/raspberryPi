@@ -54,19 +54,21 @@ int main( void )
 {
     //  Initialise encoder and function button.
     encoderInit( 23, 24, 0xFF );
+    encoder.mode = FULL;
+    encoder.delay = 100;
 
     //  Check for attributes changed by interrupts.
     while ( 1 )
     {
         //  Volume.
-        if ( encoder.direction != 0 )
-        {
-            // Volume +
-            if ( encoder.direction > 0 ) printf( "++++.\n" );
-            // Volume -
-            else printf( "----\n" );
-            encoder.direction = 0;
-        }
+//        if ( encoderDirection != 0 )
+//        {
+//            // Volume +
+//            if ( encoderDirection > 0 ) printf( "++++.\n" );
+//            // Volume -
+//            else printf( "----\n" );
+//            encoderDirection = 0;
+//        }
         //  Button.
 //        if ( button.state )
 //        {
@@ -76,7 +78,7 @@ int main( void )
 //        }
 
         // Sensitivity delay.
-        delay( 100 );
+//        delay( 100 );
     }
 
     return 0;

@@ -6,8 +6,9 @@
     Rotary encoder driver for the Raspberry Pi.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
-        Rotary encoder state machine based on algorithm by Ben Buxton.
-            - see http://www.buxtronix.net.
+
+    Based on state machine algorithm by Michael Kellet.
+        -see www.mkesc.co.uk/ise.pdf
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -46,81 +47,81 @@
 #ifndef ROTENCPI_H
 #define ROTENCPI_H
 
+#define STATE_TABLE_SIZE 16
+#define STATE_TABLE { 0,-1, 1, 0, 1, 0, 0,-1,-1, 0, 0, 1, 0, 1,-1, 0 }
 
 // Data structures ------------------------------------------------------------
 
+volatile int8_t encoderDirection;   // Encoder direction.
+volatile int8_t encoderState;       // Encoder state, abAB.
+volatile int8_t buttonState;        // Button state, on or off.
+
+enum decode_t { SIMPLE, HALF, FULL };   // Decoder method. See below.
+
 struct encoderStruct
 {
-    uint8_t gpioA;
-    uint8_t gpioB;
-    uint8_t state;
-    int8_t  direction;
-} encoder;
+    uint8_t       gpioA; // GPIO for encoder pin A.
+    uint8_t       gpioB; // GPIO for encoder pin B.
+    uint16_t      delay; // Sensitivity delay (uS).
+    enum decode_t mode;  // Simple, half or full quadrature.
+}   encoder;
 
 struct buttonStruct
 {
-    uint8_t gpio;
-    bool    state;
-} button;
+    uint8_t gpio;   // GPIO for button pin.
+}   button;
 
 //  Description of rotary encoder function. -----------------------------------
 /*
     Quadrature encoding:
 
           :   :   :   :   :   :   :   :   :
-          :   +-------+   :   +-------+   :         +---+-------+-------+
-          :   |   :   |   :   |   :   |   :         | P |  +ve  |  -ve  |
-      A   :   |   :   |   :   |   :   |   :         | h +---+---+---+---+
-      --------+   :   +-------+   :   +-------      | a | A | B | A | B |
-          :   :   :   :   :   :   :   :   :         +---+---+---+---+---+
-          :   :   :   :   :   :   :   :   :         | 1 | 0 | 0 | 1 | 0 |
-          +-------+   :   +-------+   :   +---      | 2 | 0 | 1 | 1 | 1 |
-          |   :   |   :   |   :   |   :   |         | 3 | 1 | 1 | 0 | 1 |
-      B   |   :   |   :   |   :   |   :   |         | 4 | 1 | 0 | 0 | 0 |
-      ----+   :   +-------+   :   +-------+         +---+---+---+---+---+
-          :   :   :   :   :   :   :   :   :
-        1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2   <- Phase
-          :   :   :   :   :   :   :   :   :
+          :   +-------+   :   +-------+   :       +-----+---+---+---+---+----+
+          :   |   :   |   :   |   :   |   :       | dir | a | b | A | B | dc |
+      A   :   |   :   |   :   |   :   |   :       +-----+---+---+---+---+----+
+      --------+   :   +-------+   :   +-------    | +ve | 0 | 0 | 1 | 0 | 02 |
+          :   :   :   :   :   :   :   :   :       |     | 1 | 0 | 1 | 1 | 11 |
+          :   :   :   :   :   :   :   :   :       |     | 1 | 1 | 0 | 1 | 13 |
+          +-------+   :   +-------+   :   +---    |     | 0 | 1 | 0 | 0 | 04 |
+          |   :   |   :   |   :   |   :   |       +-----+---+---+---+---+----+
+      B   |   :   |   :   |   :   |   :   |       | -ve | 1 | 1 | 1 | 0 | 14 |
+      ----+   :   +-------+   :   +-------+       |     | 1 | 0 | 0 | 0 | 08 |
+          :   :   :   :   :   :   :   :   :       |     | 0 | 0 | 0 | 1 | 01 |
+        1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2     |     | 0 | 1 | 1 | 1 | 07 |
+          :   :   :   :   :   :   :   :   :       +-----+---+---+---+---+----+
 
-    State table for full step mode:
+    A & B are current readings and a & b are the previous readings.
+    hx & dc are the hex and decimal equivalents of nibble abAB.
 
-            +---------+---------+---------+---------+
-            | AB = 00 | AB = 01 | AB = 10 | AB = 11 |
-            +---------+---------+---------+---------+
-            | START   | C/W 1   | A/C 1   | START   |
-            | C/W +   | START   | C/W X   | C/W DIR |
-            | C/W +   | C/W 1   | START   | START   |
-            | C/W +   | C/W 1   | C/W X   | START   |
-            | A/C +   | START   | A/C 1   | START   |
-            | A/C +   | A/C X   | START   | A/C DIR |
-            | A/C +   | A/C X   | A/C 1   | START   |
-            +---------+---------+---------+---------+
+    There are 3 ways to decode the information, each giving different
+    resolutions:
+    Simple mode - Interrupt on leading edge of A. Sample B.
+    Half mode   - Interrupt on both edges of A. Sample A & B. (2x).
+    Full mode   - Interrupt on both edges of A and B. Sample A & B. (4x).
+
+    State table can be used for all modes:
+
+            +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+            |dec|00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|
+            +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+            |dir|00|-1|+1|00|+1|00|00|-1|-1|00|00|+1|00|+1|-1|00|
+            +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 */
 
 // ----------------------------------------------------------------------------
-//  Called by interrupt on encoder pin A. Used for debugging.
-// ----------------------------------------------------------------------------
-void encoderA( void );
-
-// ----------------------------------------------------------------------------
-//  Called by interrupt on encoder pin B. Used for debugging.
-// ----------------------------------------------------------------------------
-void encoderB( void );
-
-// ----------------------------------------------------------------------------
-//  Returns encoder direction in encoderStruct. Call by interrupt on GPIOs.
+//  Returns encoder direction in encoderDirection. Call by interrupt on GPIOs.
 // ----------------------------------------------------------------------------
 /*
     direction = +1: +ve direction.
               =  0: no change determined.
               = -1: -ve direction.
 */
-void encoderDirection( void );
+void setEncoderDirection( void );
 
 // ----------------------------------------------------------------------------
-//  Returns button state in buttonStruct. Call by interrupt on GPIO.
+//  Returns button state in buttonState. Call by interrupt on GPIO.
 // ----------------------------------------------------------------------------
-void buttonState( void );
+void setButtonState( void );
 
 // ----------------------------------------------------------------------------
 //  Initialises encoder and button GPIOs.
