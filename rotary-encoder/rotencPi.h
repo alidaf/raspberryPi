@@ -1,5 +1,6 @@
-// ****************************************************************************
 /*
+//  ===========================================================================
+
     rotencPi:
 
     Rotary encoder driver for the Raspberry Pi.
@@ -20,20 +21,27 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+//  ---------------------------------------------------------------------------
+
+    Authors:        D.Faulke    12/12/2015
+
+    Contributors:
+
+    Testers:        D.Stivens
+
+    Changelog:
+
+        v0.1    Original version.
+        v0.2    Converted to libraries.
+
+    To Do:
+
+        Write GPIO and interrupt routines to replace wiringPi.
+        Improve response by splitting interrupts.
+
+//  ---------------------------------------------------------------------------
 */
-// ****************************************************************************
-
-//  Authors:        D.Faulke    10/12/2015
-//  Contributors:
-//
-//  Changelog:
-//
-//  v0.1 Original version.
-//
-
-//  To Do:
-//      Write GPIO and interrupt routines to replace wiringPi.
-//
 
 #ifndef ROTENCPI_H
 #define ROTENCPI_H

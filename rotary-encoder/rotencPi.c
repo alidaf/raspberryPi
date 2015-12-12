@@ -1,5 +1,6 @@
-// ****************************************************************************
 /*
+//  ===========================================================================
+
     rotencPi:
 
     Rotary encoder driver for the Raspberry Pi.
@@ -20,30 +21,38 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+//  ===========================================================================
+
+    Compile with:
+
+        gcc -c -fpic -Wall rotencPi.c -lwiringPi -lpthread
+
+    Also use the following flags for Raspberry Pi optimisation:
+
+        -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
+        -ffast-math -pipe -O3
+
+//  ---------------------------------------------------------------------------
+
+    Authors:        D.Faulke    11/12/2015
+
+    Contributors:
+
+    Testers:        D.Stivens
+
+    Changelog:
+
+        v0.1    Original version.
+        v0.2    Converted to libraries.
+
+    To Do:
+
+        Write GPIO and interrupt routines to replace wiringPi.
+        Improve response by splitting interrupts.
+
+//  ---------------------------------------------------------------------------
 */
-// ****************************************************************************
-
-#define rotencPiVersion "Version 0.1"
-
-//  Compilation:
-//
-//  Compile with gcc -c -fpic rotencPi.c -lwiringPi
-//  Also use the following flags for Raspberry Pi optimisation:
-//         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
-//         -ffast-math -pipe -O3
-
-//  Authors:        D.Faulke    11/12/2015
-//  Contributors:
-//
-//  Changelog:
-//
-//  v0.1 Original version.
-//
-
-//  To Do:
-//      Write GPIO and interrupt routines to replace wiringPi.
-//
-
 
 #include <stdio.h>
 #include <stdint.h>
@@ -138,8 +147,8 @@ void encoderInit( uint8_t gpioA, uint8_t gpioB, uint8_t gpioC )
     pullUpDnControl( encoder.gpioB, PUD_UP );
 
     //  Register interrupt functions.
-    wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &encoderDirection );
-    wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &encoderDirection );
+    wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &encoderDirection );
+    wiringPiISR( encoder.gpioB, INT_EDGE_RISING, &encoderDirection );
 
     // Set states.
     encoder.direction = 0;
