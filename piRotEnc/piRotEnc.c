@@ -106,7 +106,7 @@ struct commandStruct            // Command line options.
     .increments     = 20,       // 20 increments from 0 to 100%.
     .factor         = 1,        // Volume change rate factor.
     .balance        = 0,        // L = R.
-    .delay          = 1000,     // 1ms between interrupt checks
+    .delay          = 50,       // 1ms between interrupt checks
     .printOutput    = false,    // No output printing.
     .printOptions   = false,    // No command line options printing.
     .printRanges    = false     // No range printing.
