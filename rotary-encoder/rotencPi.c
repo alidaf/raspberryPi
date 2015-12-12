@@ -72,6 +72,8 @@
 pthread_mutex_t encoderBusy; // Mutex lock for encoder interrupt function.
 pthread_mutex_t buttonBusy;  // Mutex lock for button inerrupt function.
 
+pthread_mutex_t encoderABusy;   // Mutex lock for encoder interrupt function.
+pthread_mutex_t encoderBBusy;   // Mutex lock for encoder interrupt function.
 
 //  Data types ----------------------------------------------------------------
 
@@ -84,9 +86,41 @@ static const uint8_t encoderStateTable[7][4] = {{ 0x00, 0x02, 0x04, 0x00 },
                                                 { 0x06, 0x05, 0x04, 0x00 }};
 
 // ----------------------------------------------------------------------------
+//  Called by interrupt on encoder pin A. Used for debugging.
+// ----------------------------------------------------------------------------
+void encoderA( void )
+{
+    pthread_mutex_lock( &encoderABusy );
+    printf( "Called by trigger on A.\n" );
+    encoder.state = ( digitalRead( encoder.gpioB ) << 1 ) |
+                      digitalRead( encoder.gpioA );
+
+    printf( "AB = 0x%x.\n", encoder.state );
+    pthread_mutex_unlock( &encoderABusy );
+    delay( 100 );
+    return;
+}
+
+// ----------------------------------------------------------------------------
+//  Called by interrupt on encoder pin B. Used for debugging.
+// ----------------------------------------------------------------------------
+void encoderB( void )
+{
+    pthread_mutex_lock( &encoderBBusy );
+    printf( "Called by trigger on B.\n" );
+    encoder.state = ( digitalRead( encoder.gpioB ) << 1 ) |
+                      digitalRead( encoder.gpioA );
+
+    printf( "AB = 0x%x.\n", encoder.state );
+    pthread_mutex_unlock( &encoderBBusy );
+    delay( 100 );
+    return;
+}
+
+// ----------------------------------------------------------------------------
 //  Returns encoder direction in encoder struct. Call by interrupt on GPIOs.
 // ----------------------------------------------------------------------------
-void encoderDirection()
+void encoderDirection( void )
 {
     // Lock thread.
     pthread_mutex_lock( &encoderBusy );
@@ -111,7 +145,7 @@ void encoderDirection()
 // ----------------------------------------------------------------------------
 //  Returns button state in button struct. Call by interrupt on GPIO.
 // ----------------------------------------------------------------------------
-void buttonState()
+void buttonState( void )
 {
     // Lock thread.
     pthread_mutex_lock( &buttonBusy );
@@ -147,8 +181,10 @@ void encoderInit( uint8_t gpioA, uint8_t gpioB, uint8_t gpioC )
     pullUpDnControl( encoder.gpioB, PUD_UP );
 
     //  Register interrupt functions.
-    wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &encoderDirection );
-    wiringPiISR( encoder.gpioB, INT_EDGE_RISING, &encoderDirection );
+//    wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &encoderDirection );
+//    wiringPiISR( encoder.gpioB, INT_EDGE_RISING, &encoderDirection );
+    wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &encoderA );
+    wiringPiISR( encoder.gpioB, INT_EDGE_RISING, &encoderB );
 
     // Set states.
     encoder.direction = 0;

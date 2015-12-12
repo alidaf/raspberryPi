@@ -22,7 +22,7 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-//  ---------------------------------------------------------------------------
+//  ===========================================================================
 
     Authors:        D.Faulke    12/12/2015
 
@@ -46,6 +46,7 @@
 #ifndef ROTENCPI_H
 #define ROTENCPI_H
 
+
 // Data structures ------------------------------------------------------------
 
 struct encoderStruct
@@ -62,8 +63,8 @@ struct buttonStruct
     bool    state;
 } button;
 
-/*  Description of rotary encoder function. -----------------------------------
-
+//  Description of rotary encoder function. -----------------------------------
+/*
     Quadrature encoding:
 
           :   :   :   :   :   :   :   :   :
@@ -95,6 +96,16 @@ struct buttonStruct
             | A/C +   | A/C X   | A/C 1   | START   |
             +---------+---------+---------+---------+
 */
+
+// ----------------------------------------------------------------------------
+//  Called by interrupt on encoder pin A. Used for debugging.
+// ----------------------------------------------------------------------------
+void encoderA( void );
+
+// ----------------------------------------------------------------------------
+//  Called by interrupt on encoder pin B. Used for debugging.
+// ----------------------------------------------------------------------------
+void encoderB( void );
 
 // ----------------------------------------------------------------------------
 //  Returns encoder direction in encoderStruct. Call by interrupt on GPIOs.
