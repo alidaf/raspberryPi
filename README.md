@@ -1,9 +1,10 @@
 ## raspberryPi
-RaspberryPi projects and utilities.
+
+RaspberryPi projects, libraries and utilities. Read the various header files for detailed descriptions.
 
 ###rotencPi:
 
-A rotary encoder library providing five different methods of decoding using interrupts.
+A rotary encoder library providing five different methods of decoding using interrupts. At some point, support for decoder chips may be included with some circuit diagrams. At the moment the decoding routines are interrupt driven but set a global variable that still needs to be polled. It is anticipated that the code will change to avoid this at some point.
 
 ###lcdPi:
 
@@ -14,13 +15,15 @@ lcd-hd44780-i2c provides the same support but using the I2C bus via a port expan
 
 These libraries enable up to 8 custom characters for animation, go to any position and display text. Has a tickertape mode that can display text many times larger than the screen size by rotating the text left or right. Some animation examples using custom characters and threading are included.
 
-#alsaPi
+lcd-amg19264-i2c will provide support for the display, and backlight control in the Popcorn C200.
+
+###alsaPi:
 
 A library to provide some routines to set and change volume. Intended for use with rotencPi. Volume adjustment can be profiled to compensate for, or accentuate the logarithmic response of ALSA. This will allow better control according to the type of use, e.g. headphones need better refinement at low volumes but DACs or line level devices may need better refinement at higher levels.
 
 A number of utility programs are also inlcuded for setting ALSA volume by using either high level controls or ALSA mixer elements.
 
-###infoPi
+###infoPi:
 
 A utility program for providing information on the Raspberry Pi, such as ALSA controls and mixers, GPIO pin layout and board revisions. Uses command line switches to provide specific information. 
 
@@ -30,7 +33,7 @@ A utility program for providing information on the Raspberry Pi, such as ALSA co
 * -g [pin] Returns corresponding GPIO for header pin number.
 * -h [gpio] Returns corresponding header pin number for GPIO.
 
-###piRotEnc
+###piRotEnc:
 
 A program to provide a package of rotary encoder controls for the Raspberry Pi. This incorporates the rotencPi, alsaPi and lcdPi libraries. It is intended that a button be used to select a control mode for a single rotary encoder, i.e. adjust volume, balance, mute, folder navigation and file selection. Tiny Core Linux packages will be uploaded to 'binaries' occasionally. This is still under development as work on the LCD, ALSA and rotary encoder libraries progress.
 
@@ -47,21 +50,27 @@ Command line parameters allow specifying:
 
 The LCD routines and rotary encoder routines are interrupt driven to keep CPU usage low.
 
-###popcornPi
-
-This is intended, once I have learned more about the hardware functions, to repurpose a Popcorn C200 case using a Raspberry Pi as a media server instead of the rather naff motherboard that it came with.
-
-###gpioPi
-
-This is intended to provide a library of functions to access and control GPIOs in a similar manner to wiringPi. It is not an attempt to replace wiringPi, which is a well supported library. It is an attempt to shortcut some of the more basic functions to provide more direct but fully interrupt driven libraries.
-
-###binaries
+###binaries:
 
 Tiny Core Linux packages and binaries for some of the programs and libraries. Packages can be made on request for anyone that is interested. A guide on how to install TCL packages is provided at the end of this file. 
 
-###deprecated
+###deprecated:
 
 Some older packages that have been deprecated or subsumed into other libraries.
+
+##To Do
+
+###popcornPi:
+
+This is intended, once I have learned more about the hardware functions, to repurpose a Popcorn C200 case using a Raspberry Pi as a media server instead of the rather naff motherboard that it came with.
+
+###streamPi:
+
+This will eventually provide a library of functions to manipulate media streams and provide information and control elements.
+
+###gpioPi:
+
+This is intended to provide a library of functions to access and control GPIOs in a similar manner to wiringPi. It is not an attempt to replace wiringPi, which is a well supported library. It is an attempt to shortcut some of the more basic functions to provide more direct but fully interrupt driven libraries.
 
 ---
 #### Instructions for installing the package manually in Tiny Core Linux and it's derivatives.
