@@ -89,6 +89,7 @@ struct commandStruct            // Command line options.
     float       factor;         // Volume shaping factor.
     int8_t      balance;        // Volume L/R balance.
     uint16_t    delay;          // Delay between encoder tics.
+    uint8_t     decode;         // Decoding method.
     bool        printOutput;    // Flag to print output.
     bool        printOptions;   // Flag to print options.
     bool        printRanges;    // Flag to print ranges.
@@ -106,7 +107,8 @@ struct commandStruct            // Command line options.
     .increments     = 20,       // 20 increments from 0 to 100%.
     .factor         = 1,        // Volume change rate factor.
     .balance        = 0,        // L = R.
-    .delay          = 50,       // 1ms between interrupt checks
+    .delay          = 100,      // 100ms between state checks.
+    .decode         = 4,        // Full decoding mode.
     .printOutput    = false,    // No output printing.
     .printOptions   = false,    // No command line options printing.
     .printRanges    = false     // No range printing.
@@ -119,6 +121,7 @@ struct boundsStruct                     // Boundary limits for options.
     float   factor  [NUM_BOUNDS];       // Shaping factor.
     uint8_t incs    [NUM_BOUNDS];       // Increments.
     uint16_t delay  [NUM_BOUNDS];       // Sensitivity delay.
+    uint8_t decode  [NUM_BOUNDS];       // Decoding methods.
 }
     bounds =                            // Set default values.
 {
@@ -126,7 +129,8 @@ struct boundsStruct                     // Boundary limits for options.
     .balance    =   { -100,  100    },  // -100% to +100%.
     .factor     =   { 0.001, 10     },  // 0.001 to 10.
     .incs       =   { 10,    0xFF   },  // UINT8.
-    .delay      =   { 1,     0xFFFF }   // UINT16.
+    .delay      =   { 1,     0xFFFF },  // UINT16.
+    .decode     =   { 0,     4      }   // Number of methods in library.
 };
 
 
@@ -152,6 +156,7 @@ static void printOptions( void )
     printf( "\t| Maximum         | %3i%% %10s |\n", command.maximum, "" );
     printf( "\t| Factor          | %7.3f %7s |\n", command.factor, "" );
     printf( "\t| Interrupt delay | %3i %11s |\n", command.delay, "" );
+    printf( "\t| Decode method   | %3i %11s |\n", command.decode, "" );
     printf( "\t+-----------------+-----------------+\n\n" );
 };
 
@@ -173,7 +178,9 @@ static void printRanges( void )
     printf( "\t| %-10s |   %2s   |  %3i  |  %3i  |\n",
             "Increments", "-i", bounds.incs[0], bounds.incs[1] );
     printf( "\t| %-10s |   %2s   |  %3i  |  %3i  |\n",
-            "Response", "-d", bounds.delay[0], bounds.delay[1] );
+            "Response", "-r", bounds.delay[0], bounds.delay[1] );
+    printf( "\t| %-10s |   %2s   |  %3d  |  %3d  |\n",
+            "Decode", "-d", bounds.decode[0], bounds.decode[1] );
     printf( "\t+------------+--------+-------+-------+\n\n" );
 };
 
@@ -207,6 +214,7 @@ static struct argp_option options[] =
     { "inc",       'i', "<int>",       0, "Volume increments." },
     { "fac",       'f', "<float>",     0, "Volume profile factor." },
     { 0, 0, 0, 0, "Responsiveness:" },
+    { "decode",    'd', "<int>",       0, "Decoding method." },
     { "delay",     'r', "<int>",       0, "Interrupt delay (mS)." },
     { 0, 0, 0, 0, "Debugging:" },
     { "proutput",  'P',       0,       0, "Print output while running." },
@@ -262,6 +270,9 @@ static int parse_opt( int param, char *arg, struct argp_state *state )
         case 'r' :
             command.delay = atoi( arg );
             break;
+        case 'd' :
+            command.decode = atoi( arg );
+            break;
         case 'P' :
             command.printOutput = true;
             break;
@@ -300,28 +311,31 @@ static bool checkParams ( void )
     static bool inBounds = true;
     inBounds = ( checkIfInBounds( command.volume,       // Volume soft limits.
                                   command.minimum,
-                                  command.maximum ) ||
+                                  command.maximum )   ||
                  checkIfInBounds( command.balance,      // Balance
                                   bounds.balance[0],
                                   bounds.balance[1] ) ||
                  checkIfInBounds( command.volume,       // Starting volume.
                                   bounds.volume[0],
-                                  bounds.volume[1] ) ||
+                                  bounds.volume[1] )  ||
                  checkIfInBounds( command.minimum,      // Minimum volume.
                                   bounds.volume[0],
-                                  bounds.volume[1] ) ||
+                                  bounds.volume[1] )  ||
                  checkIfInBounds( command.maximum,      // Maximum volume
                                   bounds.volume[0],
-                                  bounds.volume[1] ) ||
+                                  bounds.volume[1] )  ||
                  checkIfInBounds( command.increments,   // Increments.
                                   bounds.incs[0],
-                                  bounds.incs[1] ) ||
+                                  bounds.incs[1] )    ||
                  checkIfInBounds( command.factor,       // Shaping factor.
                                   bounds.factor[0],
-                                  bounds.factor[1] ) ||
+                                  bounds.factor[1] )  ||
                  checkIfInBounds( command.delay,        // Sensitivity delay.
                                   bounds.delay[0],
-                                  bounds.delay[1] ));
+                                  bounds.delay[1] )   ||
+                 checkIfInBounds( command.decode,       // Decode method.
+                                  bounds.decode[0],
+                                  bounds.decode[1] ));
     if ( !inBounds )
     {
         printf( "\nThere is something wrong with the set parameters.\n" );
@@ -358,6 +372,7 @@ int main( int argc, char *argv[] )
     sound.max       =   command.maximum;
 
     //  Initialise encoder and function button.
+    encoder.mode = command.decode;
     encoderInit( command.gpioA, command.gpioB, command.gpioC );
 
     //  Initialise ALSA.
@@ -370,13 +385,13 @@ int main( int argc, char *argv[] )
     while ( 1 )
     {
         //  Volume.
-        if (( encoder.direction != 0 ) && ( !sound.mute ))
+        if (( encoderDirection != 0 ) && ( !sound.mute ))
         {
             // Volume +
-            if ( encoder.direction > 0 ) incVol();
+            if ( encoderDirection > 0 ) incVol();
             // Volume -
             else decVol();
-            encoder.direction = 0;
+            encoderDirection = 0;
             setVol();
         }
         //  Button.
