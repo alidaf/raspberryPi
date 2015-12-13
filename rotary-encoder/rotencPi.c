@@ -46,6 +46,7 @@
 
         v0.1    Original version.
         v0.2    Converted to libraries.
+        v0.3    Combined different methods.
 
     To Do:
 
@@ -69,12 +70,10 @@
 pthread_mutex_t encoderBusy; // Mutex lock for encoder interrupt function.
 pthread_mutex_t buttonBusy;  // Mutex lock for button inerrupt function.
 
-pthread_mutex_t encoderABusy;   // Mutex lock for encoder interrupt function.
-pthread_mutex_t encoderBBusy;   // Mutex lock for encoder interrupt function.
 
 //  Data types ----------------------------------------------------------------
 
-// Simpled state table.
+// Simple state table.
 static const uint8_t simpleTable[SIMPLE_TABLE_COLS] = SIMPLE_TABLE;
 
 // State transition table - half mode.
@@ -83,33 +82,19 @@ static const uint8_t halfTable[HALF_TABLE_ROWS][HALF_TABLE_COLS] = HALF_TABLE;
 // State transition table - full mode.
 static const uint8_t fullTable[FULL_TABLE_ROWS][FULL_TABLE_COLS] = FULL_TABLE;
 
-// ----------------------------------------------------------------------------
-//  Sets direction in encoderDirection using SIMPLE_TABLE.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
+//  Sets direction in encoderDirection according to state of pin B.
+//  ---------------------------------------------------------------------------
 void setDirectionSimple( void )
 {
-    static uint8_t code = 0; // Keep readings between calls.
-
     // Lock thread.
     pthread_mutex_lock( &encoderBusy );
 
-    // Shift old AB into high nibble and read current AB into low nibble.
-    printf( "Old state = 0x%0x.\n", code );
-    code <<= 2; // Shift into ab
-    code |= ((( digitalRead( encoder.gpioA ) << 1 ) |
-              ( digitalRead( encoder.gpioB ))) & 0x03 );
-    code &= 0x0f;
-//                   (( digitalRead( encoder.gpioA ) << 1 ) & 0x3 ) |
-//                    ( digitalRead( encoder.gpioB ) & 0x1 ));
+    // Function is triggered by A so we only need to read B.
+    bool b = digitalRead( encoder.gpioB );
 
-    printf( "New state = 0x%0x.\n", code );
-
-    // Assign result to volatile EncoderState variable.
-//    encoderState = ( encoderState & 0x0f );
-
-    // Get direction from state table.
-    encoderDirection = simpleTable[ code ];
-    printf( "Direction = %d.\n", encoderDirection );
+    if ( b ) encoderDirection = -1;
+    else encoderDirection = 1;
 
     /*
         It may be a good idea to allow a function to be registered here
@@ -126,9 +111,46 @@ void setDirectionSimple( void )
     return;
 };
 
-// ----------------------------------------------------------------------------
+
+
+//  ---------------------------------------------------------------------------
+//  Sets direction in encoderDirection using SIMPLE_TABLE.
+//  ---------------------------------------------------------------------------
+void setDirectionTable( void )
+{
+    static uint8_t code = 0; // Keep readings between calls.
+
+    // Lock thread.
+    pthread_mutex_lock( &encoderBusy );
+
+    // Shift old AB into higher bits and read current AB into lower bits.
+    code <<= 2;
+    bool a = digitalRead( encoder.gpioA );
+    bool b = digitalRead( encoder.gpioB );
+    code += a * 0x2 + b;
+    code &= 0xf;
+
+    // Get direction from state table.
+    encoderDirection = simpleTable[ code ];
+
+    /*
+        It may be a good idea to allow a function to be registered here
+        rather than rely on polling the encoderDirection variable, which
+        causes high cpu usage. It will then be completely interrupt driven.
+        Since wiringPi does not allow parameter passing via it's interrupt
+        routine, this may not be feasible without rewriting the wiringPi
+        library.
+    */
+
+    // Unlock thread.
+    pthread_mutex_unlock( &encoderBusy );
+
+    return;
+};
+
+//  ---------------------------------------------------------------------------
 //  Sets direction in encoderDirection using HALF_TABLE.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 void setDirectionHalf( void )
 {
     // Lock thread.
@@ -165,9 +187,9 @@ void setDirectionHalf( void )
 
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Sets direction in encoderDirection using FULL_TABLE.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 void setDirectionFull( void )
 {
     // Lock thread.
@@ -203,9 +225,9 @@ void setDirectionFull( void )
 
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Returns button state in button struct. Call by interrupt on GPIO.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 void setButtonState( void )
 {
     // Lock thread.
@@ -230,9 +252,9 @@ void setButtonState( void )
     return;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Initialises encoder and button GPIOs.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 void encoderInit( uint8_t gpioA, uint8_t gpioB, uint8_t gpioC )
 {
     /*
@@ -257,11 +279,11 @@ void encoderInit( uint8_t gpioA, uint8_t gpioB, uint8_t gpioC )
             wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &setDirectionSimple );
             break;
         case SIMPLE_2:
-            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionSimple );
+            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionTable );
             break;
         case SIMPLE_4:
-            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionSimple );
-            wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &setDirectionSimple );
+            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionTable );
+            wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &setDirectionTable );
             break;
         case HALF:
             wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionHalf );
