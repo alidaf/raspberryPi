@@ -84,9 +84,9 @@ static const uint8_t halfTable[HALF_TABLE_ROWS][HALF_TABLE_COLS] = HALF_TABLE;
 static const uint8_t fullTable[FULL_TABLE_ROWS][FULL_TABLE_COLS] = FULL_TABLE;
 
 // ----------------------------------------------------------------------------
-//  Returns encoder direction in encoder struct. Call by interrupt on GPIOs.
+//  Sets direction in encoderDirection using SIMPLE_TABLE.
 // ----------------------------------------------------------------------------
-void setEncoderDirection( void )
+void setDirectionSimple( void )
 {
     static uint8_t code = 0; // Keep readings between calls.
 
@@ -125,6 +125,19 @@ void setEncoderDirection( void )
 
     return;
 };
+
+// ----------------------------------------------------------------------------
+//  Sets direction in encoderDirection using HALF_TABLE.
+// ----------------------------------------------------------------------------
+void setDirectionHalf( void )
+
+
+// ----------------------------------------------------------------------------
+//  Sets direction in encoderDirection using FULL_TABLE.
+// ----------------------------------------------------------------------------
+void setDirectionFull void )
+
+
 
 // ----------------------------------------------------------------------------
 //  Returns button state in button struct. Call by interrupt on GPIO.
@@ -174,20 +187,30 @@ void encoderInit( uint8_t gpioA, uint8_t gpioB, uint8_t gpioC )
     pullUpDnControl( encoder.gpioB, PUD_UP );
 
     //  Register interrupt functions.
-    if ( encoder.mode == SIMPLE )
-        wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &setEncoderDirection );
-    else
-    if ( encoder.mode == HALF )
-        wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setEncoderDirection );
-    else
+    switch ( encoder.mode )
     {
-        wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setEncoderDirection );
-        wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &setEncoderDirection );
+        case SIMPLE_1:
+            wiringPiISR( encoder.gpioA, INT_EDGE_RISING, &setDirectionSimple );
+            break;
+        case SIMPLE_2:
+            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionSimple );
+            break;
+        case SIMPLE_4:
+            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionSimple );
+            wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &setDirectionSimple );
+            break;
+        case HALF:
+            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionHalf );
+            wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &setDirectionHalf );
+            break;
+        default:
+            wiringPiISR( encoder.gpioA, INT_EDGE_BOTH, &setDirectionFull );
+            wiringPiISR( encoder.gpioB, INT_EDGE_BOTH, &setDirectionFull );
+            break;
     }
 
     // Set states.
     encoderDirection = 0;
-//    encoderState = 0;
 
     // Only set up a button if there is one.
     if ( gpioC != 0xFF )

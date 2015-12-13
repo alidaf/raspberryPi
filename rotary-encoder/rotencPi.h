@@ -47,12 +47,11 @@
 #ifndef ROTENCPI_H
 #define ROTENCPI_H
 
-#define SIMPLE_TABLE_COLS 16
-#define SIMPLE_TABLE { 0,-1, 1, 0, 1, 0, 0,-1,-1, 0, 0, 1, 0, 1,-1, 0 }
+#define SIMPLE_TABLE_COLS   16
+#define SIMPLE_TABLE       { 0,-1, 1, 0, 1, 0, 0,-1,-1, 0, 0, 1, 0, 1,-1, 0 }
 
-#define HALF_TABLE_ROWS 6
-#define HALF_TABLE_COLS 4
-
+#define HALF_TABLE_ROWS  6
+#define HALF_TABLE_COLS  4
 #define HALF_TABLE {{ 0x03, 0x02, 0x01, 0x00 },
                     { 0x23, 0x00, 0x01, 0x00 },
                     { 0x13, 0x02, 0x00, 0x00 },
@@ -61,9 +60,8 @@
                     { 0x03, 0x05, 0x03, 0x20 }}
 
 
-#define FULL_TABLE_ROWS 7
-#define FULL_TABLE_COLS 4
-
+#define FULL_TABLE_ROWS  7
+#define FULL_TABLE_COLS  4
 #define FULL_TABLE {{ 0x00, 0x02, 0x01, 0x00 },
                     { 0x03, 0x00, 0x01, 0x10 },
                     { 0x03, 0x02, 0x00, 0x00 },
@@ -98,24 +96,24 @@ struct buttonStruct
 //  Description of rotary encoder function. -----------------------------------
 /*
     Quadrature encoding:
-
-          :   :   :   :   :   :   :   :   :
-          :   +-------+   :   +-------+   :       +-----+---+---+---+---+----+
-          :   |   :   |   :   |   :   |   :       | dir | a | b | A | B | dc |
-      A   :   |   :   |   :   |   :   |   :       +-----+---+---+---+---+----+
-      --------+   :   +-------+   :   +-------    | +ve | 0 | 0 | 1 | 0 | 02 |
-          :   :   :   :   :   :   :   :   :       |     | 1 | 0 | 1 | 1 | 11 |
-          :   :   :   :   :   :   :   :   :       |     | 1 | 1 | 0 | 1 | 13 |
-          +-------+   :   +-------+   :   +---    |     | 0 | 1 | 0 | 0 | 04 |
-          |   :   |   :   |   :   |   :   |       +-----+---+---+---+---+----+
-      B   |   :   |   :   |   :   |   :   |       | -ve | 1 | 1 | 1 | 0 | 14 |
-      ----+   :   +-------+   :   +-------+       |     | 1 | 0 | 0 | 0 | 08 |
-          :   :   :   :   :   :   :   :   :       |     | 0 | 0 | 0 | 1 | 01 |
-        1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2     |     | 0 | 1 | 1 | 1 | 07 |
-          :   :   :   :   :   :   :   :   :       +-----+---+---+---+---+----+
+                                                  +---------------------------+
+          :   :   :   :   :   :   :   :   :       |     |  old  |  new  |     |
+          :   +-------+   :   +-------+   :       | dir |-------+-------| dec |
+          :   |   :   |   :   |   :   |   :       |     | a | b | A | B |     |
+      A   :   |   :   |   :   |   :   |   :       |-----+---+---+---+---+-----|
+      --------+   :   +-------+   :   +-------    | +ve | 0 | 0 | 1 | 0 |   2 |
+          :   :   :   :   :   :   :   :   :       |     | 1 | 0 | 1 | 1 |  11 |
+          :   :   :   :   :   :   :   :   :       |     | 1 | 1 | 0 | 1 |  13 |
+          +-------+   :   +-------+   :   +---    |     | 0 | 1 | 0 | 0 |   4 |
+          |   :   |   :   |   :   |   :   |       |-----+---+---+---+---+-----|
+      B   |   :   |   :   |   :   |   :   |       | -ve | 1 | 1 | 1 | 0 |  14 |
+      ----+   :   +-------+   :   +-------+       |     | 1 | 0 | 0 | 0 |   8 |
+          :   :   :   :   :   :   :   :   :       |     | 0 | 0 | 0 | 1 |   1 |
+        1 : 2 : 3 : 4 : 1 : 2 : 3 : 4 : 1 : 2     |     | 0 | 1 | 1 | 1 |   7 |
+          :   :   :   :   :   :   :   :   :       +---------------------------+
 
     A & B are current readings and a & b are the previous readings.
-    hx & dc are the hex and decimal equivalents of nibble abAB.
+    dec is the decimal equivalents of nibble abAB.
 
     There are a variety of ways to decode the information but a simple
     state machine method by Michael Kellet, http://www.mkesc.co.uk/ise.pdf,
@@ -127,11 +125,11 @@ struct buttonStruct
 
     The state table contains directions for all possible combinations of abAB.
 
-            +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-            |dec|00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|
-            +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-            |dir|00|-1|+1|00|+1|00|00|-1|-1|00|00|+1|00|+1|-1|00|
-            +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+           +-----------------------------------------------------+
+           | AB  |00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|
+           |-----+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--|
+           | dir |00|-1|+1|00|+1|00|00|-1|-1|00|00|+1|00|+1|-1|00|
+           +-----------------------------------------------------+
 
     An alternative method using a state transition table that helps with
     noisy encoders by ignoring invalid transitions between states has been
@@ -145,26 +143,28 @@ struct buttonStruct
     based on the encoder output, AB. The direction is determined when the
     state reaches 0x10 (+ve) or 0x20 (-ve).
 
-    Half mode - outputs direction after half and full steps.
-                +-------------+-------------------+
+    Half mode transition table - outputs direction after half and full steps.
+
+                +---------------------------------+
                 |             | Encoder output AB |
-                | Transitions +-------------------+
+                | Transitions |-------------------|
                 |             | 00 | 01 | 10 | 11 |
-                +-------------+----+----+----+----+
+                |-------------+----+----+----+----|
               ->| Start       | 03 | 02 | 01 | 00 |
                 | -ve begin   | 23 | 00 | 01 | 00 |
                 | +ve begin   | 13 | 02 | 00 | 00 |
                 | Halfway     | 03 | 05 | 04 | 00 |
                 | +ve begin   | 03 | 03 | 04 | 10 |-> +ve
                 | -ve begin   | 03 | 05 | 03 | 20 |-> -ve
-                +-------------+----+----+----+----+
+                +---------------------------------+
 
-    Full mode - outputs direction after full step only.
-                +-------------+-------------------+
+    Full mode transition table - outputs direction after full step only.
+
+                +---------------------------------+
                 |             | Encoder output AB |
-                | Transitions +-------------------+
+                | Transitions |-------------------|
                 |             | 00 | 01 | 10 | 11 |
-                +-------------+----+----+----+----+
+                |-------------+----+----+----+----|
               ->| Start       | 00 | 02 | 01 | 00 |
                 | +ve end     | 03 | 00 | 01 | 10 |-> +ve
                 | +ve begin   | 03 | 02 | 00 | 00 |
@@ -172,19 +172,30 @@ struct buttonStruct
                 | -ve begin   | 06 | 00 | 04 | 00 |
                 | -ve end     | 06 | 05 | 00 | 20 |-> -ve
                 | -ve next    | 06 | 05 | 04 | 00 |
-                +-------------+----+----+----+----+
-
+                +---------------------------------+
 */
+//  ---------------------------------------------------------------------------
 
-// ----------------------------------------------------------------------------
-//  Returns encoder direction in encoderDirection. Call by interrupt on GPIOs.
-// ----------------------------------------------------------------------------
 /*
-    direction = +1: +ve direction.
-              =  0: no change determined.
-              = -1: -ve direction.
+    Functions to set direction in encoderDirection variable:
+    encoderDirection = +1: +ve direction.
+                     =  0: no change determined.
+                     = -1: -ve direction.
 */
-void setEncoderDirection( void );
+// ----------------------------------------------------------------------------
+//  Sets direction in encoderDirection using SIMPLE_TABLE.
+// ----------------------------------------------------------------------------
+void setDirectionSimple( void );
+
+// ----------------------------------------------------------------------------
+//  Sets direction in encoderDirection using HALF_TABLE.
+// ----------------------------------------------------------------------------
+void setDirectionHalf( void );
+
+// ----------------------------------------------------------------------------
+//  Sets direction in encoderDirection using FULL_TABLE.
+// ----------------------------------------------------------------------------
+void setDirectionFull void );
 
 // ----------------------------------------------------------------------------
 //  Returns button state in buttonState. Call by interrupt on GPIO.
