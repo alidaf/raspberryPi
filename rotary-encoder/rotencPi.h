@@ -47,16 +47,40 @@
 #ifndef ROTENCPI_H
 #define ROTENCPI_H
 
-#define STATE_TABLE_SIZE 16
-#define STATE_TABLE { 0,-1, 1, 0, 1, 0, 0,-1,-1, 0, 0, 1, 0, 1,-1, 0 }
+#define SIMPLE_TABLE_COLS 16
+#define SIMPLE_TABLE { 0,-1, 1, 0, 1, 0, 0,-1,-1, 0, 0, 1, 0, 1,-1, 0 }
+
+#define HALF_TABLE_ROWS 6
+#define HALF_TABLE_COLS 4
+
+#define HALF_TABLE {{ 0x03, 0x02, 0x01, 0x00 },
+                    { 0x23, 0x00, 0x01, 0x00 },
+                    { 0x13, 0x02, 0x00, 0x00 },
+                    { 0x03, 0x05, 0x04, 0x00 },
+                    { 0x03, 0x03, 0x04, 0x10 },
+                    { 0x03, 0x05, 0x03, 0x20 }}
+
+
+#define FULL_TABLE_ROWS 7
+#define FULL_TABLE_COLS 4
+
+#define FULL_TABLE {{ 0x00, 0x02, 0x01, 0x00 },
+                    { 0x03, 0x00, 0x01, 0x10 },
+                    { 0x03, 0x02, 0x00, 0x00 },
+                    { 0x03, 0x02, 0x01, 0x00 },
+                    { 0x06, 0x00, 0x04, 0x00 },
+                    { 0x06, 0x05, 0x00, 0x20 },
+                    { 0x06, 0x05, 0x04, 0x00 }}
+
 
 // Data structures ------------------------------------------------------------
 
 volatile int8_t encoderDirection;   // Encoder direction.
-volatile int8_t encoderState;       // Encoder state, abAB.
+//volatile int8_t encoderState;       // Encoder state, abAB.
 volatile int8_t buttonState;        // Button state, on or off.
 
-enum decode_t { SIMPLE, HALF, FULL };   // Decoder method. See below.
+// Decoder methods. See description of encoder functions below.
+enum decode_t { SIMPLE_1, SIMPLE_2, SIMPLE_4, HALF, FULL }; 
 
 struct encoderStruct
 {
@@ -93,19 +117,63 @@ struct buttonStruct
     A & B are current readings and a & b are the previous readings.
     hx & dc are the hex and decimal equivalents of nibble abAB.
 
-    There are 3 ways to decode the information, each giving different
-    resolutions:
-    Simple mode - Interrupt on leading edge of A. Sample B.
-    Half mode   - Interrupt on both edges of A. Sample A & B. (2x).
-    Full mode   - Interrupt on both edges of A and B. Sample A & B. (4x).
+    There are a variety of ways to decode the information but a simple
+    state machine method by Michael Kellet, http://www.mkesc.co.uk/ise.pdf,
+    is efficient and provides 3 modes, each giving different resolutions:
 
-    State table can be used for all modes:
+    SIMPLE_1 - Interrupt on leading edge of A, (1x)
+    SIMPLE_2 - Interrupt on both edges of A. Sample A & B, (2x).
+    SIMPLE_4 - Interrupt on both edges of A and B. Sample A & B, (4x).
+
+    The state table contains directions for all possible combinations of abAB.
 
             +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
             |dec|00|01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|
             +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
             |dir|00|-1|+1|00|+1|00|00|-1|-1|00|00|+1|00|+1|-1|00|
             +---+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+    An alternative method using a state transition table that helps with
+    noisy encoders by ignoring invalid transitions between states has been
+    offered by Ben Buxton, http://ww.buxtronix.net, and offers 2
+    modes with different resolutions. Both require reads of A & B.
+
+    HALF - Outputs direction after half and full steps.
+    FULL - Outputs direction after full step only.
+
+    Each row is a state. Each cell in that row contains the new state to set
+    based on the encoder output, AB. The direction is determined when the
+    state reaches 0x10 (+ve) or 0x20 (-ve).
+
+    Half mode - outputs direction after half and full steps.
+                +-------------+-------------------+
+                |             | Encoder output AB |
+                | Transitions +-------------------+
+                |             | 00 | 01 | 10 | 11 |
+                +-------------+----+----+----+----+
+              ->| Start       | 03 | 02 | 01 | 00 |
+                | -ve begin   | 23 | 00 | 01 | 00 |
+                | +ve begin   | 13 | 02 | 00 | 00 |
+                | Halfway     | 03 | 05 | 04 | 00 |
+                | +ve begin   | 03 | 03 | 04 | 10 |-> +ve
+                | -ve begin   | 03 | 05 | 03 | 20 |-> -ve
+                +-------------+----+----+----+----+
+
+    Full mode - outputs direction after full step only.
+                +-------------+-------------------+
+                |             | Encoder output AB |
+                | Transitions +-------------------+
+                |             | 00 | 01 | 10 | 11 |
+                +-------------+----+----+----+----+
+              ->| Start       | 00 | 02 | 01 | 00 |
+                | +ve end     | 03 | 00 | 01 | 10 |-> +ve
+                | +ve begin   | 03 | 02 | 00 | 00 |
+                | +ve next    | 03 | 02 | 01 | 00 |
+                | -ve begin   | 06 | 00 | 04 | 00 |
+                | -ve end     | 06 | 05 | 00 | 20 |-> -ve
+                | -ve next    | 06 | 05 | 04 | 00 |
+                +-------------+----+----+----+----+
+
 */
 
 // ----------------------------------------------------------------------------
