@@ -52,22 +52,22 @@
 
 #define HALF_TABLE_ROWS  6
 #define HALF_TABLE_COLS  4
-#define HALF_TABLE {{ 0x03, 0x02, 0x01, 0x00 },
-                    { 0x23, 0x00, 0x01, 0x00 },
-                    { 0x13, 0x02, 0x00, 0x00 },
-                    { 0x03, 0x05, 0x04, 0x00 },
-                    { 0x03, 0x03, 0x04, 0x10 },
+#define HALF_TABLE {{ 0x03, 0x02, 0x01, 0x00 },\
+                    { 0x23, 0x00, 0x01, 0x00 },\
+                    { 0x13, 0x02, 0x00, 0x00 },\
+                    { 0x03, 0x05, 0x04, 0x00 },\
+                    { 0x03, 0x03, 0x04, 0x10 },\
                     { 0x03, 0x05, 0x03, 0x20 }}
 
 
 #define FULL_TABLE_ROWS  7
 #define FULL_TABLE_COLS  4
-#define FULL_TABLE {{ 0x00, 0x02, 0x01, 0x00 },
-                    { 0x03, 0x00, 0x01, 0x10 },
-                    { 0x03, 0x02, 0x00, 0x00 },
-                    { 0x03, 0x02, 0x01, 0x00 },
-                    { 0x06, 0x00, 0x04, 0x00 },
-                    { 0x06, 0x05, 0x00, 0x20 },
+#define FULL_TABLE {{ 0x00, 0x02, 0x01, 0x00 },\
+                    { 0x03, 0x00, 0x01, 0x10 },\
+                    { 0x03, 0x02, 0x00, 0x00 },\
+                    { 0x03, 0x02, 0x01, 0x00 },\
+                    { 0x06, 0x00, 0x04, 0x00 },\
+                    { 0x06, 0x05, 0x00, 0x20 },\
                     { 0x06, 0x05, 0x04, 0x00 }}
 
 
@@ -78,7 +78,7 @@ volatile int8_t encoderDirection;   // Encoder direction.
 volatile int8_t buttonState;        // Button state, on or off.
 
 // Decoder methods. See description of encoder functions below.
-enum decode_t { SIMPLE_1, SIMPLE_2, SIMPLE_4, HALF, FULL }; 
+enum decode_t { SIMPLE_1, SIMPLE_2, SIMPLE_4, HALF, FULL };
 
 struct encoderStruct
 {
@@ -195,7 +195,7 @@ void setDirectionHalf( void );
 // ----------------------------------------------------------------------------
 //  Sets direction in encoderDirection using FULL_TABLE.
 // ----------------------------------------------------------------------------
-void setDirectionFull void );
+void setDirectionFull( void );
 
 // ----------------------------------------------------------------------------
 //  Returns button state in buttonState. Call by interrupt on GPIO.

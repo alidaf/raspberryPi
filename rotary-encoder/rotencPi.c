@@ -108,7 +108,7 @@ void setDirectionSimple( void )
 //    encoderState = ( encoderState & 0x0f );
 
     // Get direction from state table.
-    encoderDirection = encoderStateTable[ code ];
+    encoderDirection = simpleTable[ code ];
     printf( "Direction = %d.\n", encoderDirection );
 
     /*
@@ -130,14 +130,78 @@ void setDirectionSimple( void )
 //  Sets direction in encoderDirection using HALF_TABLE.
 // ----------------------------------------------------------------------------
 void setDirectionHalf( void )
+{
+    // Lock thread.
+    pthread_mutex_lock( &encoderBusy );
 
+    // Get AB.
+    static uint8_t state = 0;
+    static uint8_t code = 0;
+
+    code = ( digitalRead( encoder.gpioB ) << 1 ) |
+             digitalRead( encoder.gpioA );
+
+    // Look up state in transition table.
+    state = halfTable[ state & 0xf ][ code ];
+
+    // Determine direction and set encoderDirection.
+    uint8_t direction = state & 0x30;
+    if ( direction ) encoderDirection = ( direction == 0x10 ? -1 : 1 );
+    else encoderDirection = 0;
+
+    /*
+        It may be a good idea to allow a function to be registered here
+        rather than rely on polling the encoderDirection variable, which
+        causes high cpu usage. It will then be completely interrupt driven.
+        Since wiringPi does not allow parameter passing via it's interrupt
+        routine, this may not be feasible without rewriting the wiringPi
+        library.
+    */
+
+    // Unlock thread.
+    pthread_mutex_unlock( &encoderBusy );
+
+    return;
+
+};
 
 // ----------------------------------------------------------------------------
 //  Sets direction in encoderDirection using FULL_TABLE.
 // ----------------------------------------------------------------------------
-void setDirectionFull void )
+void setDirectionFull( void )
+{
+    // Lock thread.
+    pthread_mutex_lock( &encoderBusy );
 
+    // Get AB
+    static uint8_t state = 0;
+    static uint8_t code = 0;
+    code = ( digitalRead( encoder.gpioB ) << 1 ) |
+             digitalRead( encoder.gpioA );
 
+    // Look up state in transition table.
+    state = fullTable[ state & 0xf ][ code ];
+
+    // Determine direction and set encoderDirection.
+    uint8_t direction = state & 0x30;
+    if ( direction ) encoderDirection = ( direction == 0x10 ? -1 : 1 );
+    else encoderDirection = 0;
+
+    /*
+        It may be a good idea to allow a function to be registered here
+        rather than rely on polling the encoderDirection variable, which
+        causes high cpu usage. It will then be completely interrupt driven.
+        Since wiringPi does not allow parameter passing via it's interrupt
+        routine, this may not be feasible without rewriting the wiringPi
+        library.
+    */
+
+    // Unlock thread.
+    pthread_mutex_unlock( &encoderBusy );
+
+    return;
+
+};
 
 // ----------------------------------------------------------------------------
 //  Returns button state in button struct. Call by interrupt on GPIO.
