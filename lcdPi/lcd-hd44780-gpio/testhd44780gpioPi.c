@@ -39,7 +39,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    11/12/2015  This program.
+    Authors:        D.Faulke    14/12/2015  This program.
 
     Contributors:
 
@@ -79,18 +79,26 @@ int main()
     hd44780Init( data, lines, font, display, cursor, blink,
                  counter, shift, mode, direction );
 
-    // Set time display properties.
-    struct timeStruct textTime =
+    // Set up structure to display current time.
+    struct DateAndTime time =
     {
-        .row     = 1,
-        .col     = 4,
+        .row = 1,
+        .col = 4,
+        .length = 16,
+        .format[0] = "%H:%M:%S",
+        .format[1] = "%H %M %S",
+        .delay = 0.5
     };
 
-    // Set text display properties.
-    struct dateStruct textDate =
+    // Set up structure to display current date.
+    struct DateAndTime date =
     {
-        .row   = 0,
-        .col   = 0,
+        .row = 0,
+        .col = 0,
+        .length = 16,
+        .format[0] = "%a %d %b %Y",
+        .format[1] = "%a %d %b %Y",
+        .delay = 360
     };
 
     // Set ticker tape properties.
@@ -107,8 +115,9 @@ int main()
     // Create threads and mutex for animated display functions.
     pthread_mutex_init( &displayBusy, NULL );
     pthread_t threads[2];
-    pthread_create( &threads[0], NULL, displayTime, (void *) &textTime );
-    pthread_create( &threads[1], NULL, displayDate, (void *) &textDate );
+
+    pthread_create( &threads[0], NULL, displayDateTime, (void *) &date );
+    pthread_create( &threads[1], NULL, displayDateTime, (void *) &time );
 //    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
 //    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
 

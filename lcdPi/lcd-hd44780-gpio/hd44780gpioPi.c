@@ -38,7 +38,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    11/12/2015  This program.
+    Authors:        D.Faulke    14/12/2015  This program.
 
     Contributors:
 
@@ -490,84 +490,46 @@ void *displayTicker( void *threadTicker )
 };
 
 //  ---------------------------------------------------------------------------
-//  Displays time at row with justification. Threaded version.
+//  Displays date/time at row with formatting.
 //  ---------------------------------------------------------------------------
-void *displayTime( void *threadTime )
-{
-    // Get time struct.
-    struct timeStruct *display = threadTime;
-
-    struct tm *timePtr; // Structure defined in time.h.
-    time_t timeVar;     // Type defined in time.h.
-
-    struct timespec sleepTime = { 0 }; // Structure defined in time.h.
-    sleepTime.tv_nsec = 500000000;     // 0.5 seconds.
-
-    // Display string.
-    char timeString[8];
-
-    while ( 1 )
-    {
-        // Get current time.
-        timeVar = time( NULL );
-        timePtr = localtime( &timeVar );
-
-        sprintf( timeString, "%02d:%02d:%02d", timePtr->tm_hour,
-                                               timePtr->tm_min,
-                                               timePtr->tm_sec );
-        // Display time string.
-        pthread_mutex_lock( &displayBusy );
-        gotoRowPos( display->row, display->col );
-        writeDataString( timeString );
-        pthread_mutex_unlock( &displayBusy );
-        nanosleep( &sleepTime, NULL );
-
-        // Get current time.
-        timeVar = time( NULL );
-        timePtr = localtime( &timeVar );
-
-        sprintf( timeString, "%02d %02d %02d", timePtr->tm_hour,
-                                               timePtr->tm_min,
-                                               timePtr->tm_sec );
-        // Display time string (animation).
-        pthread_mutex_lock( &displayBusy );
-        gotoRowPos( display->row, display->col );
-        writeDataString( timeString );
-        pthread_mutex_unlock( &displayBusy );
-        nanosleep( &sleepTime, NULL );
-    }
-    pthread_exit( NULL );
-};
-
-//  ---------------------------------------------------------------------------
-//  Displays date at row with format and justification. Call as a thread.
-//  ---------------------------------------------------------------------------
-void *displayDate( void *threadDate )
+void *displayDateTime( void *threadDate )
 {
     // Get date struct.
-    struct dateStruct *display = threadDate;
+    struct DateAndTime *dateAndTime = threadDate;
 
-    struct tm *timePtr; // Structure defined in time.h.
-    time_t timeVar;     // Type defined in time.h.
+    // Definitions for time.h functions.
+    struct tm *timePtr;
+    time_t timeVar;
+
+    // Definitions for nanosleep function.
+    struct timespec sleepTime = { 0 };
+    if ( dateAndTime->delay < 1 )
+        sleepTime.tv_nsec = dateAndTime->delay * 1000000000;
 
     // Display string.
-    char dateString[16];
+    char buffer[20] = "";
+    uint8_t frame = 0; // Animation frames
 
     while ( 1 )
     {
-        // Get current time.
+        if ( frame > 1 ) frame = 0;
+        // Get current date & time.
         timeVar = time( NULL );
         timePtr = localtime( &timeVar );
 
-        strftime( dateString, 16, "%a %d %b %Y", timePtr );
+        strftime( buffer, dateAndTime->length,
+                          dateAndTime->format[frame], timePtr );
+        frame++;
 
         // Display time string.
         pthread_mutex_lock( &displayBusy );
-        gotoRowPos( display->row, display->col );
-        writeDataString( dateString );
+        gotoRowPos( dateAndTime->row, dateAndTime->col );
+        writeDataString( buffer );
         pthread_mutex_unlock( &displayBusy );
-        sleep( 60 );
 
+        // Sleep for designated delay.
+        if ( dateAndTime->delay < 1 ) nanosleep( &sleepTime, NULL );
+        else sleep( dateAndTime->delay );
     }
     pthread_exit( NULL );
 };

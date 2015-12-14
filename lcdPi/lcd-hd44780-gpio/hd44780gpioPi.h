@@ -22,7 +22,7 @@
 
 //  ===========================================================================
 
-    Authors:        D.Faulke    11/12/2015.
+    Authors:        D.Faulke    14/12/2015.
 
     Contributors:
 
@@ -157,25 +157,36 @@ struct hd44780Struct
 
 struct textStruct
 {
-    uint8_t display;          // Display handle.
     uint8_t row;              // Display row.
     uint8_t col;              // Display column.
     char *string;             // Display text.
 };
 
-struct timeStruct
+struct DateAndTime
 {
-    uint8_t display;          // Display handle.
-    uint8_t row;              // Display row.
-    uint8_t col;              // Display column.
+    uint8_t row;            // Display row (y).
+    uint8_t col;            // Display col (x).
+    uint8_t length;         // Total length of display string.
+    char    *format[2];     // format strings. Use for animating.
+    float   delay;          // Delay between updates (Seconds).
 };
-
-struct dateStruct
-{
-    uint8_t displayID;        // Display ID.
-    uint8_t row;              // Display row.
-    uint8_t col;              // Display column.
-};
+/*
+    format[n] is a string containing time.h formatting codes.
+    Some common codes are:
+        %a  Abbreviated weekday name.
+        %A  Full weekday name.
+        %d  Day of the month.
+        %b  Abbreviated month name.
+        %B  Full month name.
+        %m  Month number.
+        %y  Abbreviated year.
+        %Y  Full year.
+        %H  Hour in 24h format.
+        %I  Hour in 12h format.
+        %M  Minute.
+        %S  Second.
+        %p  AM/PM.
+*/
 
 struct tickerStruct
 {
@@ -372,25 +383,8 @@ void *displayTicker( void *threadTicker );
 */
 
 //  ---------------------------------------------------------------------------
-//  Displays time at row with format and justification. Call as a thread.
+//  Displays date/time at row with formatting.
 //  ---------------------------------------------------------------------------
-/*
-    Animates a blinking colon between numbers.
-    align = LEFT   : Left justified.
-    align = CENTRE : Centre justified.
-    align = RIGHT  : Right justified.
-*/
-void *displayTime( void *threadTime );
-
-//  ---------------------------------------------------------------------------
-//  Displays date at row with format and justification. Call as a thread.
-//  ---------------------------------------------------------------------------
-/*
-    Animates a blinking colon between numbers.
-    align = LEFT   : Left justified.
-    align = CENTRE : Centre justified.
-    align = RIGHT  : Right justified.
-*/
-void *displayDate( void *threadDate );
+void *displayDateTime( void *threadDate );
 
 #endif
