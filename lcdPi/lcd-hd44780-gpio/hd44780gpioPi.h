@@ -6,13 +6,6 @@
     HD44780 LCD display driver for the Raspberry Pi (GPIO version).
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
-    Based on the following guides and codes:
-        HD44780 data sheet
-        - see https://www.sparkfun.com/datasheets/LCD/HD44780.pdf
-        An essential article on LCD initialisation by Donald Weiman.
-        - see http://web.alfredstate.edu/weimandn/
-        The wiringPi project copyright 2012 Gordon Henderson
-        - see http://wiringpi.com
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -36,27 +29,13 @@
 //  ---------------------------------------------------------------------------
 */
 
-#ifndef HD44780GPIOPI_H
-#define HD44780GPIOPI_H
-
-#include <stdio.h>
-#include <string.h>
-#include <argp.h>
-#include <wiringPi.h>
-#include <stdbool.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <time.h>
-#include <pthread.h>
-
-
 //  Information. --------------------------------------------------------------
 /*
-    Pin layout for Hitachi HD44780 based 16x2 LCD.
+    Pin layout for Hitachi HD44780 based LCD display.
 
-        +-----+-------+------+---------------------------------------+
+        +------------------------------------------------------------+
         | Pin | Label | Pi   | Description                           |
-        +-----+-------+------+---------------------------------------+
+        |-----+-------+------+---------------------------------------|
         |   1 |  Vss  | GND  | Ground (0V) for logic.                |
         |   2 |  Vdd  | 5V   | 5V supply for logic.                  |
         |   3 |  Vo   | xV   | Variable V for contrast.              |
@@ -65,7 +44,7 @@
         |   6 |  E    | GPIO | Enable bit.                           |
         |   7 |  DB0  | n/a  | Data bit 0. Not used in 4-bit mode.   |
         |   8 |  DB1  | n/a  | Data bit 1. Not used in 4-bit mode.   |
-        |   9 |  DB2  | n/a  | Data bot 2. Not used in 4-bit mode.   |
+        |   9 |  DB2  | n/a  | Data bit 2. Not used in 4-bit mode.   |
         |  10 |  DB3  | n/a  | Data bit 3. Not used in 4-bit mode.   |
         |  11 |  DB4  | GPIO | Data bit 4.                           |
         |  12 |  DB5  | GPIO | Data bit 5.                           |
@@ -73,33 +52,34 @@
         |  14 |  DB7  | GPIO | Data bit 7.                           |
         |  15 |  A    | xV   | Voltage for backlight (max 5V).       |
         |  16 |  K    | GND  | Ground (0V) for backlight.            |
-        +-----+-------+------+---------------------------------------+
-
-    Note: Setting pin 5 (R/W) to 1 (read) while connected to a GPIO
-          will likely damage the Pi unless V is reduced or grounded.
+        +------------------------------------------------------------+
 
     LCD register bits:
 
-    +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
-    |RS |RW |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|   |Key|Effect         |
-    +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
-    | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |   |I/D|DDRAM inc/dec. |
-    | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | - |   |R/L|Shift R/L.     |
-    | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |I/D| S |   |S  |Shift on.      |
-    | 0 | 0 | 0 | 0 | 0 | 0 | 1 | D | C | B |   |DL |4-bit/8-bit.   |
-    | 0 | 0 | 0 | 0 | 0 | 1 |S/C|R/L| - | - |   |D  |Display on/off.|
-    | 0 | 0 | 0 | 0 | 1 |DL | N | F | - | - |   |N  |1/2 lines.     |
-    | 0 | 0 | 0 | 1 |   : CGRAM address :   |   |C  |Cursor on/off. |
-    | 0 | 0 | 1 |   :   DDRAM address   :   |   |F  |5x8/5x10 font. |
-    | 0 | 1 |BF |   :   Address counter :   |   |B  |Blink on/off.  |
-    | 1 | 0 |   :   : Read Data :   :   :   |   |S/C|Display/cursor.|
-    | 1 | 1 |   :   : Write Data:   :   :   |   |BF |Busy flag.     |
-    +---+---+---+---+---+---+---+---+---+---+   +---+---------------+
+        +---------------------------------------+   +-------------------+
+        |RS |RW |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|   |Key|Effect         |
+        |---+---+---+---+---+---+---+---+---+---|   |---+---------------|
+        | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |   |I/D|DDRAM inc/dec. |
+        | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | - |   |R/L|Shift R/L.     |
+        | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |I/D| S |   |S  |Shift on.      |
+        | 0 | 0 | 0 | 0 | 0 | 0 | 1 | D | C | B |   |DL |4-bit/8-bit.   |
+        | 0 | 0 | 0 | 0 | 0 | 1 |S/C|R/L| - | - |   |D  |Display on/off.|
+        | 0 | 0 | 0 | 0 | 1 |DL | N | F | - | - |   |N  |1/2 lines.     |
+        | 0 | 0 | 0 | 1 |   : CGRAM address :   |   |C  |Cursor on/off. |
+        | 0 | 0 | 1 |   :   DDRAM address   :   |   |F  |5x8/5x10 font. |
+        | 0 | 1 |BF |   :   Address counter :   |   |B  |Blink on/off.  |
+        | 1 | 0 |   :   : Read Data :   :   :   |   |S/C|Display/cursor.|
+        | 1 | 1 |   :   : Write Data:   :   :   |   |BF |Busy flag.     |
+        +---------------------------------------+   +-------------------+
+
     DDRAM: Display Data RAM.
     CGRAM: Character Generator RAM.
 */
 
 //  Macros. -------------------------------------------------------------------
+
+#ifndef HD44780GPIOPI_H
+#define HD44780GPIOPI_H
 
 // Constants. Change these according to needs.
 #define BITS_BYTE          8 // Number of bits in a byte.
@@ -159,77 +139,59 @@
 #define GPIO_UNSET         0 // Set GPIO to low.
 #define GPIO_SET           1 // Set GPIO to high.
 
+//  Mutex. --------------------------------------------------------------------
 
-//  Types. --------------------------------------------------------------------
-
-// Enumerated type for text alignment and ticker directions.
-enum textAlignment_t { LEFT, CENTRE, RIGHT };
-
-// Enumerated types for date and time displays.
-enum timeFormat_t { HMS, HM };
-enum dateFormat_t { DAY_DMY, DAY_DM, DAY_D, DMY };
-
+pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
 //  Data structures. ----------------------------------------------------------
 
-//  Hardware.
 struct hd44780Struct
 {
-    uint8_t     id;                 // Handle for multiple displays.
-    uint8_t     cols;               // Number of display columns (x).
-    uint8_t     rows;               // Number of display rows (y).
-    uint8_t     gpioRS;             // GPIO pin for LCD RS pin.
-    uint8_t     gpioEN;             // GPIO pin for LCD Enable pin.
-    uint8_t     gpioRW;             // GPIO pin for R/W mode. Not used.
-    uint8_t     gpioDB[PINS_DATA];  // GPIO pins for LCD data pins.
+    uint8_t cols;              // Number of display columns (x).
+    uint8_t rows;              // Number of display rows (y).
+    uint8_t gpioRS;            // GPIO pin for LCD RS pin.
+    uint8_t gpioEN;            // GPIO pin for LCD Enable pin.
+    uint8_t gpioRW;            // GPIO pin for R/W mode. Not used.
+    uint8_t gpioDB[PINS_DATA]; // GPIO pins for LCD data pins.
 };
 
-//  Display.
-/*
-    .align  = TEXT_ALIGN_NULL   : No set alignment (just print at cursor ).
-            = TEXT_ALIGN_LEFT   : Text aligns or shifts left.
-            = TEXT_ALIGN_CENTRE : Text aligns or shifts about centre.
-            = TEXT_ALIGN_RIGHT  : Text aligns or shifts right.
-*/
 struct textStruct
 {
-    char        string[DISPLAY_COLUMNS];// Display text.
-    uint8_t     row;                    // Display row.
-    enum        textAlignment_t align;  // Text alignment.
+    uint8_t display;          // Display handle.
+    uint8_t row;              // Display row.
+    uint8_t col;              // Display column.
+    char *string;             // Display text.
 };
 
 struct timeStruct
 {
-    uint8_t     row;                    // Display row.
-    uint16_t    delay;                  // Delay between ticks (mS).
-    enum        textAlignment_t align;  // Text alignment.
-    enum        timeFormat_t format;    // Format style.
+    uint8_t display;          // Display handle.
+    uint8_t row;              // Display row.
+    uint8_t col;              // Display column.
 };
 
 struct dateStruct
 {
-    uint8_t     row;                    // Display row.
-    uint16_t    delay;                  // Delay between ticks (mS).
-    enum        textAlignment_t align;  // Text alignment.
-    enum        dateFormat_t format;    // Format style.
+    uint8_t displayID;        // Display ID.
+    uint8_t row;              // Display row.
+    uint8_t col;              // Display column.
 };
 
-/*
-    .increment = Number and direction of characters to rotate.
-                 +ve rotate left.
-                 -ve rotate right.
-    .length + .padding must be < TEXT_MAX_LENGTH.
-*/
 struct tickerStruct
 {
-    char        text[TEXT_MAX_LENGTH];  // Display text.
-    uint16_t    length;                 // Text length.
-    uint16_t    padding;                // Text padding between end to start.
-    uint8_t     row;                    // Display row.
-    int16_t     increment;              // Size and direction of tick movement.
-    uint16_t    delay;                  // Delay between ticks (mS).
+    char        text[TEXT_MAX_LENGTH]; // Display text.
+    uint16_t    length;                // Text length.
+    uint16_t    padding;               // Text padding between end to start.
+    uint8_t     row;                   // Display row.
+    int16_t     increment;             // Size and direction of tick movement.
+    uint16_t    delay;                 // Delay between ticks (mS).
 };
-
+/*
+    .increment = Number and direction of characters to rotate.
+                 +ve: rotate left.
+                 -ve: rotate right.
+    .length + .padding must be < TEXT_MAX_LENGTH.
+*/
 
 //  Display output functions. -------------------------------------------------
 
@@ -326,9 +288,9 @@ int8_t hd44780Init( bool data,   bool lines, bool font,    bool display,
 
 //  Mode settings. ------------------------------------------------------------
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Sets entry mode.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 /*
     counter = 0: Decrement DDRAM counter after data write (cursor moves L)
     counter = 1: Increment DDRAM counter after data write (cursor moves R)
@@ -337,9 +299,9 @@ int8_t hd44780Init( bool data,   bool lines, bool font,    bool display,
 */
 int8_t setEntryMode( bool counter, bool shift );
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Sets display mode.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 /*
     display = 0: Display off.
     display = 1: Display on.
@@ -350,9 +312,9 @@ int8_t setEntryMode( bool counter, bool shift );
 */
 int8_t setDisplayMode( bool display, bool cursor, bool blink );
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Shifts cursor or display.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 /*
     mode      = 0: Shift cursor.
     mode      = 1: Shift display.
@@ -381,9 +343,9 @@ struct customCharsStruct
 #define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
 #define CUSTOM_MAX   8 // Max number of custom chars allowed.
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Loads custom characters into CGRAM.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 /*
     Set command to point to start of CGRAM and load data line by line. CGRAM
     pointer is auto-incremented. Set command to point to start of DDRAM to
@@ -394,9 +356,9 @@ int8_t loadCustom( const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] );
 
 //  Display functions. --------------------------------------------------------
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Displays text on display row as a tickertape. Call as a thread.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 void *displayTicker( void *threadTicker );
 /*
     text:       Tickertape text.
@@ -409,9 +371,9 @@ void *displayTicker( void *threadTicker );
     delay:      Controls the speed of the ticker tape. Delay in mS.
 */
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Displays time at row with format and justification. Call as a thread.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 /*
     Animates a blinking colon between numbers.
     align = LEFT   : Left justified.
@@ -420,9 +382,9 @@ void *displayTicker( void *threadTicker );
 */
 void *displayTime( void *threadTime );
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Displays date at row with format and justification. Call as a thread.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 /*
     Animates a blinking colon between numbers.
     align = LEFT   : Left justified.

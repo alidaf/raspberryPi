@@ -11,8 +11,6 @@
         - see https://www.sparkfun.com/datasheets/LCD/HD44780.pdf
         An essential article on LCD initialisation by Donald Weiman.
         - see http://web.alfredstate.edu/weimandn/
-        The wiringPi project copyright 2012 Gordon Henderson
-        - see http://wiringpi.com
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -64,41 +62,39 @@
 */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
-#include <argp.h>
 #include <wiringPi.h>
 #include <stdbool.h>
-#include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
 #include <pthread.h>
+#include <unistd.h>
 
-#include "hd44780Pi.h"
+#include "hd44780gpioPi.h"
 
 
-//  Mutex. --------------------------------------------------------------------
+//  Data structures. ----------------------------------------------------------
 
-pthread_mutex_t displayBusy; // Locks further writes to display until finished.
-
-struct hd44780Struct =  // Default values.
+struct hd44780Struct hd44780 =
 {
-    .cols       = 16,   // Display columns.
-    .rows       = 2,    // Display rows.
-    .gpioRS     = 7,    // Pin 26 (RS).
-    .gpioEN     = 8,    // Pin 24 (E).
-    .gpioRW     = 11,   // Pin 23 (RW).
-    .gpioDB[0]  = 25,   // Pin 12 (DB4).
-    .gpioDB[1]  = 24,   // Pin 16 (DB5).
-    .gpioDB[2]  = 23,   // Pin 18 (DB6).
-    .gpioDB[3]  = 18    // Pin 22 (DB7).
-} hd44780;
+    .cols      = 16,   // Display columns.
+    .rows      = 2,    // Display rows.
+    .gpioRS    = 7,    // Pin 26 (RS).
+    .gpioEN    = 8,    // Pin 24 (E).
+    .gpioRW    = 11,   // Pin 23 (RW).
+    .gpioDB[0] = 25,   // Pin 12 (DB4).
+    .gpioDB[1] = 24,   // Pin 16 (DB5).
+    .gpioDB[2] = 23,   // Pin 18 (DB6).
+    .gpioDB[3] = 18    // Pin 22 (DB7).
+};
 
 
 //  Display functions. --------------------------------------------------------
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Writes data nibble to display.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t writeNibble( uint8_t data )
 {
     uint8_t i;
@@ -126,9 +122,9 @@ int8_t writeNibble( uint8_t data )
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Writes command byte to display.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t writeCommand( uint8_t data )
 {
     uint8_t nibble;
@@ -152,9 +148,9 @@ int8_t writeCommand( uint8_t data )
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Writes data byte to display.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t writeData( uint8_t data )
 {
     uint8_t nibble;
@@ -178,21 +174,22 @@ int8_t writeData( uint8_t data )
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Writes a string of data to display.
-// ----------------------------------------------------------------------------
-int8_t writeDataString( int8_t *string )
+//  ---------------------------------------------------------------------------
+int8_t writeDataString( char *string )
 {
     uint8_t i;
 
     for ( i = 0; i < strlen( string ); i++ )
         writeData( string[i] );
+
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Moves cursor to row, position.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t gotoRowPos( uint8_t row, uint8_t pos )
 {
     if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
@@ -212,9 +209,9 @@ int8_t gotoRowPos( uint8_t row, uint8_t pos )
 
 //  Display init and mode functions. ------------------------------------------
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Clears display.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t displayClear( void )
 {
     writeCommand( DISPLAY_CLEAR );
@@ -223,9 +220,9 @@ int8_t displayClear( void )
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Clears memory and returns cursor/screen to original position.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t displayHome( void )
 {
     writeCommand( DISPLAY_HOME );
@@ -234,9 +231,9 @@ int8_t displayHome( void )
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Initialises display. Must be called before any other display functions.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t hd44780Init( bool data,   bool lines, bool font,    bool display,
                     bool cursor, bool blink, bool counter, bool shift,
                     bool mode,   bool direction )
@@ -312,9 +309,9 @@ int8_t hd44780Init( bool data,   bool lines, bool font,    bool display,
 
 //  Mode settings. ------------------------------------------------------------
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Sets entry mode.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t setEntryMode( bool counter, bool shift )
 {
     writeCommand( ENTRY_BASE | ( counter * ENTRY_COUNTER )
@@ -325,9 +322,9 @@ int8_t setEntryMode( bool counter, bool shift )
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Sets display mode.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t setDisplayMode( bool display, bool cursor, bool blink )
 {
     writeCommand( DISPLAY_BASE | ( display * DISPLAY_ON )
@@ -339,9 +336,9 @@ int8_t setDisplayMode( bool display, bool cursor, bool blink )
     return 0;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Shifts cursor or display.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t setMoveMode( bool mode, bool direction )
 {
     writeCommand( MOVE_BASE | ( mode * MOVE_DISPLAY )
@@ -355,9 +352,9 @@ int8_t setMoveMode( bool mode, bool direction )
 
 //  Custom characters and animation. ------------------------------------------
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  example: Pac Man and pulsing heart.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 /*
     PacMan 1        PacMan 2        Ghost 1         Ghost 2
     00000 = 0x00,   00000 = 0x00,   00000 = 0x00,   00000 = 0x00
@@ -393,9 +390,9 @@ struct customCharsStruct customChars =
              { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }},
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Loads custom characters into CGRAM.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 int8_t loadCustomChar( const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] )
 {
 
@@ -414,9 +411,9 @@ int8_t loadCustomChar( const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] )
 
 //  Some display functions. ---------------------------------------------------
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Returns a reversed string. Used for rotate string function.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 static void reverseString( char *text, size_t start, size_t end )
 {
     char temp;
@@ -428,23 +425,27 @@ static void reverseString( char *text, size_t start, size_t end )
         text[end] = temp;
         start++;
     }
+
+    return;
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Returns a rotated string.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 static void rotateString( char *text, size_t length, size_t increments )
 {
-//    if (!text || !*text ) return;
+    // if (!text || !*text ) return;
     increments %= length;
     reverseString( text, 0, increments );
     reverseString( text, increments, length );
     reverseString( text, 0, length );
+
+    return;
 }
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Displays text on display row as a tickertape.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 void *displayTicker( void *threadTicker )
 {
     struct tickerStruct *ticker = threadTicker;
@@ -488,15 +489,13 @@ void *displayTicker( void *threadTicker )
     pthread_exit( NULL );
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Displays time at row with justification. Threaded version.
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 void *displayTime( void *threadTime )
 {
-    struct timeStruct *text = threadTime;
-
-    // Need to set the correct format.
-    char timeString[8];
+    // Get time struct.
+    struct timeStruct *display = threadTime;
 
     struct tm *timePtr; // Structure defined in time.h.
     time_t timeVar;     // Type defined in time.h.
@@ -504,34 +503,35 @@ void *displayTime( void *threadTime )
     struct timespec sleepTime = { 0 }; // Structure defined in time.h.
     sleepTime.tv_nsec = 500000000;     // 0.5 seconds.
 
-    uint8_t pos;
-    if ( text->align == CENTRE ) pos = DISPLAY_COLUMNS / 2 - 4;
-    else
-    if ( text->align == RIGHT ) pos = DISPLAY_COLUMNS - 8;
-    else pos = 0;
+    // Display string.
+    char timeString[8];
 
     while ( 1 )
     {
+        // Get current time.
         timeVar = time( NULL );
         timePtr = localtime( &timeVar );
 
         sprintf( timeString, "%02d:%02d:%02d", timePtr->tm_hour,
                                                timePtr->tm_min,
                                                timePtr->tm_sec );
+        // Display time string.
         pthread_mutex_lock( &displayBusy );
-        gotoRowPos( text->row, pos );
+        gotoRowPos( display->row, display->col );
         writeDataString( timeString );
         pthread_mutex_unlock( &displayBusy );
         nanosleep( &sleepTime, NULL );
 
+        // Get current time.
         timeVar = time( NULL );
         timePtr = localtime( &timeVar );
 
         sprintf( timeString, "%02d %02d %02d", timePtr->tm_hour,
                                                timePtr->tm_min,
                                                timePtr->tm_sec );
+        // Display time string (animation).
         pthread_mutex_lock( &displayBusy );
-        gotoRowPos( text->row, pos );
+        gotoRowPos( display->row, display->col );
         writeDataString( timeString );
         pthread_mutex_unlock( &displayBusy );
         nanosleep( &sleepTime, NULL );
@@ -539,9 +539,35 @@ void *displayTime( void *threadTime )
     pthread_exit( NULL );
 };
 
-// ----------------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Displays date at row with format and justification. Call as a thread.
-// ----------------------------------------------------------------------------
-void *displayDate( void *threadDate );
+//  ---------------------------------------------------------------------------
+void *displayDate( void *threadDate )
 {
+    // Get date struct.
+    struct dateStruct *display = threadDate;
+
+    struct tm *timePtr; // Structure defined in time.h.
+    time_t timeVar;     // Type defined in time.h.
+
+    // Display string.
+    char dateString[16];
+
+    while ( 1 )
+    {
+        // Get current time.
+        timeVar = time( NULL );
+        timePtr = localtime( &timeVar );
+
+        strftime( dateString, 16, "%a %d %b %Y", timePtr );
+
+        // Display time string.
+        pthread_mutex_lock( &displayBusy );
+        gotoRowPos( display->row, display->col );
+        writeDataString( dateString );
+        pthread_mutex_unlock( &displayBusy );
+        sleep( 60 );
+
+    }
+    pthread_exit( NULL );
 };

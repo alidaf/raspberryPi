@@ -52,26 +52,28 @@
 */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
 #include <pthread.h>
 
-#include "hd44780Pi.h"
+#include "hd44780gpioPi.h"
 
 int main()
 {
-    uint8_t data      = 0;  // 4-bit mode.
-    uint8_t lines     = 1;  // 2 display lines.
-    uint8_t font      = 1;  // 5x8 font.
-    uint8_t display   = 1;  // Display on.
-    uint8_t cursor    = 0;  // Cursor off.
-    uint8_t blink     = 0;  // Blink (block cursor) off.
-    uint8_t counter   = 1;  // Increment DDRAM counter after data write
-    uint8_t shift     = 0;  // Do not shift display after data write.
-    uint8_t mode      = 0;  // Shift cursor.
-    uint8_t direction = 0;  // Right.
+    bool data      = 0;  // 4-bit mode.
+    bool lines     = 1;  // 2 display lines.
+    bool font      = 1;  // 5x8 font.
+    bool display   = 1;  // Display on.
+    bool cursor    = 0;  // Cursor off.
+    bool blink     = 0;  // Blink (block cursor) off.
+    bool counter   = 1;  // Increment DDRAM counter after data write
+    bool shift     = 0;  // Do not shift display after data write.
+    bool mode      = 0;  // Shift cursor.
+    bool direction = 0;  // Right.
 
     // Initialise display.
     hd44780Init( data, lines, font, display, cursor, blink,
@@ -80,19 +82,15 @@ int main()
     // Set time display properties.
     struct timeStruct textTime =
     {
-        .row = 0,
-        .delay = 300,
-        .align = CENTRE,
-        .format = HMS
+        .row     = 1,
+        .col     = 4,
     };
 
     // Set text display properties.
     struct dateStruct textDate =
     {
-        .row = 0,
-        .delay = 300,
-        .align = CENTRE,
-        .format = DAY_DMY
+        .row   = 0,
+        .col   = 0,
     };
 
     // Set ticker tape properties.
@@ -110,8 +108,9 @@ int main()
     pthread_mutex_init( &displayBusy, NULL );
     pthread_t threads[2];
     pthread_create( &threads[0], NULL, displayTime, (void *) &textTime );
+    pthread_create( &threads[1], NULL, displayDate, (void *) &textDate );
 //    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
-    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
+//    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
 
     while (1)
     {
