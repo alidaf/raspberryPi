@@ -85,6 +85,7 @@
 #define BITS_BYTE          8 // Number of bits in a byte.
 #define BITS_NIBBLE        4 // Number of bits in a nibble.
 #define PINS_DATA          4 // Number of data pins used.
+#define MAX_DISPLAYS       1 // Number of displays.
 #define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
 
 // These should be replaced by command line options.
@@ -145,47 +146,48 @@ pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
 //  Data structures. ----------------------------------------------------------
 
-struct hd44780Struct
+struct HD44780gpio
 {
-    uint8_t cols;              // Number of display columns (x).
-    uint8_t rows;              // Number of display rows (y).
-    uint8_t gpioRS;            // GPIO pin for LCD RS pin.
-    uint8_t gpioEN;            // GPIO pin for LCD Enable pin.
-    uint8_t gpioRW;            // GPIO pin for R/W mode. Not used.
-    uint8_t gpioDB[PINS_DATA]; // GPIO pins for LCD data pins.
+    uint8_t cols;          // Number of display columns (x).
+    uint8_t rows;          // Number of display rows (y).
+    uint8_t rs;            // GPIO number for LCD RS pin.
+    uint8_t en;            // GPIO number for LCD E pin.
+    uint8_t rw;            // GPIO number for R/W mode. Not used.
+    uint8_t db[PINS_DATA]; // GPIO numbers for LCD data pins.
 };
 
 struct textStruct
 {
-    uint8_t row;              // Display row.
-    uint8_t col;              // Display column.
-    char *string;             // Display text.
+    uint8_t row;        // Display row.
+    uint8_t col;        // Display column.
+    char    *buffer;    // Display text.
 };
 
-struct DateAndTime
+struct Calendar
 {
-    uint8_t row;            // Display row (y).
-    uint8_t col;            // Display col (x).
-    uint8_t length;         // Total length of display string.
-    char    *format[2];     // format strings. Use for animating.
-    float   delay;          // Delay between updates (Seconds).
+    uint8_t row;        // Display row (y).
+    uint8_t col;        // Display col (x).
+    uint8_t length;     // Length of formatting string.
+    uint8_t frames;     // Actual number of animation frames.
+    char    *format[2]; // format strings. Use for animating.
+    float   delay;      // Delay between updates (Seconds).
 };
 /*
-    format[n] is a string containing time.h formatting codes.
-    Some common codes are:
-        %a  Abbreviated weekday name.
-        %A  Full weekday name.
-        %d  Day of the month.
-        %b  Abbreviated month name.
-        %B  Full month name.
-        %m  Month number.
-        %y  Abbreviated year.
-        %Y  Full year.
-        %H  Hour in 24h format.
-        %I  Hour in 12h format.
-        %M  Minute.
-        %S  Second.
-        %p  AM/PM.
+        format[n] is a string containing <time.h> formatting codes.
+        Some common codes are:
+            %a  Abbreviated weekday name.
+            %A  Full weekday name.
+            %d  Day of the month.
+            %b  Abbreviated month name.
+            %B  Full month name.
+            %m  Month number.
+            %y  Abbreviated year.
+            %Y  Full year.
+            %H  Hour in 24h format.
+            %I  Hour in 12h format.
+            %M  Minute.
+            %S  Second.
+            %p  AM/PM.
 */
 
 struct tickerStruct
@@ -383,8 +385,8 @@ void *displayTicker( void *threadTicker );
 */
 
 //  ---------------------------------------------------------------------------
-//  Displays date/time at row with formatting.
+//  Displays formatted date/time strings. Call as a thread.
 //  ---------------------------------------------------------------------------
-void *displayDateTime( void *threadDate );
+void *displayCalendar( void *threadCalendar );
 
 #endif

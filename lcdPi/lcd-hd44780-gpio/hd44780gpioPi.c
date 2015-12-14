@@ -74,23 +74,23 @@
 #include "hd44780gpioPi.h"
 
 
-//  Data structures. ----------------------------------------------------------
+//  Hardware functions. -------------------------------------------------------
 
-struct hd44780Struct hd44780 =
-{
-    .cols      = 16,   // Display columns.
-    .rows      = 2,    // Display rows.
-    .gpioRS    = 7,    // Pin 26 (RS).
-    .gpioEN    = 8,    // Pin 24 (E).
-    .gpioRW    = 11,   // Pin 23 (RW).
-    .gpioDB[0] = 25,   // Pin 12 (DB4).
-    .gpioDB[1] = 24,   // Pin 16 (DB5).
-    .gpioDB[2] = 23,   // Pin 18 (DB6).
-    .gpioDB[3] = 18    // Pin 22 (DB7).
-};
+    // Hardware settings.
+    struct HD44780gpio hd44780gpio =
+    {
+        .cols  = 16,   // Display columns.
+        .rows  = 2,    // Display rows.
+        .rs    = 7,    // GPIO 26 (RS).
+        .en    = 8,    // GPIO 24 (E).
+        .rw    = 11,   // GPIO 23 (RW).
+        .db[0] = 25,   // GPIO 12 (DB4).
+        .db[1] = 24,   // GPIO 16 (DB5).
+        .db[2] = 23,   // GPIO 18 (DB6).
+        .db[3] = 18    // GPIO 22 (DB7).
+    };
 
 
-//  Display functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Writes data nibble to display.
@@ -104,15 +104,15 @@ int8_t writeNibble( uint8_t data )
     nibble = data;
     for ( i = 0; i < BITS_NIBBLE; i++ )
     {
-        digitalWrite( hd44780.gpioDB[i], ( nibble & 1 ));
+        digitalWrite( hd44780gpio.db[i], ( nibble & 1 ));
         delayMicroseconds( 41 );
         nibble >>= 1;
     }
 
     // Toggle enable bit to send nibble.
-    digitalWrite( hd44780.gpioEN, GPIO_SET );
+    digitalWrite( hd44780gpio.en, GPIO_SET );
     delayMicroseconds( 41 );
-    digitalWrite( hd44780.gpioEN, GPIO_UNSET );
+    digitalWrite( hd44780gpio.en, GPIO_UNSET );
     delayMicroseconds( 41 ); // Commands should take 5mS!
 
     /*
@@ -130,7 +130,7 @@ int8_t writeCommand( uint8_t data )
     uint8_t nibble;
 
     // Set to command mode.
-    digitalWrite( hd44780.gpioRS, GPIO_UNSET );
+    digitalWrite( hd44780gpio.rs, GPIO_UNSET );
     delayMicroseconds( 41 );
 
     // High nibble.
@@ -156,7 +156,7 @@ int8_t writeData( uint8_t data )
     uint8_t nibble;
 
     // Set to character mode.
-    digitalWrite( hd44780.gpioRS, GPIO_SET );
+    digitalWrite( hd44780gpio.rs, GPIO_SET );
     delayMicroseconds( 41 );
 
     // High nibble.
@@ -244,19 +244,19 @@ int8_t hd44780Init( bool data,   bool lines, bool font,    bool display,
     wiringPiSetupGpio();
 
     // Set all GPIO pins to 0.
-    digitalWrite( hd44780.gpioRS, GPIO_UNSET );
-    digitalWrite( hd44780.gpioEN, GPIO_UNSET );
+    digitalWrite( hd44780gpio.rs, GPIO_UNSET );
+    digitalWrite( hd44780gpio.en, GPIO_UNSET );
 
     // Data pins.
     for ( i = 0; i < PINS_DATA; i++ )
-        digitalWrite( hd44780.gpioDB[i], GPIO_UNSET );
+        digitalWrite( hd44780gpio.db[i], GPIO_UNSET );
 
     // Set LCD pin modes.
-    pinMode( hd44780.gpioRS, OUTPUT );
-    pinMode( hd44780.gpioEN, OUTPUT );
+    pinMode( hd44780gpio.rs, OUTPUT );
+    pinMode( hd44780gpio.en, OUTPUT );
     // Data pins.
     for ( i = 0; i < PINS_DATA; i++ )
-        pinMode( hd44780.gpioDB[i], OUTPUT );
+        pinMode( hd44780gpio.db[i], OUTPUT );
 
     // Allow a start-up delay for display initialisation.
     delay( 50 ); // >40mS@3V.
@@ -307,7 +307,7 @@ int8_t hd44780Init( bool data,   bool lines, bool font,    bool display,
 };
 
 
-//  Mode settings. ------------------------------------------------------------
+//  Hardware mode settings. ---------------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Sets entry mode.
@@ -409,7 +409,7 @@ int8_t loadCustomChar( const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] )
 };
 
 
-//  Some display functions. ---------------------------------------------------
+//  Display functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Returns a reversed string. Used for rotate string function.
@@ -451,7 +451,8 @@ void *displayTicker( void *threadTicker )
     struct tickerStruct *ticker = threadTicker;
 
     // Close thread if text string is too big.
-    if ( ticker->length + ticker->padding > TEXT_MAX_LENGTH ) pthread_exit( NULL );
+    if ( ticker->length + ticker->padding > TEXT_MAX_LENGTH )
+         pthread_exit( NULL );
 
     // Variables for nanosleep function.
     struct timespec sleepTime = { 0 };  // Structure defined in time.h.
@@ -490,12 +491,12 @@ void *displayTicker( void *threadTicker )
 };
 
 //  ---------------------------------------------------------------------------
-//  Displays date/time at row with formatting.
+//  Displays formatted date/time strings.
 //  ---------------------------------------------------------------------------
-void *displayDateTime( void *threadDate )
+void *displayCalendar( void *threadCalendar )
 {
     // Get date struct.
-    struct DateAndTime *dateAndTime = threadDate;
+    struct Calendar *calendar = threadCalendar;
 
     // Definitions for time.h functions.
     struct tm *timePtr;
@@ -503,8 +504,8 @@ void *displayDateTime( void *threadDate )
 
     // Definitions for nanosleep function.
     struct timespec sleepTime = { 0 };
-    if ( dateAndTime->delay < 1 )
-        sleepTime.tv_nsec = dateAndTime->delay * 1000000000;
+    if ( calendar->delay < 1 )
+        sleepTime.tv_nsec = calendar->delay * 1000000000;
 
     // Display string.
     char buffer[20] = "";
@@ -517,19 +518,19 @@ void *displayDateTime( void *threadDate )
         timeVar = time( NULL );
         timePtr = localtime( &timeVar );
 
-        strftime( buffer, dateAndTime->length,
-                          dateAndTime->format[frame], timePtr );
+        strftime( buffer, calendar->length,
+                          calendar->format[frame], timePtr );
         frame++;
 
         // Display time string.
         pthread_mutex_lock( &displayBusy );
-        gotoRowPos( dateAndTime->row, dateAndTime->col );
+        gotoRowPos( calendar->row, calendar->col );
         writeDataString( buffer );
         pthread_mutex_unlock( &displayBusy );
 
         // Sleep for designated delay.
-        if ( dateAndTime->delay < 1 ) nanosleep( &sleepTime, NULL );
-        else sleep( dateAndTime->delay );
+        if ( calendar->delay < 1 ) nanosleep( &sleepTime, NULL );
+        else sleep( calendar->delay );
     }
     pthread_exit( NULL );
 };

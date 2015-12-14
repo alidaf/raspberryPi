@@ -30,7 +30,7 @@
 
     Compile with:
 
-    gcc testHD44780gpio.c hd44780.c -Wall -o testHD44780gpio
+    gcc testHD44780gpio.c hd44780.c -Wall -o testhd44780gpio
                      -lwiringPi -lpthread -lhd44780Pi
 
     Also use the following flags for Raspberry Pi optimisation:
@@ -80,7 +80,7 @@ int main()
                  counter, shift, mode, direction );
 
     // Set up structure to display current time.
-    struct DateAndTime time =
+    struct Calendar time =
     {
         .row = 1,
         .col = 4,
@@ -91,7 +91,7 @@ int main()
     };
 
     // Set up structure to display current date.
-    struct DateAndTime date =
+    struct Calendar date =
     {
         .row = 0,
         .col = 0,
@@ -116,8 +116,8 @@ int main()
     pthread_mutex_init( &displayBusy, NULL );
     pthread_t threads[2];
 
-    pthread_create( &threads[0], NULL, displayDateTime, (void *) &date );
-    pthread_create( &threads[1], NULL, displayDateTime, (void *) &time );
+    pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
+    pthread_create( &threads[1], NULL, displayCalendar, (void *) &time );
 //    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
 //    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
 
