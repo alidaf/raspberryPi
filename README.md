@@ -14,9 +14,9 @@ Various libraries providing support for some LCD displays.
 * lcd-hd44780-i2c provides the same support but using the I2C bus via a port expander. Still 
 in development.
 
-These libraries enable up to 8 custom characters for animation, go to any position and display text. Has a tickertape mode that can display text many times larger than the screen size by rotating the text left or right. Some animation examples using custom characters and threading are included.
+These libraries enable up to 8 custom characters for animation, go to any position and display text. Has a tickertape mode that can display text many times larger than the screen size by rotating the text left or right. Some animation examples using custom characters and threading are included. A function to display formattable date and time information with simple animation such as blinking colons between numbers is also provided.
 
-lcd-amg19264-i2c will provide support for the display, and backlight control in the Popcorn C200.
+* lcd-amg19264-i2c will provide support for the display, and backlight control in the Popcorn C200.
 
 ###alsaPi:
 
