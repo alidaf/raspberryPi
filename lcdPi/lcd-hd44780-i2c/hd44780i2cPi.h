@@ -97,32 +97,31 @@
 
     The MCP23017 is an I2C bus operated 16-bit I/O port expander:
 
-                            +------------O------------+
-                            |  Fn  | pin | pin |  Fn  |
-                            |------+-----+-----+------|
-               LCD    RS <--| GPB0 |  01 | 28  | GPA7 |
-               LCD   R/W <--| GPB1 |  02 | 27  | GPA6 |
-               LCD    EN <--| GPB2 |  03 | 26  | GPA5 |
-                            | GPB3 |  04 | 25  | GPA4 |
-               LCD   DB4 <--| GPB4 |  05 | 24  | GPA3 |
-               LCD   DB5 <--| GPB5 |  06 | 23  | GPA2 |
-               LCD   DB6 <--| GPB6 |  07 | 22  | GPA1 |
-               LCD   DB7 <--| GPB7 |  08 | 21  | GPA0 |
-         +5V <---;----------|  VDD |  09 | 20  | INTA |
-          0V <---'--||------|  VSS |  10 | 19  | INTB |
-                   0.1uF    |   NC |  11 | 18  | RST  |-----> +5V
-                Pi  SCL1 <--|  SCL |  12 | 17  | A2   |----->  0V or +5V
-                Pi  SDA1 <--|  SDA |  13 | 16  | A1   |----->  0V or +5V
-                            |   NC |  14 | 15  | A0   |----->  0V or +5V
-                            +-------------------------+
+                           +------------O------------+
+                           |  Fn  | pin | pin |  Fn  |
+                           |------+-----+-----+------|
+                LCD RS  <--| GPB0 |  01 | 28  | GPA7 |
+                LCD R/W <--| GPB1 |  02 | 27  | GPA6 |
+                LCD EN  <--| GPB2 |  03 | 26  | GPA5 |
+                           | GPB3 |  04 | 25  | GPA4 |
+                LCD DB4 <--| GPB4 |  05 | 24  | GPA3 |
+                LCD DB5 <--| GPB5 |  06 | 23  | GPA2 |
+                LCD DB6 <--| GPB6 |  07 | 22  | GPA1 |
+                LCD DB7 <--| GPB7 |  08 | 21  | GPA0 |
+        +5V <---+----------|  VDD |  09 | 20  | INTA |
+        GND <---+--||------|  VSS |  10 | 19  | INTB |
+                  0.1uF    |   NC |  11 | 18  | RST  |--> +5V      10k
+                Pi SCL1 <--|  SCL |  12 | 17  | A2   |--> GND | --/\/\/-> +5V
+                Pi SDA1 <--|  SDA |  13 | 16  | A1   |--> GND | --/\/\/-> +5V
+                           |   NC |  14 | 15  | A0   |--> GND | --/\/\/-> +5V
+                           +-------------------------+
 
     Notes:  There is a 0.1uF ceramic capaictor across pins 09 and 10
             for stability.
 
-            SCL1 and SDA1 are connected to the pi via a logic level shifter
-            to protect the Pi from +5V reads at the pins since I2C is
-            bidirectional. The Pi has resistors to 'pull' the voltage
-            to +3.3V on these pins so the shifter can probably be dropped.
+            SCL1 and SDA1 are connected to the Pi directly. The Pi has
+            resistors to 'pull' the voltage to +3.3V on these pins so
+            using a logic level shifter is probably unnecessary.
 
             The RST (hardware reset) pin is kept high for normal operation.
 
@@ -137,15 +136,21 @@
                 R/W = 0: write.
                 R/W = 1: read.
 
-            The address reported by i2cdetect should be 0x20 to 0x27
-            depending on whether pins A0 to A2 are wired high or low.
+            Possible addresses are therefore 0x20 to 0x27 and set by wiring
+            pins A0 to A2 low (GND) or high (+5V). If wiring high, the pins
+            should be connected to +5V via a 10k resistor.
+
+            Further HD44780 displays may be added by wiring the LCD EN pin to
+            another MCP23017 pin. The RS, R/W and DB pins can be wired in
+            parallel to the exisiting connections.
+
+//  ---------------------------------------------------------------------------
 
     Reading/writing to the MCP23017:
 
         The MCP23017 has two 8-bit ports (PORTA & PORTB) that can operate in
         8-bit or 16-bit modes. Each port has associated registers but share
-        a configuration register IOCON that determines whether the GPIOs are
-        written/read simultaneously or sequentially.
+        a configuration register IOCON.
 
     MCP23017 register addresses:
 
@@ -185,24 +190,24 @@
             | BANK |MIRROR|SEQOP |DISSLW| HAEN | ODR  |INTPOL| ---- |
             +-------------------------------------------------------+
 
-        BANK   = 1: PORTS are segregated, i.e. 8-bit mode.
-        BANK   = 0: PORTS are paired into 16-bit mode.
-        MIRROR = 1: INT pins are connected.
-        MIRROR = 0: INT pins operate independently.
-        SEQOP  = 1: Sequential operation disabled.
-        SEQOP  = 0: Sequential operation enabled (address pointer increments).
-        DISSLW = 1: Slew rate disabled.
-        DISSLW = 0: Slew rate enabled.
-        HAEN   = 1: N/A for MCP23017.
-        HAEN   = 0: N/A for MCP23017.
-        ODR    = 1: INT pin configured as open-drain output.
-        ODR    = 0: INT pin configured as active driver output.
-        INTPOL = 1: Polarity of INT pin, active = low.
-        INTPOL = 0: Polarity of INT pin, active = high.
+            BANK   = 1: PORTS are segregated, i.e. 8-bit mode.
+            BANK   = 0: PORTS are paired into 16-bit mode.
+            MIRROR = 1: INT pins are connected.
+            MIRROR = 0: INT pins operate independently.
+            SEQOP  = 1: Sequential operation disabled.
+            SEQOP  = 0: Sequential operation enabled.
+            DISSLW = 1: Slew rate disabled.
+            DISSLW = 0: Slew rate enabled.
+            HAEN   = 1: N/A for MCP23017.
+            HAEN   = 0: N/A for MCP23017.
+            ODR    = 1: INT pin configured as open-drain output.
+            ODR    = 0: INT pin configured as active driver output.
+            INTPOL = 1: Polarity of INT pin, active = low.
+            INTPOL = 0: Polarity of INT pin, active = high.
 
-        Default is 0 for all bits.
+            Default is 0 for all bits.
 
-        The internal pull-up resistors are 100kOhm.
+            The internal pull-up resistors are 100kOhm.
 */
 
 //  Macros. -------------------------------------------------------------------
@@ -268,6 +273,7 @@
 
 // I2C base addresses, set according to A0-A2. Maximum of 8.
 #define MCP23017_ADDRESS_0  0x20
+/*
 #define MCP23017_ADDRESS_1  0x21 // Dummy address for additional chip.
 #define MCP23017_ADDRESS_2  0x22 // Dummy address for additional chip.
 #define MCP23017_ADDRESS_3  0x23 // Dummy address for additional chip.
@@ -275,7 +281,7 @@
 #define MCP23017_ADDRESS_5  0x25 // Dummy address for additional chip.
 #define MCP23017_ADDRESS_6  0x26 // Dummy address for additional chip.
 #define MCP23017_ADDRESS_7  0x27 // Dummy address for additional chip.
-
+*/
 // MCP23017 register addresses ( IOCON.BANK = 0).
 #define MCP23017_0_IODIRA   0x00
 #define MCP23017_0_IODIRB   0x01
@@ -301,6 +307,7 @@
 #define MCP23017_0_OLATB    0x15
 
 // MCP23017 register addresses (IOCON.BANK = 1).
+/*
 #define MCP23017_1_IODIRA   0x00
 #define MCP23017_1_IODIRB   0x10
 #define MCP23017_1_IPOLA    0x01
@@ -323,6 +330,7 @@
 #define MCP23017_1_GPIOB    0x19
 #define MCP23017_1_OLATA    0x0a
 #define MCP23017_1_OLATB    0x1a
+*/
 
 static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
 static int mcp23017ID[MCP23017_CHIPS];       // IDs (handles) for each chip.
