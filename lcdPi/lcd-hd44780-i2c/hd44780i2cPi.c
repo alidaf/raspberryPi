@@ -68,7 +68,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <wiringPi.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
@@ -103,9 +102,7 @@ static int8_t *getBinaryString( uint8_t data, uint8_t bits )
 //  ---------------------------------------------------------------------------
 //  Writes byte to register of MCP23017.
 //  ---------------------------------------------------------------------------
-static int8_t mcp23017WriteByte( uint8_t handle,
-                                  uint8_t reg,
-                                  uint8_t byte )
+static int8_t mcp23017WriteByte( uint8_t handle, uint8_t reg, uint8_t byte )
 {
     uint8_t i;
     uint8_t data = byte;
@@ -161,11 +158,9 @@ static int8_t mcp23017init( void )
 //  HD44780 display functions. ------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Toggles E (enable) bit in byte mode without changing other bits.
+//  Toggles EN (enable) bit in byte mode without changing other bits.
 //  ---------------------------------------------------------------------------
-static void hd44780ToggleEnable( uint8_t handle,
-                                 uint8_t reg,
-                                 uint8_t byte )
+static void hd44780ToggleEnable( uint8_t handle, uint8_t reg, uint8_t byte )
 {
     mcp23017WriteByte( handle, reg, byte + lcdPin.en );
     usleep( 5000 ); // 5mS.
@@ -176,10 +171,8 @@ static void hd44780ToggleEnable( uint8_t handle,
 //  ---------------------------------------------------------------------------
 //  Writes a command or data byte (according to mode).
 //  ---------------------------------------------------------------------------
-static int8_t hd44780WriteByte( uint8_t handle,
-                              uint8_t reg,
-                              uint8_t data,
-                              uint8_t mode )
+static int8_t hd44780WriteByte( uint8_t handle, uint8_t reg,
+                                uint8_t data,   uint8_t mode )
 {
     uint8_t i;
     uint8_t mcp23017Byte;
@@ -240,9 +233,7 @@ static int8_t hd44780WriteByte( uint8_t handle,
 //  ---------------------------------------------------------------------------
 //  Writes a data string.
 //  ---------------------------------------------------------------------------
-static int8_t hd44780WriteString( uint8_t handle,
-                                    uint8_t reg,
-                                    char *string )
+static int8_t hd44780WriteString( uint8_t handle, char *string )
 {
     uint8_t i;
 
@@ -260,10 +251,8 @@ static int8_t hd44780WriteString( uint8_t handle,
     row due to common architecture. Moving from the end of a line to the start
     of the next is not contiguous memory.
 */
-static int8_t hd44780Goto( uint8_t handle,
-                         uint8_t reg,
-                         uint8_t row,
-                         uint8_t pos )
+static int8_t hd44780Goto( uint8_t handle, uint8_t reg,
+                           uint8_t row,    uint8_t pos )
 {
     if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
     if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
@@ -304,12 +293,11 @@ static int8_t displayHome( uint8_t handle, uint8_t reg )
 //  ---------------------------------------------------------------------------
 //  Initialises display. Must be called before any other display functions.
 //  ---------------------------------------------------------------------------
-static int8_t initialiseDisplay( uint8_t handle,
-                               uint8_t reg,
-                               bool data, bool lines, bool font,
-                               bool display, bool cursor, bool blink,
-                               bool counter, bool shift,
-                               bool mode, bool direction )
+static int8_t initialiseDisplay( uint8_t handle, uint8_t reg,
+                                 bool data,    bool lines,  bool font,
+                                 bool display, bool cursor, bool blink,
+                                 bool counter, bool shift,
+                                 bool mode,    bool direction )
 {
     // Allow a start-up delay.
     usleep( 42000 ); // >40mS@3V.
@@ -380,7 +368,7 @@ static int8_t initialiseDisplay( uint8_t handle,
 //  Sets entry mode.
 //  ---------------------------------------------------------------------------
 static int8_t setEntryMode( uint8_t handle, uint8_t reg,
-                          bool counter, bool shift )
+                            bool counter,   bool shift )
 {
     hd44780WriteByte( handle, reg,
                       ENTRY_BASE | ( counter * ENTRY_COUNTER )
@@ -396,7 +384,7 @@ static int8_t setEntryMode( uint8_t handle, uint8_t reg,
 //  Sets display mode.
 //  ---------------------------------------------------------------------------
 static int8_t setDisplayMode( uint8_t handle, uint8_t reg,
-                            bool display, bool cursor, bool blink )
+                              bool display, bool cursor, bool blink )
 {
     hd44780WriteByte( handle, reg,
                       DISPLAY_BASE | ( display * DISPLAY_ON )
@@ -413,7 +401,7 @@ static int8_t setDisplayMode( uint8_t handle, uint8_t reg,
 //  Shifts cursor or display.
 //  ---------------------------------------------------------------------------
 static int8_t setMoveMode( uint8_t handle, uint8_t reg,
-                         bool mode, bool direction )
+                           bool mode, bool direction )
 {
     hd44780WriteByte( handle, reg,
                       MOVE_BASE | ( mode * MOVE_DISPLAY )
@@ -465,7 +453,7 @@ const uint8_t pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
 //  Loads custom characters into CGRAM.
 //  ---------------------------------------------------------------------------
 static int8_t loadCustom( uint8_t handle, uint8_t reg,
-                        const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
+                          const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
 {
     hd44780WriteByte( handle, reg, ADDRESS_CGRAM, MODE_COMMAND );
     uint8_t i, j;

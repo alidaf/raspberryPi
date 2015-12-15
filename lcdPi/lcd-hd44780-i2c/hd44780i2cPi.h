@@ -354,20 +354,40 @@ pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
 //  Data structures. ----------------------------------------------------------
 
-struct HD44780i2c
+struct MCP23017i2c
 {
-    uint8_t data;  // I2C data GPIO.
-    uint8_t clock; // I2C clock GPIO.
+    uint8_t rs;     // MCP23017 GPIO pin address for HD44780 RS pin.
+    uint8_t rw;     // MCP23017 GPIO pin address for HD44780 R/W pin.
+    uint8_t en;     // MCP23017 GPIO pin address for HD44780 EN pin.
+    uint8_t db[4];  // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
+}
+    mcp23017i2c     // Defaults based on wiring.
+{
+    .rs     = 0x80, // Bit 7.
+    .rw     = 0x40, // Bit 6.
+    .en     = 0x20, // Bit 5.
+    .db[0]  = 0x08, // Bit 3.
+    .db[1]  = 0x04, // Bit 2.
+    .db[2]  = 0x02, // Bit 1.
+    .db[3]  = 0x01  // Bit 0.
 };
 
-struct textStruct
+struct HD44780pins
+{
+    bool rs;    // Pin value for RS pin.
+    bool rw;    // Pin value for R/W pin.
+    bool en;    // Pin value for EN pin.
+    bool db[4]; // Pin value for DB4-DB7 pins.
+};
+
+struct HD44780text
 {
     uint8_t row;        // Display row.
     uint8_t col;        // Display column.
     char    *buffer;    // Display text.
 };
 
-struct Calendar
+struct HD44780calendar
 {
     uint8_t row;        // Display row (y).
     uint8_t col;        // Display col (x).
@@ -394,7 +414,7 @@ struct Calendar
             %p  AM/PM.
 */
 
-struct tickerStruct
+struct HD44780ticker
 {
     char     text[TEXT_MAX_LENGTH]; // Display text.
     uint16_t length;                // Text length.
