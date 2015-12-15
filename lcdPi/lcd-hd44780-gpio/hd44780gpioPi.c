@@ -177,12 +177,12 @@ int8_t writeData( uint8_t data )
 //  ---------------------------------------------------------------------------
 //  Writes a string of data to display.
 //  ---------------------------------------------------------------------------
-int8_t writeDataString( char *string )
+int8_t writeDataString( char *buffer )
 {
     uint8_t i;
 
-    for ( i = 0; i < strlen( string ); i++ )
-        writeData( string[i] );
+    for ( i = 0; i < strlen( buffer ); i++ )
+        writeData( buffer[i] );
 
     return 0;
 };
@@ -412,17 +412,17 @@ int8_t loadCustomChar( const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] )
 //  Display functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Returns a reversed string. Used for rotate string function.
+//  Reverses a string passed as *buffer between start and end.
 //  ---------------------------------------------------------------------------
-static void reverseString( char *text, size_t start, size_t end )
+static void reverseString( char *buffer, size_t start, size_t end )
 {
     char temp;
     while ( start < end )
     {
         end--;
-        temp = text[start];
-        text[start] = text[end];
-        text[end] = temp;
+        temp = buffer[start];
+        buffer[start] = buffer[end];
+        buffer[end] = temp;
         start++;
     }
 
@@ -430,15 +430,15 @@ static void reverseString( char *text, size_t start, size_t end )
 };
 
 //  ---------------------------------------------------------------------------
-//  Returns a rotated string.
+//  Rotates a string passed as buffer by increments.
 //  ---------------------------------------------------------------------------
-static void rotateString( char *text, size_t length, size_t increments )
+static void rotateString( char *buffer, size_t length, size_t increments )
 {
     // if (!text || !*text ) return;
     increments %= length;
-    reverseString( text, 0, increments );
-    reverseString( text, increments, length );
-    reverseString( text, 0, length );
+    reverseString( buffer, 0, increments );
+    reverseString( buffer, increments, length );
+    reverseString( buffer, 0, length );
 
     return;
 }
@@ -448,6 +448,7 @@ static void rotateString( char *text, size_t length, size_t increments )
 //  ---------------------------------------------------------------------------
 void *displayTicker( void *threadTicker )
 {
+    // Get parameters.
     struct tickerStruct *ticker = threadTicker;
 
     // Close thread if text string is too big.
@@ -467,17 +468,17 @@ void *displayTicker( void *threadTicker )
     ticker->length = strlen( ticker->text );
 
     // Set up a text window equal to the number of display columns.
-    char displayText[DISPLAY_COLUMNS];
+    char buffer[DISPLAY_COLUMNS];
 
     while ( 1 )
     {
         // Copy the display text.
-        strncpy( displayText, ticker->text, DISPLAY_COLUMNS );
+        strncpy( buffer, ticker->text, DISPLAY_COLUMNS );
 
         // Lock thread and display ticker text.
         pthread_mutex_lock( &displayBusy );
         gotoRowPos( 1, 0 );
-        writeDataString( displayText );
+        writeDataString( buffer );
         pthread_mutex_unlock( &displayBusy );
 
         // Delay for readability.
@@ -495,7 +496,7 @@ void *displayTicker( void *threadTicker )
 //  ---------------------------------------------------------------------------
 void *displayCalendar( void *threadCalendar )
 {
-    // Get date struct.
+    // Get parameters.
     struct Calendar *calendar = threadCalendar;
 
     // Definitions for time.h functions.

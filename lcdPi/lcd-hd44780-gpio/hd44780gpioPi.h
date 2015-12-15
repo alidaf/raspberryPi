@@ -26,11 +26,8 @@
 
     Contributors:
 
-//  ---------------------------------------------------------------------------
-*/
-
 //  Information. --------------------------------------------------------------
-/*
+
     Pin layout for Hitachi HD44780 based LCD display.
 
         +------------------------------------------------------------+
@@ -206,7 +203,7 @@ struct tickerStruct
     .length + .padding must be < TEXT_MAX_LENGTH.
 */
 
-//  Display output functions. -------------------------------------------------
+//  Hardware functions. -------------------------------------------------------
 
 // ----------------------------------------------------------------------------
 //  Writes byte value of a char to display in nibbles.
@@ -370,7 +367,7 @@ int8_t loadCustom( const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] );
 //  Display functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Displays text on display row as a tickertape. Call as a thread.
+//  Displays text on display row as a tickertape.
 //  ---------------------------------------------------------------------------
 void *displayTicker( void *threadTicker );
 /*
@@ -385,7 +382,7 @@ void *displayTicker( void *threadTicker );
 */
 
 //  ---------------------------------------------------------------------------
-//  Displays formatted date/time strings. Call as a thread.
+//  Displays formatted date/time strings.
 //  ---------------------------------------------------------------------------
 void *displayCalendar( void *threadCalendar );
 
