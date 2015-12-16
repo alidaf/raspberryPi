@@ -143,13 +143,13 @@ static int8_t mcp23017init( void )
 
         printf( "\nSetting up MCP23017.\n\n" );
         // Set directions to out (PORTA).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_IODIRA, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_IODIRA, 0x00 );
         // Set directions to out (PORTB).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_IODIRB, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_IODIRB, 0x00 );
         // Set all outputs to low (PORTA).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_OLATA, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_OLATA, 0x00 );
         // Set all outputs to low (PORTB).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_OLATB, 0x00 );
+        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_OLATB, 0x00 );
 	}
 
     return 0;
@@ -261,10 +261,10 @@ static int8_t hd44780Goto( uint8_t handle, uint8_t reg,
 
     // Array of row start addresses
     uint8_t rows[DISPLAY_ROWS_MAX] = { ADDRESS_ROW_0, ADDRESS_ROW_1,
-                                             ADDRESS_ROW_2, ADDRESS_ROW_3 };
+                                       ADDRESS_ROW_2, ADDRESS_ROW_3 };
 
-    hd44780WriteByte( handle, reg,
-                    ( ADDRESS_DDRAM | rows[row] ) + pos, MODE_COMMAND );
+    hd44780WriteByte( handle, reg, ( ADDRESS_DDRAM | rows[row] ) + pos,
+    				     MODE_COMMAND );
     return 0;
 };
 
@@ -485,7 +485,7 @@ static void *displayPacMan( void *rowPtr )
 
     // Load custom characters into CGRAM.
     pthread_mutex_lock( &displayBusy );
-    loadCustom( mcp23017ID[0], MCP23017_OLATB, pacMan );
+    loadCustom( mcp23017ID[0], MCP23017_0_OLATB, pacMan );
     pthread_mutex_unlock( &displayBusy );
 
     uint8_t i, j;     // i = position counter, j = frame counter.
@@ -498,9 +498,9 @@ static void *displayPacMan( void *rowPtr )
             {
                 pthread_mutex_lock( &displayBusy );
                 hd44780Goto( mcp23017ID[0],
-                             MCP23017_OLATB, row, i );
+                             MCP23017_0_OLATB, row, i );
                 hd44780WriteByte( mcp23017ID[0],
-                                  MCP23017_OLATB,
+                                  MCP23017_0_OLATB,
                                   pacManRight[j],
                                   MODE_DATA );
                 pthread_mutex_unlock( &displayBusy );
@@ -508,9 +508,9 @@ static void *displayPacMan( void *rowPtr )
                 {
                     pthread_mutex_lock( &displayBusy );
                     hd44780Goto( mcp23017ID[0],
-                                 MCP23017_OLATB, row, i - 2 );
+                                 MCP23017_0_OLATB, row, i - 2 );
                     hd44780WriteByte( mcp23017ID[0],
-                                      MCP23017_OLATB,
+                                      MCP23017_0_OLATB,
                                       ghost[j],
                                       MODE_DATA );
                     pthread_mutex_unlock( &displayBusy );
@@ -519,9 +519,9 @@ static void *displayPacMan( void *rowPtr )
                 {
                     pthread_mutex_lock( &displayBusy );
                     hd44780Goto( mcp23017ID[0],
-                                 MCP23017_OLATB, row, i - 3 );
+                                 MCP23017_0_OLATB, row, i - 3 );
                     hd44780WriteByte( mcp23017ID[0],
-                                      MCP23017_OLATB,
+                                      MCP23017_0_OLATB,
                                       ghost[j],
                                       MODE_DATA );
                     pthread_mutex_unlock( &displayBusy );
@@ -530,9 +530,9 @@ static void *displayPacMan( void *rowPtr )
                 {
                     pthread_mutex_lock( &displayBusy );
                     hd44780Goto( mcp23017ID[0],
-                                 MCP23017_OLATB, row, i - 4 );
+                                 MCP23017_0_OLATB, row, i - 4 );
                     hd44780WriteByte( mcp23017ID[0],
-                                      MCP23017_OLATB,
+                                      MCP23017_0_OLATB,
                                       ghost[j],
                                       MODE_DATA );
                     pthread_mutex_unlock( &displayBusy );
@@ -541,9 +541,9 @@ static void *displayPacMan( void *rowPtr )
                 {
                     pthread_mutex_lock( &displayBusy );
                     hd44780Goto( mcp23017ID[0],
-                                 MCP23017_OLATB, row, i - 5 );
+                                 MCP23017_0_OLATB, row, i - 5 );
                     hd44780WriteByte( mcp23017ID[0],
-                                      MCP23017_OLATB,
+                                      MCP23017_0_OLATB,
                                       ghost[j],
                                       MODE_DATA );
                     pthread_mutex_unlock( &displayBusy );
@@ -551,9 +551,9 @@ static void *displayPacMan( void *rowPtr )
                 nanosleep( &sleepTime, NULL );
             }
             pthread_mutex_lock( &displayBusy );
-            hd44780Goto( mcp23017ID[0], MCP23017_OLATB, row, 0 );
+            hd44780Goto( mcp23017ID[0], MCP23017_0_OLATB, row, 0 );
             hd44780WriteString( mcp23017ID[0],
-                                MCP23017_OLATB,
+                                MCP23017_0_OLATB,
                                 "                " );
             pthread_mutex_unlock( &displayBusy );
         }

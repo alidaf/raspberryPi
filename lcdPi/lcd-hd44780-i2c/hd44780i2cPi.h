@@ -282,55 +282,65 @@
 #define MCP23017_ADDRESS_6  0x26 // Dummy address for additional chip.
 #define MCP23017_ADDRESS_7  0x27 // Dummy address for additional chip.
 */
+
+#define MCP23017_REGISTERS    22
+#define MCP23017_BANKS         2
+
+// MCP23017 registers.
+enum mcp23017Reg_t
+    { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
+      DEFVALA,  DEFVALB,  INTCONA,  INTCONB,  IOCONA,   IOCONB,
+      GPPUA,    GPPUB,    INTFA,    INTFB,    INTCAPA,  INTCAPB,
+      GPIOA,    GPIOB,    OLATA,    OLATB };
+
 // MCP23017 register addresses ( IOCON.BANK = 0).
-#define MCP23017_0_IODIRA   0x00
-#define MCP23017_0_IODIRB   0x01
-#define MCP23017_0_IPOLA    0x02
-#define MCP23017_0_IPOLB    0x03
-#define MCP23017_0_GPINTENA 0x04
-#define MCP23017_0_GPINTENB 0x05
-#define MCP23017_0_DEFVALA  0x06
-#define MCP23017_0_DEFVALB  0x07
-#define MCP23017_0_INTCONA  0x08
-#define MCP23017_0_INTCONB  0x09
-#define MCP23017_0_IOCONA   0x0a
-#define MCP23017_0_IOCONB   0x0b
-#define MCP23017_0_GPPUA    0x0c
-#define MCP23017_0_GPPUB    0x0d
-#define MCP23017_0_INTFA    0x0e
-#define MCP23017_0_INTFB    0x0f
-#define MCP23017_0_INTCAPA  0x10
-#define MCP23017_0_INTCAPB  0x11
-#define MCP23017_0_GPIOA    0x12
-#define MCP23017_0_GPIOB    0x13
-#define MCP23017_0_OLATA    0x14
-#define MCP23017_0_OLATB    0x15
+#define BANK0_IODIRA   0x00
+#define BANK0_IODIRB   0x01
+#define BANK0_IPOLA    0x02
+#define BANK0_IPOLB    0x03
+#define BANK0_GPINTENA 0x04
+#define BANK0_GPINTENB 0x05
+#define BANK0_DEFVALA  0x06
+#define BANK0_DEFVALB  0x07
+#define BANK0_INTCONA  0x08
+#define BANK0_INTCONB  0x09
+#define BANK0_IOCONA   0x0a
+#define BANK0_IOCONB   0x0b
+#define BANK0_GPPUA    0x0c
+#define BANK0_GPPUB    0x0d
+#define BANK0_INTFA    0x0e
+#define BANK0_INTFB    0x0f
+#define BANK0_INTCAPA  0x10
+#define BANK0_INTCAPB  0x11
+#define BANK0_GPIOA    0x12
+#define BANK0_GPIOB    0x13
+#define BANK0_OLATA    0x14
+#define BANK0_OLATB    0x15
 
 // MCP23017 register addresses (IOCON.BANK = 1).
-/*
-#define MCP23017_1_IODIRA   0x00
-#define MCP23017_1_IODIRB   0x10
-#define MCP23017_1_IPOLA    0x01
-#define MCP23017_1_IPOLB    0x11
-#define MCP23017_1_GPINTENA 0x02
-#define MCP23017_1_GPINTENB 0x12
-#define MCP23017_1_DEFVALA  0x03
-#define MCP23017_1_DEFVALB  0x13
-#define MCP23017_1_INTCONA  0x04
-#define MCP23017_1_INTCONB  0x14
-#define MCP23017_1_IOCONA   0x05
-#define MCP23017_1_IOCONB   0x15
-#define MCP23017_1_GPPUA    0x06
-#define MCP23017_1_GPPUB    0x16
-#define MCP23017_1_INTFA    0x07
-#define MCP23017_1_INTFB    0x17
-#define MCP23017_1_INTCAPA  0x08
-#define MCP23017_1_INTCAPB  0x18
-#define MCP23017_1_GPIOA    0x09
-#define MCP23017_1_GPIOB    0x19
-#define MCP23017_1_OLATA    0x0a
-#define MCP23017_1_OLATB    0x1a
-*/
+
+#define BANK1_IODIRA   0x00
+#define BANK1_IODIRB   0x10
+#define BANK1_IPOLA    0x01
+#define BANK1_IPOLB    0x11
+#define BANK1_GPINTENA 0x02
+#define BANK1_GPINTENB 0x12
+#define BANK1_DEFVALA  0x03
+#define BANK1_DEFVALB  0x13
+#define BANK1_INTCONA  0x04
+#define BANK1_INTCONB  0x14
+#define BANK1_IOCONA   0x05
+#define BANK1_IOCONB   0x15
+#define BANK1_GPPUA    0x06
+#define BANK1_GPPUB    0x16
+#define BANK1_INTFA    0x07
+#define BANK1_INTFB    0x17
+#define BANK1_INTCAPA  0x08
+#define BANK1_INTCAPB  0x18
+#define BANK1_GPIOA    0x09
+#define BANK1_GPIOB    0x19
+#define BANK1_OLATA    0x0a
+#define BANK1_OLATB    0x1a
 
 static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
 static int mcp23017ID[MCP23017_CHIPS];       // IDs (handles) for each chip.
@@ -354,14 +364,44 @@ pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
 //  Data structures. ----------------------------------------------------------
 
-struct MCP23017i2c
+unit8_t mcp23017Reg[MCP23017_REGISTERS][MCP23017_BANKS] =
+/*
+    Register address can be reference with enumerated type
+         {          BANK0, BANK1          }
+*/
+        {{   BANK0_IODIRA, BANK1_IODIRA   },
+         {   BANK0_IODIRB, BANK1_IODIRB   },
+         {    BANK0_IPOLA, BANK1_IPOLA    },
+         {    BANK0_IPOLB, BANK1_IPOLB    },
+         { BANK0_GPINTENA, BANK1_GPINTENA },
+         { BANK0_GPINTENB, BANK1_GPINTENB },
+         {  BANK0_DEFVALA, BANK1_DEFVALA  },
+         {  BANK0_DEFVALB, BANK1_DEFVALB  },
+         {  BANK0_INTCONA, BANK1_INTCONA  },
+         {  BANK0_INTCONB, BANK1_INTCONB  },
+         {   BANK0_IOCONA, BANK1_IOCONA   },
+         {   BANK0_IOCONB, BANK1_IOCONB   },
+         {    BANK0_GPPUA, BANK1_GPPUA    },
+         {    BANK0_GPPUB, BANK1_GPPUB    },
+         {    BANK0_INTFA, BANK1_INTFA    },
+         {    BANK0_INTFB, BANK1_INTFB    },
+         {  BANK0_INTCAPA, BANK1_INTCAPA  },
+         {  BANK0_INTCAPB, BANK1_INTCAPB  },
+         {    BANK0_GPIOA, BANK1_GPIOA    },
+         {    BANK0_GPIOB, BANK1_GPIOB    },
+         {    BANK0_OLATA, BANK1_OLATA    },
+         {    BANK0_OLATB, BANK1_OLATB    }};
+
+struct HD44780i2c
 {
+    uint8_t addr;   // I2C address.
+    uint8_t bank;   // MCP23017 BANK.
     uint8_t rs;     // MCP23017 GPIO pin address for HD44780 RS pin.
     uint8_t rw;     // MCP23017 GPIO pin address for HD44780 R/W pin.
     uint8_t en;     // MCP23017 GPIO pin address for HD44780 EN pin.
     uint8_t db[4];  // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
 }
-    mcp23017i2c     // Defaults based on wiring.
+    hd44780i2c =   // Defaults based on wiring. All in the same BANK.
 {
     .rs     = 0x80, // Bit 7.
     .rw     = 0x40, // Bit 6.
@@ -380,14 +420,14 @@ struct HD44780pins
     bool db[4]; // Pin value for DB4-DB7 pins.
 };
 
-struct HD44780text
+struct Text
 {
     uint8_t row;        // Display row.
     uint8_t col;        // Display column.
     char    *buffer;    // Display text.
 };
 
-struct HD44780calendar
+struct Calendar
 {
     uint8_t row;        // Display row (y).
     uint8_t col;        // Display col (x).
@@ -597,7 +637,7 @@ struct customCharsStruct
     finish.
 */
 static int8_t loadCustom( uint8_t handle, uint8_t reg,
-                    const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] );
+                    const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] );
 
 //  Display functions. --------------------------------------------------------
 
