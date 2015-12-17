@@ -34,7 +34,7 @@
 
     The MCP23017 is an I2C bus operated 16-bit I/O port expander:
 
-                        +------------O------------+
+                        +-----------( )-----------+
                         |  Fn  | pin | pin |  Fn  |
                         |------+-----+-----+------|
                       { | GPB0 |  01 | 28  | GPA7 | }
@@ -55,9 +55,9 @@
 
             The I2C address device is addressed as follows:
 
-                +-----+-----+-----+-----+-----+-----+-----+-----+
+                +-----------------------------------------------+
                 |  0  |  1  |  0  |  0  |  A2 |  A1 |  A0 | R/W |
-                +-----+-----+-----+-----+-----+-----+-----+-----+
+                +-----------------------------------------------+
                 : <----------- slave address -----------> :     :
                 : <--------------- control byte --------------> :
 
@@ -114,22 +114,22 @@
             | BANK |MIRROR|SEQOP |DISSLW| HAEN | ODR  |INTPOL| ---- |
             +-------------------------------------------------------+
 
-            BANK   = 1: PORTS are segregated, i.e. 8-bit mode.
-            BANK   = 0: PORTS are paired into 16-bit mode.
-            MIRROR = 1: INT pins are connected.
-            MIRROR = 0: INT pins operate independently.
-            SEQOP  = 1: Sequential operation disabled.
-            SEQOP  = 0: Sequential operation enabled.
-            DISSLW = 1: Slew rate disabled.
-            DISSLW = 0: Slew rate enabled.
-            HAEN   = 1: N/A for MCP23017.
-            HAEN   = 0: N/A for MCP23017.
-            ODR    = 1: INT pin configured as open-drain output.
-            ODR    = 0: INT pin configured as active driver output.
-            INTPOL = 1: Polarity of INT pin, active = low.
-            INTPOL = 0: Polarity of INT pin, active = high.
+                BANK   = 1: PORTS are segregated, i.e. 8-bit mode.
+                BANK   = 0: PORTS are paired into 16-bit mode.
+                MIRROR = 1: INT pins are connected.
+                MIRROR = 0: INT pins operate independently.
+                SEQOP  = 1: Sequential operation disabled.
+                SEQOP  = 0: Sequential operation enabled.
+                DISSLW = 1: Slew rate disabled.
+                DISSLW = 0: Slew rate enabled.
+                HAEN   = 1: N/A for MCP23017.
+                HAEN   = 0: N/A for MCP23017.
+                ODR    = 1: INT pin configured as open-drain output.
+                ODR    = 0: INT pin configured as active driver output.
+                INTPOL = 1: Polarity of INT pin, active = low.
+                INTPOL = 0: Polarity of INT pin, active = high.
 
-            Default is 0 for all bits.
+                Default is 0 for all bits.
 
             The internal pull-up resistors are 100kOhm.
 */
@@ -141,27 +141,14 @@
 
 #define MCP23017_MAX           8 // Max number of MCP23017s.
 
-// I2C base addresses, set according to A0-A2. Maximum of 8.
-#define MCP23017_ADDRESS_0  0x20
-/*
-#define MCP23017_ADDRESS_1  0x21 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_2  0x22 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_3  0x23 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_4  0x24 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_5  0x25 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_6  0x26 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_7  0x27 // Dummy address for additional chip.
-*/
-
 #define MCP23017_REGISTERS    22
 #define MCP23017_BANKS         2
 
 // MCP23017 registers.
-enum mcp23017Reg_t
-    { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
-      DEFVALA,  DEFVALB,  INTCONA,  INTCONB,  IOCONA,   IOCONB,
-      GPPUA,    GPPUB,    INTFA,    INTFB,    INTCAPA,  INTCAPB,
-      GPIOA,    GPIOB,    OLATA,    OLATB };
+typedef enum reg { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
+                   DEFVALA,  DEFVALB,  INTCONA,  INTCONB,  IOCONA,   IOCONB,
+                   GPPUA,    GPPUB,    INTFA,    INTFB,    INTCAPA,  INTCAPB,
+                   GPIOA,    GPIOB,    OLATA,    OLATB } mcp23017Reg_t;
 
 // MCP23017 register addresses ( IOCON.BANK = 0).
 #define BANK0_IODIRA   0x00
@@ -212,25 +199,14 @@ enum mcp23017Reg_t
 #define BANK1_OLATA    0x0a
 #define BANK1_OLATB    0x1a
 
-static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
-static int mcp23017ID[MCP23017_CHIPS];       // IDs (handles) for each chip.
-
-// Array of addresses for each MCP23017.
-static uint8_t mcp23017Addr[MCP23017_CHIPS] = { MCP23017_ADDRESS_0 };
 /*
-    = { MCP23017_ADDRESS_0,
-        MCP23017_ADDRESS_1,
-        MCP23017_ADDRESS_2,
-        MCP23017_ADDRESS_3,
-        MCP23017_ADDRESS_4,
-        MCP23017_ADDRESS_5,
-        MCP23017_ADDRESS_6,
-        MCP23017_ADDRESS_7 }
+    Note: I2C file system path for revision 1 is "/dev/i2c-0".
 */
+static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
 
 //  Data structures. ----------------------------------------------------------
 
-unit8_t mcp23017_Register[MCP23017_REGISTERS][MCP23017_BANKS] =
+uint8_t mcp23017Register[MCP23017_REGISTERS][MCP23017_BANKS] =
 /*
     Register address can be reference with enumerated type
          {          BANK0, BANK1          }
@@ -258,29 +234,54 @@ unit8_t mcp23017_Register[MCP23017_REGISTERS][MCP23017_BANKS] =
          {    BANK0_OLATA, BANK1_OLATA    },
          {    BANK0_OLATB, BANK1_OLATB    }};
 
-typedef enum mcp23017_bits = { BYTE, WORD };    // 8-bit or 16-bit.
-typedef enum mcp23017_mode = { BYTE, SEQ  };    // Read/write mode.
+typedef enum mcp23017Bits_t { BITS_BYTE, BITS_WORD } mcp23017Bits_t; // 8-bit or 16-bit.
+typedef enum mcp23017Mode_t { MODE_BYTE, MODE_SEQ  } mcp23017Mode_t; // Read/write mode.
 
-struct Mcp23017
+struct mcp23017_s
 {
-    uint8_t         addr;   // Address of MCP23017.
-    mcp23017_bits   bits;   // 8-bit or 16-bit mode.
-    mcp23017_mode   mode;   // Byte or sequential R/W mode.
+    uint8_t        addr; // Address of MCP23017.
+    mcp23017Bits_t bits; // 8-bit or 16-bit mode.
+    mcp23017Mode_t mode; // Byte or sequential R/W mode.
 };
 
-struct Mcp23017 *mcp23017[MCP23017_MAX];
+struct mcp23017_s *mcp23017[MCP23017_MAX];
 
 
-//  Hardware functions. -------------------------------------------------------
+//  ---------------------------------------------------------------------------
+//  Opens I2C device, returns handle.
+//  ---------------------------------------------------------------------------
+int8_t i2cOpen( uint8_t id );
+
+//  ---------------------------------------------------------------------------
+//  Closes I2C device.
+//  ---------------------------------------------------------------------------
+//int8_t i2cClose( void );
+
+//  MCP23017 functions. -------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Writes byte to register of MCP23017.
 //  ---------------------------------------------------------------------------
-static int8_t mcp23017WriteByte( uint8_t handle, uint8_t reg, uint8_t byte );
+int8_t mcp23017WriteRegisterByte( uint8_t handle, uint8_t reg, uint8_t data );
 
 //  ---------------------------------------------------------------------------
-//  Initialises MCP23017 chips.
+//  Writes word to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017_init( uint8_t addr, bitsMode_t bits, rdwrMode_t rdwr );
+int8_t mcp23017WriteRegisterWord( uint8_t handle, uint8_t reg, uint8_t data );
+
+//  ---------------------------------------------------------------------------
+//  Reads byte from register of MCP23017.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ReadRegisterByte( uint8_t handle, uint8_t reg );
+
+//  ---------------------------------------------------------------------------
+//  Reads word from register of MCP23017.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ReadRegisterWord( uint8_t handle, uint8_t reg );
+
+//  ---------------------------------------------------------------------------
+//  Initialises MCP23017 registers.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode );
 
 #endif

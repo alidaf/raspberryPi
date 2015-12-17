@@ -10,8 +10,6 @@
     Based on the following guides and codes:
         MCP23017 data sheet.
         - see http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf.
-        Experimenting with Raspberry Pi by Warren Gay
-        - ISBN13: 978-1-484201-82-4.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,7 +28,7 @@
 
     For a shared library, compile with:
 
-        gcc -c -Wall -Werror -fpic mcp23017.c
+        gcc -c -Wall -fpic mcp23017.c
         gcc -shared -o libmcp23017.so mcp23017.o
 
     For Raspberry Pi optimisation use the following flags:
@@ -52,46 +50,27 @@
 */
 
 #include <stdio.h>
-#include <stdint.h>
-#include <string.h>
-#include <stdbool.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <stdint.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdbool.h>
 
-#include <sys/stat.h>
-#include <sys/types.h>
+//#include <sys/types.h>
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 
 #include "mcp23017.h"
 
-//  MCP23017 functions. -------------------------------------------------------
+//  I2C functions. ------------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Writes byte to register of MCP23017.
+//  Opens I2C device, returns handle.
 //  ---------------------------------------------------------------------------
-static int8_t mcp23017WriteByte( uint8_t handle, uint8_t reg, uint8_t byte )
+int8_t i2cOpen( uint8_t id )
 {
-    uint8_t i;
-    uint8_t data = byte;
-
-    printf( "I2C handle = %d, MCP23017 register = 0x%02x.\n", handle, reg );
-    printf( "RS EN RW NC DB DB DB DB\n" );
-    for ( i = 0; i < BITS_BYTE; i++ )
-        printf( "%2d ", ( data >> BITS_BYTE - i - 1 ) & 1 );
-    printf( "\n" );
-    i2c_smbus_write_byte_data( handle, reg, byte );
-}
-
-
-//  ---------------------------------------------------------------------------
-//  Opens I2C device.
-//  ---------------------------------------------------------------------------
-int8_t i2cOpen( void )
-{
-    int8_t id;
     // I2C communication is via device file (/dev/i2c-1).
-    if ( id = open( i2cDevice, O_RDWR )) < 0 )
+    if (( id = open( i2cDevice, O_RDWR )) < 0 )
     {
         printf( "Couldn't open I2C device %s.\n", i2cDevice );
         printf( "Error code = %d.\n", errno );
@@ -104,22 +83,57 @@ int8_t i2cOpen( void )
 //  ---------------------------------------------------------------------------
 //  Closes I2C device.
 //  ---------------------------------------------------------------------------
-int8_t i2cClose( void )
+//int8_t i2cClose( void )
 
-    if ( close( i2cDevice )) < 0
-        printf( "Couldn't close I2C device %s.\n", i2cDevice );
-        printf( "Error code = %d.\n", errno );
-        return -1;
-    }
-};
+//    if ( close( i2cDevice ) < 0 )
+//    {
+//        printf( "Couldn't close I2C device %s.\n", i2cDevice );
+//        printf( "Error code = %d.\n", errno );
+//        return -1;
+//    }
+//};
+
+//  MCP23017 functions. -------------------------------------------------------
+
+//  ---------------------------------------------------------------------------
+//  Writes byte to register of MCP23017.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017WriteRegisterByte( uint8_t handle, uint8_t reg, uint8_t data )
+{
+    return i2c_smbus_write_byte_data( handle, reg, data );
+}
+
+//  ---------------------------------------------------------------------------
+//  Writes word to register of MCP23017.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017WriteRegisterWord( uint8_t handle, uint8_t reg, uint8_t data )
+{
+    return i2c_smbus_write_word_data( handle, reg, data );
+}
+
+//  ---------------------------------------------------------------------------
+//  Reads byte from register of MCP23017.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ReadRegisterByte( uint8_t handle, uint8_t reg )
+{
+    return i2c_smbus_read_byte_data( handle, reg );
+}
+
+//  ---------------------------------------------------------------------------
+//  Reads word from register of MCP23017.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ReadRegisterWord( uint8_t handle, uint8_t reg )
+{
+    return i2c_smbus_read_word_data( handle, reg );
+}
 
 //  ---------------------------------------------------------------------------
 //  Initialises MCP23017 registers.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017_init( uint8_t addr, mcp23017_bits bits, mcp23017_mode mode )
+int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
 {
-    struct Mcp23017 *mcp23017this;  // current MCP23017.
-    static bool init = false;           // 1st call.
+    struct mcp23017_s *mcp23017this;  // current MCP23017.
+    static bool init = false;         // 1st call.
 
     int8_t  id = -1;
     uint8_t i;
@@ -127,13 +141,13 @@ int8_t mcp23017_init( uint8_t addr, mcp23017_bits bits, mcp23017_mode mode )
     // Set all intances of mcp23017 to NULL on first call.
     if ( !init )
     {
-        init = true;
+//        init = true;
         for ( i = 0; i < MCP23017_MAX; i++ )
             mcp23017[i] = NULL;
     }
 
     // Address must be 0x20 to 0x27.
-    if (( addr < 0x20 ) || ( addr > 0x27 )) return -1.
+    if (( addr < 0x20 ) || ( addr > 0x27 )) return -1;
 
     // Get next available ID.
     for ( i = 0; i < MCP23017_MAX; i++ )
@@ -148,15 +162,28 @@ int8_t mcp23017_init( uint8_t addr, mcp23017_bits bits, mcp23017_mode mode )
     if ( id < 0 ) return -1;        // Return if not init.
 
     // Allocate memory for MCP23017 data structure.
-    mcp23017this = malloc( sizeof ( struct Mcp23017 ));
+    mcp23017this = malloc( sizeof ( struct mcp23017_s ));
 
     // Return if unable to allocate memory.
     if ( mcp23017this == NULL ) return -1;
 
-    mcp23017this->addr = address;   // Set address.
-    mcp23017this->bits = bits;      // Set 8-bit or 16-bit mode.
-    mcp23017this->mode = mode;      // Set byte or sequential R/W mode.
-    mcp23017[id] = mcp23017this;    // Create an instance of this device.
+    if (!init)
+    {
+        // I2C communication is via device file (/dev/i2c-1).
+        if (( id = open( i2cDevice, O_RDWR )) < 0 )
+        {
+            printf( "Couldn't open I2C device %s.\n", i2cDevice );
+            printf( "Error code = %d.\n", errno );
+            return -1;
+        }
+
+        init = true;
+    }
+
+    mcp23017this->addr = addr;    // Set address.
+    mcp23017this->bits = bits;    // Set 8-bit or 16-bit mode.
+    mcp23017this->mode = mode;    // Set byte or sequential R/W mode.
+    mcp23017[id] = mcp23017this;  // Create an instance of this device.
 
     // Set slave address for this device.
     if ( ioctl( id, I2C_SLAVE, mcp23017this->addr ) < 0 )
@@ -170,16 +197,22 @@ int8_t mcp23017_init( uint8_t addr, mcp23017_bits bits, mcp23017_mode mode )
 
     // Need to set up mode and bits!
 
+    // Use mcp23017Reg_t as index to get address for port.
+    mcp23017Reg_t index;
+    uint8_t port = 0;
 
-    printf( "\nSetting up MCP23017.\n\n" );
     // Set directions to out (PORTA).
-    mcp23017WriteByte( mcp23017ID[i], MCP23017_0_IODIRA, 0x00 );
+    index = IODIRA;
+    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
     // Set directions to out (PORTB).
-    mcp23017WriteByte( mcp23017ID[i], MCP23017_0_IODIRB, 0x00 );
+    index = IODIRB;
+    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
     // Set all outputs to low (PORTA).
-    mcp23017WriteByte( mcp23017ID[i], MCP23017_0_OLATA, 0x00 );
+    index = OLATA;
+    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
     // Set all outputs to low (PORTB).
-    mcp23017WriteByte( mcp23017ID[i], MCP23017_0_OLATB, 0x00 );
+    index = OLATB;
+    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
 
     return id;
 };
