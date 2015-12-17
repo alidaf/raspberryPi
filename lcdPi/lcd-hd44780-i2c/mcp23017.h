@@ -199,40 +199,7 @@ typedef enum reg { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
 #define BANK1_OLATA    0x0a
 #define BANK1_OLATB    0x1a
 
-/*
-    Note: I2C file system path for revision 1 is "/dev/i2c-0".
-*/
-static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
-
 //  Data structures. ----------------------------------------------------------
-
-uint8_t mcp23017Register[MCP23017_REGISTERS][MCP23017_BANKS] =
-/*
-    Register address can be reference with enumerated type
-         {          BANK0, BANK1          }
-*/
-        {{   BANK0_IODIRA, BANK1_IODIRA   },
-         {   BANK0_IODIRB, BANK1_IODIRB   },
-         {    BANK0_IPOLA, BANK1_IPOLA    },
-         {    BANK0_IPOLB, BANK1_IPOLB    },
-         { BANK0_GPINTENA, BANK1_GPINTENA },
-         { BANK0_GPINTENB, BANK1_GPINTENB },
-         {  BANK0_DEFVALA, BANK1_DEFVALA  },
-         {  BANK0_DEFVALB, BANK1_DEFVALB  },
-         {  BANK0_INTCONA, BANK1_INTCONA  },
-         {  BANK0_INTCONB, BANK1_INTCONB  },
-         {   BANK0_IOCONA, BANK1_IOCONA   },
-         {   BANK0_IOCONB, BANK1_IOCONB   },
-         {    BANK0_GPPUA, BANK1_GPPUA    },
-         {    BANK0_GPPUB, BANK1_GPPUB    },
-         {    BANK0_INTFA, BANK1_INTFA    },
-         {    BANK0_INTFB, BANK1_INTFB    },
-         {  BANK0_INTCAPA, BANK1_INTCAPA  },
-         {  BANK0_INTCAPB, BANK1_INTCAPB  },
-         {    BANK0_GPIOA, BANK1_GPIOA    },
-         {    BANK0_GPIOB, BANK1_GPIOB    },
-         {    BANK0_OLATA, BANK1_OLATA    },
-         {    BANK0_OLATB, BANK1_OLATB    }};
 
 typedef enum mcp23017Bits_t { BITS_BYTE, BITS_WORD } mcp23017Bits_t; // 8-bit or 16-bit.
 typedef enum mcp23017Mode_t { MODE_BYTE, MODE_SEQ  } mcp23017Mode_t; // Read/write mode.
@@ -246,16 +213,6 @@ struct mcp23017_s
 
 struct mcp23017_s *mcp23017[MCP23017_MAX];
 
-
-//  ---------------------------------------------------------------------------
-//  Opens I2C device, returns handle.
-//  ---------------------------------------------------------------------------
-int8_t i2cOpen( uint8_t id );
-
-//  ---------------------------------------------------------------------------
-//  Closes I2C device.
-//  ---------------------------------------------------------------------------
-//int8_t i2cClose( void );
 
 //  MCP23017 functions. -------------------------------------------------------
 

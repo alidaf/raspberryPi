@@ -38,7 +38,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    16/12/2015.
+    Authors:        D.Faulke    17/12/2015.
 
     Contributors:
 
@@ -55,43 +55,40 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdbool.h>
-
-//#include <sys/types.h>
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 
 #include "mcp23017.h"
 
-//  I2C functions. ------------------------------------------------------------
+//  Data structures. ----------------------------------------------------------
 
-//  ---------------------------------------------------------------------------
-//  Opens I2C device, returns handle.
-//  ---------------------------------------------------------------------------
-int8_t i2cOpen( uint8_t id )
-{
-    // I2C communication is via device file (/dev/i2c-1).
-    if (( id = open( i2cDevice, O_RDWR )) < 0 )
-    {
-        printf( "Couldn't open I2C device %s.\n", i2cDevice );
-        printf( "Error code = %d.\n", errno );
-        return -1;
-    }
-
-    return id;
-};
-
-//  ---------------------------------------------------------------------------
-//  Closes I2C device.
-//  ---------------------------------------------------------------------------
-//int8_t i2cClose( void )
-
-//    if ( close( i2cDevice ) < 0 )
-//    {
-//        printf( "Couldn't close I2C device %s.\n", i2cDevice );
-//        printf( "Error code = %d.\n", errno );
-//        return -1;
-//    }
-//};
+uint8_t mcp23017Register[MCP23017_REGISTERS][MCP23017_BANKS] =
+/*
+    Register address can be reference with enumerated type
+         {          BANK0, BANK1          }
+*/
+        {{   BANK0_IODIRA, BANK1_IODIRA   },
+         {   BANK0_IODIRB, BANK1_IODIRB   },
+         {    BANK0_IPOLA, BANK1_IPOLA    },
+         {    BANK0_IPOLB, BANK1_IPOLB    },
+         { BANK0_GPINTENA, BANK1_GPINTENA },
+         { BANK0_GPINTENB, BANK1_GPINTENB },
+         {  BANK0_DEFVALA, BANK1_DEFVALA  },
+         {  BANK0_DEFVALB, BANK1_DEFVALB  },
+         {  BANK0_INTCONA, BANK1_INTCONA  },
+         {  BANK0_INTCONB, BANK1_INTCONB  },
+         {   BANK0_IOCONA, BANK1_IOCONA   },
+         {   BANK0_IOCONB, BANK1_IOCONB   },
+         {    BANK0_GPPUA, BANK1_GPPUA    },
+         {    BANK0_GPPUB, BANK1_GPPUB    },
+         {    BANK0_INTFA, BANK1_INTFA    },
+         {    BANK0_INTFB, BANK1_INTFB    },
+         {  BANK0_INTCAPA, BANK1_INTCAPA  },
+         {  BANK0_INTCAPB, BANK1_INTCAPB  },
+         {    BANK0_GPIOA, BANK1_GPIOA    },
+         {    BANK0_GPIOB, BANK1_GPIOB    },
+         {    BANK0_OLATA, BANK1_OLATA    },
+         {    BANK0_OLATB, BANK1_OLATB    }};
 
 //  MCP23017 functions. -------------------------------------------------------
 
@@ -142,6 +139,7 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
     if ( !init )
     {
 //        init = true;
+        printf( "First initialisation.\n" );
         for ( i = 0; i < MCP23017_MAX; i++ )
             mcp23017[i] = NULL;
     }
@@ -161,11 +159,17 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
 
     if ( id < 0 ) return -1;        // Return if not init.
 
+    printf( "ID = %d.\n", id );
     // Allocate memory for MCP23017 data structure.
     mcp23017this = malloc( sizeof ( struct mcp23017_s ));
 
     // Return if unable to allocate memory.
     if ( mcp23017this == NULL ) return -1;
+    printf( "Allocated memory.\n" );
+/*
+    Note: I2C file system path for revision 1 is "/dev/i2c-0".
+*/
+    static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
 
     if (!init)
     {
@@ -177,6 +181,7 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
             return -1;
         }
 
+        printf( "Opened I2C device OK.\n" );
         init = true;
     }
 
@@ -193,6 +198,7 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
         return -1;
     }
 
+    printf( "Set slave address OK.\n" );
     // Set registers.
 
     // Need to set up mode and bits!
@@ -200,19 +206,24 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
     // Use mcp23017Reg_t as index to get address for port.
     mcp23017Reg_t index;
     uint8_t port = 0;
+    int8_t err;
 
     // Set directions to out (PORTA).
     index = IODIRA;
-    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    if ( err < 0 ) printf( "Couldn't set IODIRA.\n" );
     // Set directions to out (PORTB).
     index = IODIRB;
-    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    if ( err < 0 ) printf( "Couldn't set IODIRB.\n" );
     // Set all outputs to low (PORTA).
     index = OLATA;
-    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    if ( err < 0 ) printf( "Couldn't set OLATA.\n" );
     // Set all outputs to low (PORTB).
     index = OLATB;
-    mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    if ( err < 0 ) printf( "Couldn't set OLATB.\n" );
 
     return id;
 };
