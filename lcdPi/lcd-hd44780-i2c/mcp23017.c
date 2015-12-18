@@ -127,22 +127,19 @@ int8_t mcp23017ReadRegisterWord( uint8_t handle, uint8_t reg )
 //  ---------------------------------------------------------------------------
 //  Initialises MCP23017 registers.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
+int8_t mcp23017Init( uint8_t addr, mcp23017Bank_t bank )
 {
     struct mcp23017_s *mcp23017this;  // current MCP23017.
     static bool init = false;         // 1st call.
+    static uint8_t index = 0;
 
     int8_t  id = -1;
     uint8_t i;
 
     // Set all intances of mcp23017 to NULL on first call.
     if ( !init )
-    {
-//        init = true;
-        printf( "First initialisation.\n" );
         for ( i = 0; i < MCP23017_MAX; i++ )
             mcp23017[i] = NULL;
-    }
 
     // Address must be 0x20 to 0x27.
     if (( addr < 0x20 ) || ( addr > 0x27 )) return -1;
@@ -159,13 +156,11 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
 
     if ( id < 0 ) return -1;        // Return if not init.
 
-    printf( "ID = %d.\n", id );
     // Allocate memory for MCP23017 data structure.
     mcp23017this = malloc( sizeof ( struct mcp23017_s ));
 
     // Return if unable to allocate memory.
     if ( mcp23017this == NULL ) return -1;
-    printf( "Allocated memory.\n" );
 /*
     Note: I2C file system path for revision 1 is "/dev/i2c-0".
 */
@@ -185,44 +180,36 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode )
         init = true;
     }
 
-    mcp23017this->addr = addr;    // Set address.
-    mcp23017this->bits = bits;    // Set 8-bit or 16-bit mode.
-    mcp23017this->mode = mode;    // Set byte or sequential R/W mode.
-    mcp23017[id] = mcp23017this;  // Create an instance of this device.
+    // Create an instance of this device.
+    mcp23017this->id = id;          // I2C handle.
+    mcp23017this->addr = addr;      // Address.
+    mcp23017this->bank = bank;      // BANK mode.
+    mcp23017[index] = mcp23017this; // Copy into instance.
+    index++;                        // Increment index.
 
     // Set slave address for this device.
-    if ( ioctl( id, I2C_SLAVE, mcp23017this->addr ) < 0 )
+    if ( ioctl( mcp23017this->id, I2C_SLAVE, mcp23017this->addr ) < 0 )
     {
         printf( "Couldn't set slave address 0x%02x.\n", mcp23017this->addr );
         printf( "Error code = %d.\n", errno );
         return -1;
     }
 
-    printf( "Set slave address OK.\n" );
     // Set registers.
-
-    // Need to set up mode and bits!
-
     // Use mcp23017Reg_t as index to get address for port.
-    mcp23017Reg_t index;
-    uint8_t port = 0;
     int8_t err;
 
     // Set directions to out (PORTA).
-    index = IODIRA;
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[IODIRA][bank], 0x00 );
     if ( err < 0 ) printf( "Couldn't set IODIRA.\n" );
     // Set directions to out (PORTB).
-    index = IODIRB;
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[IODIRB][bank], 0x00 );
     if ( err < 0 ) printf( "Couldn't set IODIRB.\n" );
     // Set all outputs to low (PORTA).
-    index = OLATA;
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[OLATA][bank], 0x00 );
     if ( err < 0 ) printf( "Couldn't set OLATA.\n" );
     // Set all outputs to low (PORTB).
-    index = OLATB;
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[index][port], 0x00 );
+    err = mcp23017WriteRegisterByte( id, mcp23017Register[OLATB][bank], 0x00 );
     if ( err < 0 ) printf( "Couldn't set OLATB.\n" );
 
     return id;

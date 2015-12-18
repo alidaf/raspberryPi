@@ -201,14 +201,13 @@ typedef enum reg { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
 
 //  Data structures. ----------------------------------------------------------
 
-typedef enum mcp23017Bits_t { BITS_BYTE, BITS_WORD } mcp23017Bits_t; // 8-bit or 16-bit.
-typedef enum mcp23017Mode_t { MODE_BYTE, MODE_SEQ  } mcp23017Mode_t; // Read/write mode.
+typedef enum mcp23017Bank_t { BANK_0, BANK_1 } mcp23017Bank_t; // BANK mode.
 
 struct mcp23017_s
 {
+    uint8_t        id;   // I2C handle.
     uint8_t        addr; // Address of MCP23017.
-    mcp23017Bits_t bits; // 8-bit or 16-bit mode.
-    mcp23017Mode_t mode; // Byte or sequential R/W mode.
+    mcp23017Bank_t bank; // 8-bit or 16-bit mode.
 };
 
 struct mcp23017_s *mcp23017[MCP23017_MAX];
@@ -239,6 +238,6 @@ int8_t mcp23017ReadRegisterWord( uint8_t handle, uint8_t reg );
 //  ---------------------------------------------------------------------------
 //  Initialises MCP23017 registers.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017Init( uint8_t addr, mcp23017Bits_t bits, mcp23017Mode_t mode );
+int8_t mcp23017Init( uint8_t addr, mcp23017Bank_t bank );
 
 #endif

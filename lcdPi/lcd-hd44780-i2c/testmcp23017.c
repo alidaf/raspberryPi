@@ -92,23 +92,32 @@
 int main()
 {
 
-    int8_t id;  // Handle for MCP23017;
-    // Initialise chip.
-    id = mcp23017Init( 0x20, BITS_BYTE, MODE_BYTE );
-    if ( id < 0 )
+    int8_t err = 0; // Return code.
+    int8_t num = 1; // Number of MCP23017 devices.
+
+    // Initialise chip. Call for each device.
+    err = mcp23017Init( 0x20, BANK_0 );
+    if ( err < 0 )
         {
             printf( "Couldn't init.\n" );
             return -1;
         };
 
-    printf( "ID = %d.\n", id );
-
-
     uint8_t i;
+    // Print properties for each device.
+    printf( "Properties.\n" );
+    for ( i = 0; i < num; i++ )
+    {
+        printf( "\tDevice %d:\n", i );
+        printf( "\tHandle = %d,\n", mcp23017[i]->id );
+        printf( "\tAddress = 0x%02x,\n", mcp23017[i]->addr );
+        printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
+    };
+
     // Write a byte to light LEDs corresponding to byte value.
     for ( i = 0; i <= 0xff; i++ )
     {
-        mcp23017WriteRegisterWord( id, OLATB, i );
+        mcp23017WriteRegisterWord( mcp23017[0]->id, OLATB, i );
         sleep( 1 );
     }
 }
