@@ -98,10 +98,10 @@ int main()
     // Initialise MCP23017. Only using 1 but should work for up to 8.
     err = mcp23017Init( 0x20 );
     if ( err < 0 )
-        {
-            printf( "Couldn't init.\n" );
-            return -1;
-        };
+    {
+        printf( "Couldn't init.\n" );
+        return -1;
+    }
 
     // Print properties for each device.
     printf( "Properties.\n" );
@@ -112,7 +112,7 @@ int main()
         printf( "\tHandle = %d,\n", mcp23017[i]->id );
         printf( "\tAddress = 0x%02x,\n", mcp23017[i]->addr );
         printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
-    };
+    }
     printf( "\n" );
 
     // Set direction of GPIOs and clear latches.
@@ -122,29 +122,30 @@ int main()
     mcp23017WriteRegisterByte( mcp23017[0], OLATA, 0x00 );
     mcp23017WriteRegisterByte( mcp23017[0], OLATB, 0x00 );
 
+    // Test setting BANK modes.
+
     // Start off with BANK = 0, switch and switch again.
     uint8_t j;
     for ( j = 0; j < 3; j++ )
     {
         // MCP23017 initialises with BANK=0.
         printf( "BANK = %d.\n", mcp23017[0]->bank );
-        if ( mcp23017[0]->bank == 0 )
-            mcp23017WriteRegisterByte( mcp23017[0], IOCONA, 0x00 );
-        else
-            mcp23017WriteRegisterByte( mcp23017[0], IOCONA, 0x80 );
 
         // Write a byte to light LEDs corresponding to byte value.
         for ( i = 0; i <= 0xff; i++ )
         {
             mcp23017WriteRegisterWord( mcp23017[0], OLATB, i );
-            sleep( 1 );
+            usleep( 50000 );
         }
-
         // Reset all LEDs.
         mcp23017WriteRegisterByte( mcp23017[0], OLATB, 0x00 );
 
         // Switch banks and loop back around.
         mcp23017[0]->bank = !mcp23017[0]->bank;
+        if ( mcp23017[0]->bank == 0 )
+            mcp23017WriteRegisterByte( mcp23017[0], IOCONA, 0x00 );
+        else
+            mcp23017WriteRegisterByte( mcp23017[0], IOCONA, 0x80 );
     }
 
     uint8_t data, last = 0x00;
