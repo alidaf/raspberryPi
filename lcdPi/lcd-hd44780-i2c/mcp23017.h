@@ -218,26 +218,28 @@ struct mcp23017_s *mcp23017[MCP23017_MAX];
 //  ---------------------------------------------------------------------------
 //  Writes byte to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterByte( uint8_t handle, uint8_t reg, uint8_t data );
+int8_t mcp23017WriteRegisterByte( struct mcp23017_s *mcp23017,
+                                  uint8_t reg, uint8_t data );
 
 //  ---------------------------------------------------------------------------
 //  Writes word to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterWord( uint8_t handle, uint8_t reg, uint8_t data );
+int8_t mcp23017WriteRegisterWord( struct mcp23017_s *mcp23017,
+                                  uint8_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
 //  Reads byte from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ReadRegisterByte( uint8_t handle, uint8_t reg );
+int8_t mcp23017ReadRegisterByte( struct mcp23017_s *mcp23017, uint8_t reg );
 
 //  ---------------------------------------------------------------------------
 //  Reads word from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ReadRegisterWord( uint8_t handle, uint8_t reg );
+int16_t mcp23017ReadRegisterWord( struct mcp23017_s *mcp23017, uint8_t reg );
 
 //  ---------------------------------------------------------------------------
-//  Initialises MCP23017 registers.
+//  Initialises MCP23017 registers. Call for each MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017Init( uint8_t addr, mcp23017Bank_t bank );
+int8_t mcp23017Init( uint8_t addr );
 
 #endif

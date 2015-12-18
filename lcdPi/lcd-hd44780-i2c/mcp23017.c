@@ -95,39 +95,53 @@ uint8_t mcp23017Register[MCP23017_REGISTERS][MCP23017_BANKS] =
 //  ---------------------------------------------------------------------------
 //  Writes byte to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterByte( uint8_t handle, uint8_t reg, uint8_t data )
+int8_t mcp23017WriteRegisterByte( struct mcp23017_s *mcp23017,
+                                  uint8_t reg, uint8_t data )
 {
-    return i2c_smbus_write_byte_data( handle, reg, data );
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    uint8_t addr = mcp23017Register[reg][bank];
+    return i2c_smbus_write_byte_data( handle, addr, data );
 }
 
 //  ---------------------------------------------------------------------------
 //  Writes word to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterWord( uint8_t handle, uint8_t reg, uint8_t data )
+int8_t mcp23017WriteRegisterWord( struct mcp23017_s *mcp23017,
+                                  uint8_t reg, uint16_t data )
 {
-    return i2c_smbus_write_word_data( handle, reg, data );
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    uint8_t addr = mcp23017Register[reg][bank];
+    return i2c_smbus_write_word_data( handle, addr, data );
 }
 
 //  ---------------------------------------------------------------------------
 //  Reads byte from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ReadRegisterByte( uint8_t handle, uint8_t reg )
+int8_t mcp23017ReadRegisterByte( struct mcp23017_s *mcp23017, uint8_t reg )
 {
-    return i2c_smbus_read_byte_data( handle, reg );
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    uint8_t addr = mcp23017Register[reg][bank];
+    return i2c_smbus_read_byte_data( handle, addr );
 }
 
 //  ---------------------------------------------------------------------------
 //  Reads word from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ReadRegisterWord( uint8_t handle, uint8_t reg )
+int16_t mcp23017ReadRegisterWord( struct mcp23017_s *mcp23017, uint8_t reg )
 {
-    return i2c_smbus_read_word_data( handle, reg );
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    uint8_t addr = mcp23017Register[reg][bank];
+    return i2c_smbus_read_word_data( handle, addr );
 }
 
 //  ---------------------------------------------------------------------------
-//  Initialises MCP23017 registers.
+//  Initialises MCP23017. Call for each MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017Init( uint8_t addr, mcp23017Bank_t bank )
+int8_t mcp23017Init( uint8_t addr )
 {
     struct mcp23017_s *mcp23017this;  // current MCP23017.
     static bool init = false;         // 1st call.
@@ -182,10 +196,10 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bank_t bank )
 
     // Create an instance of this device.
     mcp23017this->id = id;          // I2C handle.
-    mcp23017this->addr = addr;      // Address.
-    mcp23017this->bank = bank;      // BANK mode.
+    mcp23017this->addr = addr;      // Address of MCP23017.
+    mcp23017this->bank = 0;         // BANK mode 0 (default).
     mcp23017[index] = mcp23017this; // Copy into instance.
-    index++;                        // Increment index.
+    index++;                        // Increment index for next MCP23017.
 
     // Set slave address for this device.
     if ( ioctl( mcp23017this->id, I2C_SLAVE, mcp23017this->addr ) < 0 )
@@ -194,23 +208,6 @@ int8_t mcp23017Init( uint8_t addr, mcp23017Bank_t bank )
         printf( "Error code = %d.\n", errno );
         return -1;
     }
-
-    // Set registers.
-    // Use mcp23017Reg_t as index to get address for port.
-    int8_t err;
-
-    // Set directions to out (PORTA).
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[IODIRA][bank], 0x00 );
-    if ( err < 0 ) printf( "Couldn't set IODIRA.\n" );
-    // Set directions to out (PORTB).
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[IODIRB][bank], 0x00 );
-    if ( err < 0 ) printf( "Couldn't set IODIRB.\n" );
-    // Set all outputs to low (PORTA).
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[OLATA][bank], 0x00 );
-    if ( err < 0 ) printf( "Couldn't set OLATA.\n" );
-    // Set all outputs to low (PORTB).
-    err = mcp23017WriteRegisterByte( id, mcp23017Register[OLATB][bank], 0x00 );
-    if ( err < 0 ) printf( "Couldn't set OLATB.\n" );
 
     return id;
 };
