@@ -54,18 +54,18 @@
 
                         +-----------( )-----------+
                         |  Fn  | pin | pin |  Fn  |
-             100R  LED  |------+-----+-----+------| 8 port dip switch
-      GND<--/\/\/--|<|--| GPB0 |  01 | 28  | GPA7 |---/ --> +3.3V
-      GND<--/\/\/--|<|--| GPB1 |  02 | 27  | GPA6 |---/ --> +3.3V
-      GND<--/\/\/--|<|--| GPB2 |  03 | 26  | GPA5 |---/ --> +3.3V
-      GND<--/\/\/--|<|--| GPB3 |  04 | 25  | GPA4 |---/ --> +3.3V
-      GND<--/\/\/--|<|--| GPB4 |  05 | 24  | GPA3 |---/ --> +3.3V
-      GND<--/\/\/--|<|--| GPB5 |  06 | 23  | GPA2 |---/ --> +3.3V
-      GND<--/\/\/--|<|--| GPB6 |  07 | 22  | GPA1 |---/ --> +3.3V
-      GND<--/\/\/--|<|--| GPB7 |  08 | 21  | GPA0 |---/ --> +3.3V
-              +3.3V <---|  VDD |  09 | 20  | INTA |
-                GND <---|  VSS |  10 | 19  | INTB |
-                        |   NC |  11 | 18  | RST  |---> +3.3V.
+             100R  LED  |------+-----+-----+------|
+        .---/\/\/--|<|--| GPB0 |  01 | 28  | GPA7 |---/ ---.
+        |---/\/\/--|<|--| GPB1 |  02 | 27  | GPA6 |---/ ---|
+        |---/\/\/--|<|--| GPB2 |  03 | 26  | GPA5 |---/ ---|
+        |---/\/\/--|<|--| GPB3 |  04 | 25  | GPA4 |---/ ---|  8 port
+        |---/\/\/--|<|--| GPB4 |  05 | 24  | GPA3 |---/ ---| dip switch
+        |---/\/\/--|<|--| GPB5 |  06 | 23  | GPA2 |---/ ---|
+        |---/\/\/--|<|--| GPB6 |  07 | 22  | GPA1 |---/ ---|
+        |---/\/\/--|<|--| GPB7 |  08 | 21  | GPA0 |---/ ---|
+        |     +3.3V <---|  VDD |  09 | 20  | INTA |        |
+ GND <--'---------------|  VSS |  10 | 19  | INTB |        |
+                        |   NC |  11 | 18  | RST  |--------'----> +3.3V.
             I2C CLK <---|  SCL |  12 | 17  | A2   |---> GND }
             I2C I/O <---|  SDA |  13 | 16  | A1   |---> GND } Address = 0x20.
                         |   NC |  14 | 15  | A0   |---> GND }
@@ -105,53 +105,69 @@ int main()
 
     // Print properties for each device.
     printf( "Properties.\n" );
-    uint8_t i;
+
+    uint8_t i; // Loop counter.
+
     for ( i = 0; i < num; i++ )
     {
+        // Start off with BANK = 0.
+        mcp23017[i]->bank = 0;
+        mcp23017WriteRegisterByte( mcp23017[i], IOCONA, 0x00 );
+
+        // Make sure MCP23017s have been initialised OK.
         printf( "\tDevice %d:\n", i );
         printf( "\tHandle = %d,\n", mcp23017[i]->id );
         printf( "\tAddress = 0x%02x,\n", mcp23017[i]->addr );
         printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
+
+        // Set direction of GPIOs and clear latches.
+        mcp23017WriteRegisterByte( mcp23017[i], IODIRA, 0xff ); // Input.
+        mcp23017WriteRegisterByte( mcp23017[i], IODIRB, 0x00 ); // Output.
+
+        // Writes to latches are the same as writes to GPIOs.
+        mcp23017WriteRegisterByte( mcp23017[i], OLATA, 0x00 ); // Clear pins.
+        mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 ); // Clear pins.
+
     }
     printf( "\n" );
 
-    // Set direction of GPIOs and clear latches.
-    mcp23017WriteRegisterByte( mcp23017[0], IODIRA, 0xff );
-    mcp23017WriteRegisterByte( mcp23017[0], IODIRB, 0x00 );
-    // Writes to latches are the same as writes to GPIOs.
-    mcp23017WriteRegisterByte( mcp23017[0], OLATA, 0x00 );
-    mcp23017WriteRegisterByte( mcp23017[0], OLATB, 0x00 );
+    // Test setting BANK modes:
 
-    // Test setting BANK modes.
+    uint8_t j, k; // Loop counters.
+    uint8_t bank; // Temp storage for bank bit.
 
-    // Start off with BANK = 0, switch and switch again.
-    uint8_t j;
-    for ( j = 0; j < 3; j++ )
+    for ( i = 0; i < num; i++ ) // For each MCP23017.
     {
-        // MCP23017 initialises with BANK=0.
-        printf( "BANK = %d.\n", mcp23017[0]->bank );
+        printf( "Using MCP23017 %d.\n", i );
 
-        // Write a byte to light LEDs corresponding to byte value.
-        for ( i = 0; i <= 0xff; i++ )
+        for ( j = 0; j < 2; j++ ) // Toggle BANK bit twice.
         {
-            mcp23017WriteRegisterWord( mcp23017[0], OLATB, i );
-            usleep( 50000 );
-        }
-        // Reset all LEDs.
-        mcp23017WriteRegisterByte( mcp23017[0], OLATB, 0x00 );
+            printf( "\tTrying BANK = %d.\n", mcp23017[i]->bank );
 
-        // Switch banks and loop back around.
-        mcp23017[0]->bank = !mcp23017[0]->bank;
-        if ( mcp23017[0]->bank == 0 )
-            mcp23017WriteRegisterByte( mcp23017[0], IOCONA, 0x00 );
-        else
-            mcp23017WriteRegisterByte( mcp23017[0], IOCONA, 0x80 );
+            for ( k = 0; k < 0xff; k++ ) // Write 0x00 to 0xff.
+            {
+                mcp23017WriteRegisterWord( mcp23017[i], OLATB, k );
+                usleep( 100000 );
+            }
+
+            // Reset all LEDs.
+            mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
+
+            // Toggle BANK bit.
+            mcp23017[i]->bank = !mcp23017[i]->bank;
+            bank = mcp23017[i]->bank * 0x80;
+            mcp23017WriteRegisterByte( mcp23017[i], IOCONA, bank );
+        }
+
+        // Next MCP23017.
+        printf( "\n" );
     }
 
-    uint8_t data, last = 0x00;
     // Now test input.
-    printf( "Reading inputs on PORT A.\n" );
-    while ( 1 )
+    uint8_t data, last = 0x00;
+    printf( "Now reading inputs on PORT A and writing to PORT B.\n" );
+
+    while ( !getchar() ) // Read inputs until keypress.
     {
         // Read switches and write byte value to LEDs.
         data = mcp23017ReadRegisterByte( mcp23017[0], GPIOA );
