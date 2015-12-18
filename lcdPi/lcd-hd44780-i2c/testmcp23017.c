@@ -85,8 +85,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
-#include <time.h>
-#include <pthread.h>
+#include <unistd.h>
 
 #include "mcp23017.h"
 
@@ -104,6 +103,12 @@ int main()
 
     printf( "ID = %d.\n", id );
 
+
+    uint8_t i;
     // Write a byte to light LEDs corresponding to byte value.
-    mcp23017WriteRegisterByte( id, OLATA, 0xff );
+    for ( i = 0; i <= 0xff; i++ )
+    {
+        mcp23017WriteRegisterWord( id, OLATB, i );
+        sleep( 1 );
+    }
 }
