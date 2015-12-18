@@ -133,8 +133,7 @@ int main()
 
     // Test setting BANK modes:
 
-    uint8_t j, k; // Loop counters.
-    uint8_t bank; // Temp storage for bank bit.
+    uint8_t j, k;   // Loop counters.
 
     for ( i = 0; i < num; i++ ) // For each MCP23017.
     {
@@ -146,7 +145,7 @@ int main()
 
             for ( k = 0; k < 0xff; k++ ) // Write 0x00 to 0xff.
             {
-                mcp23017WriteRegisterWord( mcp23017[i], OLATB, k );
+                mcp23017WriteRegisterByte( mcp23017[i], OLATB, k );
                 usleep( 100000 );
             }
 
@@ -154,9 +153,11 @@ int main()
             mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
 
             // Toggle BANK bit.
+            if ( mcp23017[i]->bank == 0 )
+                mcp23017WriteRegisterByte( mcp23017[i], IOCONA, 0x80 );
+            else
+                mcp23017WriteRegisterByte( mcp23017[i], IOCONA, 0x00 );
             mcp23017[i]->bank = !mcp23017[i]->bank;
-            bank = mcp23017[i]->bank * 0x80;
-            mcp23017WriteRegisterByte( mcp23017[i], IOCONA, bank );
         }
 
         // Next MCP23017.
@@ -167,7 +168,7 @@ int main()
     uint8_t data, last = 0x00;
     printf( "Now reading inputs on PORT A and writing to PORT B.\n" );
 
-    while ( !getchar() ) // Read inputs until keypress.
+    while ( 1 )
     {
         // Read switches and write byte value to LEDs.
         data = mcp23017ReadRegisterByte( mcp23017[0], GPIOA );
