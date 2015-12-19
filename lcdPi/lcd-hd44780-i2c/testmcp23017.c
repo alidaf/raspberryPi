@@ -121,7 +121,7 @@ int main()
         printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
 
         // Set direction of GPIOs and clear latches.
-//        mcp23017WriteRegisterByte( mcp23017[i], GPPUA,  0xff ); // Pull ups.
+        mcp23017WriteRegisterByte( mcp23017[i], GPPUA,  0xff ); // Pull ups.
         mcp23017WriteRegisterByte( mcp23017[i], IODIRA, 0xff ); // Input.
         mcp23017WriteRegisterByte( mcp23017[i], IODIRB, 0x00 ); // Output.
 
@@ -191,6 +191,8 @@ int main()
             if ( match ) printf( "matched to 0x%02x.\n", j );
             match = false;
         }
+        // Next MCP23017.
+        printf( "\n" );
     }
 
     //  Test toggle bits function. --------------------------------------------
@@ -224,6 +226,8 @@ int main()
             usleep( 100000 );
             mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
         }
+        // Next MCP23017.
+        printf( "\n" );
     }
 
     //  Test set bits function. -----------------------------------------------
@@ -244,11 +248,12 @@ int main()
             for ( k = 0; k < 8; k++ )
             {
                 setBits = 1 << k;
-                printf( "setBits = 0x%02x.\n", setBits );
                 mcp23017SetBitsByte( mcp23017[i], GPIOB, setBits );
                 usleep( 100000 );
             }
         }
+        // Next MCP23017.
+        printf( "\n" );
     }
 
     //  Test clear bits function. ---------------------------------------------
@@ -273,6 +278,8 @@ int main()
                 usleep( 100000 );
             }
         }
+        // Next MCP23017.
+        printf( "\n" );
     }
 
     //  End of tests. ---------------------------------------------------------
