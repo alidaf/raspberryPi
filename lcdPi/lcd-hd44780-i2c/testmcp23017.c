@@ -134,7 +134,7 @@ int main()
 
     //  Test setting BANK modes: ----------------------------------------------
 
-    printf( "Test setting LEDs for both BANK modes.\n" );
+    printf( "Testing writes in both BANK modes.\n" );
     printf( "Press return.\n" );
     getchar();
 
@@ -142,11 +142,11 @@ int main()
 
     for ( i = 0; i < num; i++ ) // For each MCP23017.
     {
-        printf( "Using MCP23017 %d.\n", i );
+        printf( "MCP23017 %d:\n", i );
 
         for ( j = 0; j < 2; j++ ) // Toggle BANK bit twice.
         {
-            printf( "\tTrying BANK = %d.\n", mcp23017[i]->bank );
+            printf( "\tBANK %d.\n", mcp23017[i]->bank );
 
             for ( k = 0; k < 0xff; k++ ) // Write 0x00 to 0xff.
             {
@@ -171,7 +171,7 @@ int main()
 
     //  Test read & check bits functions. -------------------------------------
 
-    printf( "Testing read and bit check functions.\n" );
+    printf( "Testing read and bit checks.\n" );
     printf( "Press return.\n" );
     getchar();
 
@@ -180,29 +180,29 @@ int main()
     bool match = false;
     for ( i = 0; i < num; i++ )
     {
-        printf( "Using MCP23017 %d.\n", i );
+        printf( "MCP23017 %d:\n", i );
 
         data = mcp23017ReadRegisterByte( mcp23017[i], GPIOA );
         mcp23017WriteRegisterByte( mcp23017[i], OLATB, data );
-        printf( "GPIOA = 0x%02x, checking...\n", data );
+        printf( "\tGPIOA = 0x%02x, checking...", data );
         for ( j = 0; j < 0xff; j++ )
         {
             match = mcp23017CheckBitsByte( mcp23017[i], GPIOA, j );
-            if ( match ) printf( "match found (0x%02x).\n", j );
+            if ( match ) printf( "matched to 0x%02x.\n", j );
             match = false;
         }
     }
 
     //  Test toggle bits function. --------------------------------------------
 
-    printf( "Testing toggle bit function.\n" );
+    printf( "Testing toggle bits.\n" );
     printf( "Press return.\n" );
     getchar();
 
     // Set all LEDs on.
     for ( i = 0; i < num; i++ )
     {
-        printf( "Using MCP23017 %d.\n", i );
+        printf( "MCP23017 %d:\n", i );
 
         mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
         for ( j = 0; j < 10; j++ ) // Alternate bit LEDs 10x.
@@ -228,7 +228,7 @@ int main()
 
     //  Test set bits function. -----------------------------------------------
 
-    printf( "Testing set bit function.\n" );
+    printf( "Testing set bits.\n" );
     printf( "Press return.\n" );
     getchar();
 
@@ -236,15 +236,16 @@ int main()
     uint8_t setBits;
     for ( i = 0; i < num; i++ )
     {
-        printf( "Using MCP23017 %d.\n", i );
+        printf( "MCP23017 %d:\n", i );
 
         for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
         {
-            setBits = 0;
-            mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
-            for ( k = 0; k < 8; setBits <<= k, k++ )
+            mcp23017WriteRegisterByte( mcp23017[i], GPIOB, 0x00 );
+            for ( k = 0; k < 8; k++ )
             {
-                mcp23017SetBitsByte( mcp23017[i], OLATB, setBits );
+                setBits = 1 << k;
+                printf( "setBits = 0x%02x.\n", setBits );
+                mcp23017SetBitsByte( mcp23017[i], GPIOB, setBits );
                 usleep( 100000 );
             }
         }
@@ -260,16 +261,15 @@ int main()
     uint8_t clearBits;
     for ( i = 0; i < num; i++ )
     {
-        printf( "Using MCP23017 %d.\n", i );
+        printf( "MCP23017 %d:\n", i );
 
         for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
         {
-            clearBits = 0;
-            mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0xff );
-            for ( k = 0; k < 8; clearBits <<= k, k++ )
+            mcp23017WriteRegisterByte( mcp23017[i], GPIOB, 0xff );
+            for ( k = 0; k < 8; k++ )
             {
-                printf( "\tClearing bit %d.\n", k );
-                mcp23017ClearBitsByte( mcp23017[i], OLATB, clearBits );
+                clearBits = 1 << k;
+                mcp23017ClearBitsByte( mcp23017[i], GPIOB, clearBits );
                 usleep( 100000 );
             }
         }

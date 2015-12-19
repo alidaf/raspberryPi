@@ -244,7 +244,6 @@ int8_t mcp23017SetBitsByte( struct mcp23017_s *mcp23017,
     // Read register.
     uint8_t read = i2c_smbus_read_byte_data( handle, addr );
     // Write toggled bits back to register.
-    printf( "Set 0x%02x bits 0x%02x = 0x%02x.\n", read, data, data | read );
     return i2c_smbus_write_byte_data( handle, addr, data | read );
 };
 
@@ -282,8 +281,7 @@ int8_t mcp23017ClearBitsByte( struct mcp23017_s *mcp23017,
     // Read register.
     uint8_t read = i2c_smbus_read_byte_data( handle, addr );
     // Write data with cleared bits back to register.
-    printf( "Clear 0x%02x, bits 0x%02x = 0x%02x.\n", read, data, ( data & read ) ^ data );
-    return i2c_smbus_write_byte_data( handle, addr, ( data & read ) ^ data );
+    return i2c_smbus_write_byte_data( handle, addr, ( data & read ) ^ read );
 };
 
 //  ---------------------------------------------------------------------------
@@ -303,7 +301,7 @@ int8_t mcp23017ClearBitsWord( struct mcp23017_s *mcp23017,
     // Read register.
     uint16_t read = i2c_smbus_read_byte_data( handle, addr );
     // Write data with cleared bits back to register.
-    return i2c_smbus_write_byte_data( handle, addr, ( data & read ) ^ data );
+    return i2c_smbus_write_byte_data( handle, addr, ( data & read ) ^ read );
 };
 
 //  ---------------------------------------------------------------------------
