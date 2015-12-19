@@ -121,6 +121,7 @@ int main()
         printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
 
         // Set direction of GPIOs and clear latches.
+//        mcp23017WriteRegisterByte( mcp23017[i], GPPUA,  0xff ); // Pull ups.
         mcp23017WriteRegisterByte( mcp23017[i], IODIRA, 0xff ); // Input.
         mcp23017WriteRegisterByte( mcp23017[i], IODIRB, 0x00 ); // Output.
 
@@ -131,7 +132,11 @@ int main()
     }
     printf( "\n" );
 
-    // Test setting BANK modes:
+    //  Test setting BANK modes: ----------------------------------------------
+
+    printf( "Test setting LEDs for both BANK modes.\n" );
+    printf( "Press return.\n" );
+    getchar();
 
     uint8_t j, k;   // Loop counters.
 
@@ -146,7 +151,7 @@ int main()
             for ( k = 0; k < 0xff; k++ ) // Write 0x00 to 0xff.
             {
                 mcp23017WriteRegisterByte( mcp23017[i], OLATB, k );
-                usleep( 100000 );
+                usleep( 50000 );
             }
 
             // Reset all LEDs.
@@ -164,20 +169,113 @@ int main()
         printf( "\n" );
     }
 
-    // Now test input.
-    uint8_t data, last = 0x00;
-    printf( "Now reading inputs on PORT A and writing to PORT B.\n" );
+    //  Test read & check bits functions. -------------------------------------
 
-    while ( 1 )
+    printf( "Testing read and bit check functions.\n" );
+    printf( "Press return.\n" );
+    getchar();
+
+    // Check value of GPIO register set as inputs (PORT A).
+    uint8_t data;
+    bool match = false;
+    for ( i = 0; i < num; i++ )
     {
-        // Read switches and write byte value to LEDs.
-        data = mcp23017ReadRegisterByte( mcp23017[0], GPIOA );
-        if ( data != last )
+        printf( "Using MCP23017 %d.\n", i );
+
+        data = mcp23017ReadRegisterByte( mcp23017[i], GPIOA );
+        mcp23017WriteRegisterByte( mcp23017[i], OLATB, data );
+        printf( "GPIOA = 0x%02x, checking...\n", data );
+        for ( j = 0; j < 0xff; j++ )
         {
-            printf( "Input changed to 0x%02x.\n", data );
-            last = data;
+            match = mcp23017CheckBitsByte( mcp23017[i], GPIOA, j );
+            if ( match ) printf( "match found (0x%02x).\n", j );
+            match = false;
         }
-        mcp23017WriteRegisterByte( mcp23017[0], OLATB, data );
-        sleep( 1 );
     }
+
+    //  Test toggle bits function. --------------------------------------------
+
+    printf( "Testing toggle bit function.\n" );
+    printf( "Press return.\n" );
+    getchar();
+
+    // Set all LEDs on.
+    for ( i = 0; i < num; i++ )
+    {
+        printf( "Using MCP23017 %d.\n", i );
+
+        mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
+        for ( j = 0; j < 10; j++ ) // Alternate bit LEDs 10x.
+        {
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
+            usleep( 100000 );
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
+            usleep( 100000 );
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
+        }
+        mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
+        for ( j = 0; j < 10; j++ ) // Alternate nibble LEDs 10x.
+        {
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
+            usleep( 100000 );
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
+            usleep( 100000 );
+            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
+        }
+    }
+
+    //  Test set bits function. -----------------------------------------------
+
+    printf( "Testing set bit function.\n" );
+    printf( "Press return.\n" );
+    getchar();
+
+    // Set all LEDs off and light in sequence.
+    uint8_t setBits;
+    for ( i = 0; i < num; i++ )
+    {
+        printf( "Using MCP23017 %d.\n", i );
+
+        for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
+        {
+            setBits = 0;
+            mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
+            for ( k = 0; k < 8; setBits <<= k, k++ )
+            {
+                mcp23017SetBitsByte( mcp23017[i], OLATB, setBits );
+                usleep( 100000 );
+            }
+        }
+    }
+
+    //  Test clear bits function. ---------------------------------------------
+
+    printf( "Testing clear bit function.\n" );
+    printf( "Press return.\n" );
+    getchar();
+
+    // Set all LEDs on and clear in sequence.
+    uint8_t clearBits;
+    for ( i = 0; i < num; i++ )
+    {
+        printf( "Using MCP23017 %d.\n", i );
+
+        for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
+        {
+            clearBits = 0;
+            mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0xff );
+            for ( k = 0; k < 8; clearBits <<= k, k++ )
+            {
+                printf( "\tClearing bit %d.\n", k );
+                mcp23017ClearBitsByte( mcp23017[i], OLATB, clearBits );
+                usleep( 100000 );
+            }
+        }
+    }
+
+    //  End of tests. ---------------------------------------------------------
+
+    return 0;
 }

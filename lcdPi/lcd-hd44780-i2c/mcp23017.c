@@ -98,9 +98,12 @@ uint8_t mcp23017Register[MCP23017_REGISTERS][MCP23017_BANKS] =
 int8_t mcp23017WriteRegisterByte( struct mcp23017_s *mcp23017,
                                   uint8_t reg, uint8_t data )
 {
+    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
     uint8_t handle = mcp23017->id;
     uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
     uint8_t addr = mcp23017Register[reg][bank];
+    // Write byte into register.
     return i2c_smbus_write_byte_data( handle, addr, data );
 }
 
@@ -109,10 +112,16 @@ int8_t mcp23017WriteRegisterByte( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 int8_t mcp23017WriteRegisterWord( struct mcp23017_s *mcp23017,
                                   uint8_t reg, uint16_t data )
+/*
+    Currently undefined if IOCON.BANK = 1 and PORT = B.
+    Need to be able to check PORT - lookup table?
+*/
 {
     uint8_t handle = mcp23017->id;
     uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
     uint8_t addr = mcp23017Register[reg][bank];
+    // Write word into register.
     return i2c_smbus_write_word_data( handle, addr, data );
 }
 
@@ -121,9 +130,12 @@ int8_t mcp23017WriteRegisterWord( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 int8_t mcp23017ReadRegisterByte( struct mcp23017_s *mcp23017, uint8_t reg )
 {
+    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
     uint8_t handle = mcp23017->id;
     uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
     uint8_t addr = mcp23017Register[reg][bank];
+    // Return register value.
     return i2c_smbus_read_byte_data( handle, addr );
 }
 
@@ -132,11 +144,167 @@ int8_t mcp23017ReadRegisterByte( struct mcp23017_s *mcp23017, uint8_t reg )
 //  ---------------------------------------------------------------------------
 int16_t mcp23017ReadRegisterWord( struct mcp23017_s *mcp23017, uint8_t reg )
 {
+/*
+    Currently undefined if IOCON.BANK = 1 and PORT = B.
+    Need to be able to check PORT - lookup table?
+*/
     uint8_t handle = mcp23017->id;
     uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
     uint8_t addr = mcp23017Register[reg][bank];
+    // Return register value. Undefined if read PORT B and IOCON.BANK = 1.
     return i2c_smbus_read_word_data( handle, addr );
 }
+
+//  ---------------------------------------------------------------------------
+//  Checks byte bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+bool mcp23017CheckBitsByte( struct mcp23017_s *mcp23017,
+                            uint8_t reg, uint8_t data )
+{
+    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint8_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Compare and return result.
+    return (( data == read )? true : false );
+};
+
+//  ---------------------------------------------------------------------------
+//  Checks word bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+bool mcp23017CheckBitsWord( struct mcp23017_s *mcp23017,
+                            uint8_t reg, uint16_t data )
+/*
+    Currently undefined if IOCON.BANK = 1 and PORT = B.
+    Need to be able to check PORT - lookup table?
+*/
+{
+    uint8_t  handle = mcp23017->id;
+    uint8_t  bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t  addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint16_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Compare and return result. Undefined for PORT B and IOCON.BANK = 1.
+    return ( data && read );
+};
+
+//  ---------------------------------------------------------------------------
+//  Toggles byte bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ToggleBitsByte( struct mcp23017_s *mcp23017,
+                               uint8_t reg, uint8_t data )
+{
+    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint8_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Write toggled bits back to register.
+    return i2c_smbus_write_byte_data( handle, addr, data ^ read );
+};
+
+//  ---------------------------------------------------------------------------
+//  Toggles word bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ToggleBitsWord( struct mcp23017_s *mcp23017,
+                               uint8_t reg, uint16_t data )
+/*
+    Currently undefined if IOCON.BANK = 1 and PORT = B.
+    Need to be able to check PORT - lookup table?
+*/
+{
+    uint8_t  handle = mcp23017->id;
+    uint8_t  bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t  addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint16_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Write toggled bits back to register.
+    return i2c_smbus_write_word_data( handle, addr, data ^ read );
+};
+
+//  ---------------------------------------------------------------------------
+//  Sets byte bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017SetBitsByte( struct mcp23017_s *mcp23017,
+                            uint8_t reg, uint8_t data )
+{
+    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint8_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Write toggled bits back to register.
+    printf( "Set 0x%02x bits 0x%02x = 0x%02x.\n", read, data, data | read );
+    return i2c_smbus_write_byte_data( handle, addr, data | read );
+};
+
+//  ---------------------------------------------------------------------------
+//  Sets word bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017SetBitsWord( struct mcp23017_s *mcp23017,
+                            uint8_t reg, uint16_t data )
+/*
+    Currently undefined if IOCON.BANK = 1 and PORT = B.
+    Need to be able to check PORT - lookup table?
+*/
+{
+    uint8_t  handle = mcp23017->id;
+    uint8_t  bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t  addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint16_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Write toggled bits back to register.
+    return i2c_smbus_write_word_data( handle, addr, data | read );
+};
+
+//  ---------------------------------------------------------------------------
+//  Clears byte bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ClearBitsByte( struct mcp23017_s *mcp23017,
+                              uint8_t reg, uint8_t data )
+{
+    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint8_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Write data with cleared bits back to register.
+    printf( "Clear 0x%02x, bits 0x%02x = 0x%02x.\n", read, data, ( data & read ) ^ data );
+    return i2c_smbus_write_byte_data( handle, addr, ( data & read ) ^ data );
+};
+
+//  ---------------------------------------------------------------------------
+//  Clears word bits of MCP23017 register.
+//  ---------------------------------------------------------------------------
+int8_t mcp23017ClearBitsWord( struct mcp23017_s *mcp23017,
+                              uint8_t reg, uint16_t data )
+/*
+    Currently undefined if IOCON.BANK = 1 and PORT = B.
+    Need to be able to check PORT - lookup table?
+*/
+{
+    uint8_t handle = mcp23017->id;
+    uint8_t bank = mcp23017->bank;
+    // Get register address for BANK mode.
+    uint8_t addr = mcp23017Register[reg][bank];
+    // Read register.
+    uint16_t read = i2c_smbus_read_byte_data( handle, addr );
+    // Write data with cleared bits back to register.
+    return i2c_smbus_write_byte_data( handle, addr, ( data & read ) ^ data );
+};
 
 //  ---------------------------------------------------------------------------
 //  Initialises MCP23017. Call for each MCP23017.
@@ -209,6 +377,10 @@ int8_t mcp23017Init( uint8_t addr )
         return -1;
     }
 
+    /*
+        Should probably set all registers to zero in case reset pin is
+        kept high.
+    */
     return id;
 };
 
