@@ -121,7 +121,6 @@ int main()
         printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
 
         // Set direction of GPIOs and clear latches.
-        mcp23017WriteRegisterByte( mcp23017[i], GPPUA,  0xff ); // Pull ups.
         mcp23017WriteRegisterByte( mcp23017[i], IODIRA, 0xff ); // Input.
         mcp23017WriteRegisterByte( mcp23017[i], IODIRB, 0x00 ); // Output.
 
@@ -135,8 +134,6 @@ int main()
     //  Test setting BANK modes: ----------------------------------------------
 
     printf( "Testing writes in both BANK modes.\n" );
-    printf( "Press return.\n" );
-    getchar();
 
     uint8_t j, k;   // Loop counters.
 
@@ -172,8 +169,6 @@ int main()
     //  Test read & check bits functions. -------------------------------------
 
     printf( "Testing read and bit checks.\n" );
-    printf( "Press return.\n" );
-    getchar();
 
     // Check value of GPIO register set as inputs (PORT A).
     uint8_t data;
@@ -195,91 +190,79 @@ int main()
         printf( "\n" );
     }
 
-    //  Test toggle bits function. --------------------------------------------
+    //  Continuously loop through the next tests. -----------------------------
 
-    printf( "Testing toggle bits.\n" );
-    printf( "Press return.\n" );
-    getchar();
-
-    // Set all LEDs on.
-    for ( i = 0; i < num; i++ )
+    while ( 1 )
     {
-        printf( "MCP23017 %d:\n", i );
 
-        mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
-        for ( j = 0; j < 10; j++ ) // Alternate bit LEDs 10x.
+        //  Test toggle bits function.
+
+        printf( "Testing toggle bits.\n" );
+
+        for ( i = 0; i < num; i++ )
         {
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
-            usleep( 100000 );
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
-            usleep( 100000 );
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
-        }
-        mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
-        for ( j = 0; j < 10; j++ ) // Alternate nibble LEDs 10x.
-        {
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
-            usleep( 100000 );
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
-            usleep( 100000 );
-            mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
-        }
-        // Next MCP23017.
-        printf( "\n" );
-    }
+            printf( "MCP23017 %d:\n", i );
 
-    //  Test set bits function. -----------------------------------------------
-
-    printf( "Testing set bits.\n" );
-    printf( "Press return.\n" );
-    getchar();
-
-    // Set all LEDs off and light in sequence.
-    uint8_t setBits;
-    for ( i = 0; i < num; i++ )
-    {
-        printf( "MCP23017 %d:\n", i );
-
-        for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
-        {
-            mcp23017WriteRegisterByte( mcp23017[i], GPIOB, 0x00 );
-            for ( k = 0; k < 8; k++ )
+            printf( "\tAlternating bits.\n" );
+            for ( j = 0; j < 10; j++ )
             {
-                setBits = 1 << k;
-                mcp23017SetBitsByte( mcp23017[i], GPIOB, setBits );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
                 usleep( 100000 );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
+                usleep( 100000 );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
             }
-        }
-        // Next MCP23017.
-        printf( "\n" );
-    }
 
-    //  Test clear bits function. ---------------------------------------------
-
-    printf( "Testing clear bit function.\n" );
-    printf( "Press return.\n" );
-    getchar();
-
-    // Set all LEDs on and clear in sequence.
-    uint8_t clearBits;
-    for ( i = 0; i < num; i++ )
-    {
-        printf( "MCP23017 %d:\n", i );
-
-        for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
-        {
-            mcp23017WriteRegisterByte( mcp23017[i], GPIOB, 0xff );
-            for ( k = 0; k < 8; k++ )
+            printf( "\tAlternating nibbles.\n" );
+            for ( j = 0; j < 10; j++ )
             {
-                clearBits = 1 << k;
-                mcp23017ClearBitsByte( mcp23017[i], GPIOB, clearBits );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
                 usleep( 100000 );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
+                usleep( 100000 );
+                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
             }
+            // Next MCP23017.
+            printf( "\n" );
         }
-        // Next MCP23017.
-        printf( "\n" );
+
+        //  Test set bits function. -------------------------------------------
+
+        printf( "Testing set and clear bits.\n" );
+
+        // Set all LEDs off and light in sequence.
+        uint8_t setBits;
+        uint8_t clearBits;
+        for ( i = 0; i < num; i++ )
+        {
+            printf( "MCP23017 %d:\n", i );
+
+            printf( "Setting and clearing bits 0 - 7 in sequence.\n" );
+            for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
+            {
+                mcp23017WriteRegisterByte( mcp23017[i], GPIOB, 0x00 );
+                usleep( 50000 );
+                for ( k = 0; k < 8; k++ )
+                {
+                    setBits = 1 << k;
+                    mcp23017SetBitsByte( mcp23017[i], GPIOB, setBits );
+                    usleep( 50000 );
+                }
+                usleep( 50000 );
+                for ( k = 0; k < 8; k++ )
+                {
+                    clearBits = 1 << k;
+                    mcp23017ClearBitsByte( mcp23017[i], GPIOB, clearBits );
+                    usleep( 50000 );
+                }
+            }
+
+            // Next MCP23017.
+            printf( "\n" );
+        }
+
     }
 
     //  End of tests. ---------------------------------------------------------
