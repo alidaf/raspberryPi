@@ -1,9 +1,9 @@
 /*
 //  ===========================================================================
 
-    testHD44780i2cPi:
+    testhd44780i2c:
 
-    Tests HD44780 LCD display driver for the Raspberry Pi (GPIO version).
+    Tests HD44780 LCD display driver for the Raspberry Pi (I2C version).
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
 
@@ -23,15 +23,15 @@
 //  ===========================================================================
 */
 
-#define Version "Version 0.2"
+#define Version "Version 0.1"
 
 /*
 //  ---------------------------------------------------------------------------
 
     Compile with:
 
-    gcc testHD44780i2cPi.c hd44780.c -Wall -o testhd44780gpioPi
-                     -lwiringPi -lpthread -lhd44780i2cPi
+    gcc testhd44780i2c.c hd44780i2c.c mcp23017.c -Wall -o testhd44780i2c
+                     -lpthread
 
     Also use the following flags for Raspberry Pi optimisation:
         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
@@ -39,7 +39,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    14/12/2015  This program.
+    Authors:        D.Faulke    20/12/2015
 
     Contributors:
 
@@ -47,6 +47,47 @@
 
         v0.1    Original version.
         v0.2    Rewrote code into libraries.
+
+//  Information. --------------------------------------------------------------
+
+    The MCP23017 is an I2C bus operated 16-bit I/O port expander.
+
+    For testing, the HD44780 LCD was connected via a breadboard as follows:
+
+                          GND
+        +-----------+      |   10k
+        | pin | Fn  |   ,--+--/\/\/--
+        |-----+-----|   |       |
+        |   1 | VSS |---'       |       +-----------( )-----------+
+        |   1 | VDD |--> 5V     |       |  Fn  | pin | pin |  Fn  |
+        |   2 | Vo  |-----------'       |------+-----+-----+------|
+        |   3 | RS  |------------------>| GPB0 |  01 | 28  | GPA7 |
+        |   4 | R/W |------------------>| GPB1 |  02 | 27  | GPA6 |
+        |   5 | E   |------------------>| GPB2 |  03 | 26  | GPA5 |
+        |   6 | DB0 |                   | GPB3 |  04 | 25  | GPA4 |
+        |   7 | DB1 | ,---------------->| GPB4 |  05 | 24  | GPA3 |
+        |   8 | DB2 | | ,-------------->| GPB5 |  06 | 23  | GPA2 |
+        |   9 | DB3 | | | ,------------>| GPB6 |  07 | 22  | GPA1 |
+        |  10 | DB4 |-' | | ,---------->| GPB7 |  08 | 21  | GPA0 |
+        |  11 | DB5 |---' | |    3.3V <-|  VDD |  09 | 20  | INTA |
+        |  12 | DB6 |-----' |     GND <-|  VSS |  10 | 19  | INTB |
+        |  13 | DB7 |-------'           |   NC |  11 | 18  | RST  |----> +3.3V.
+        |  14 | A   |--> 3.3V      ,----|  SCL |  12 | 17  | A2   |---,
+        |  15 | K   |--> GND       |  ,-|  SDA |  13 | 16  | A1   |---+-> GND
+        +-----------+              |  | |   NC |  14 | 15  | A0   |---'
+                                   |  | +-------------------------+
+                                   |  |
+                                   |  v
+                                   v SDA1  } Pi
+                                  SCL1     } I2C
+
+    Notes:  Vo is connected to the wiper of a 10k trim pot to adjust the
+            contrast. A similar (perhaps 5k) pot, could be used to adjust the
+            backlight but connecting to 3.3V works OK instead. These displays
+            are commonly sold with a single 10k pot.
+
+            The HD44780 logic voltage doesn't seem to like 3.3V but the
+            MCP23017 can handle 5V signals.
 
 //  ---------------------------------------------------------------------------
 */
@@ -60,7 +101,7 @@
 #include <time.h>
 #include <pthread.h>
 
-#include "hd44780i2cPi.h"
+#include "hd44780i2c.h"
 
 int main()
 {

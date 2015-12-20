@@ -34,7 +34,7 @@
 
     Compile with:
 
-        gcc -c -fpic -Wall hd44780i2c.c -lwiringPi -lpthread
+        gcc -c -fpic -Wall hd44780i2c.c mcp23017.c -lpthread
 
     Also use the following flags for Raspberry Pi optimisation:
 
@@ -43,7 +43,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    15/12/2015  This program.
+    Authors:        D.Faulke    20/12/2015  This program.
 
     Contributors:
 
@@ -97,117 +97,42 @@
 
     The MCP23017 is an I2C bus operated 16-bit I/O port expander:
 
-                           +------------O------------+
+                           +-----------( )-----------+
                            |  Fn  | pin | pin |  Fn  |
                            |------+-----+-----+------|
-                LCD RS  <--| GPB0 |  01 | 28  | GPA7 |
-                LCD R/W <--| GPB1 |  02 | 27  | GPA6 |
-                LCD EN  <--| GPB2 |  03 | 26  | GPA5 |
+                           | GPB0 |  01 | 28  | GPA7 |
+                           | GPB1 |  02 | 27  | GPA6 |
+                           | GPB2 |  03 | 26  | GPA5 |
                            | GPB3 |  04 | 25  | GPA4 |
-                LCD DB4 <--| GPB4 |  05 | 24  | GPA3 |
-                LCD DB5 <--| GPB5 |  06 | 23  | GPA2 |
-                LCD DB6 <--| GPB6 |  07 | 22  | GPA1 |
-                LCD DB7 <--| GPB7 |  08 | 21  | GPA0 |
-        +5V <---+----------|  VDD |  09 | 20  | INTA |
-        GND <---+--||------|  VSS |  10 | 19  | INTB |
-                  0.1uF    |   NC |  11 | 18  | RST  |--> +5V      10k
-                Pi SCL1 <--|  SCL |  12 | 17  | A2   |--> GND | --/\/\/-> +5V
-                Pi SDA1 <--|  SDA |  13 | 16  | A1   |--> GND | --/\/\/-> +5V
-                           |   NC |  14 | 15  | A0   |--> GND | --/\/\/-> +5V
+                           | GPB4 |  05 | 24  | GPA3 |
+                           | GPB5 |  06 | 23  | GPA2 |
+                           | GPB6 |  07 | 22  | GPA1 |
+                           | GPB7 |  08 | 21  | GPA0 |
+                           |  VDD |  09 | 20  | INTA |
+                           |  VSS |  10 | 19  | INTB |
+                           |   NC |  11 | 18  | RST  |
+                           |  SCL |  12 | 17  | A2   |
+                           |  SDA |  13 | 16  | A1   |
+                           |   NC |  14 | 15  | A0   |
                            +-------------------------+
-
-    Notes:  There is a 0.1uF ceramic capaictor across pins 09 and 10
-            for stability.
-
-            SCL1 and SDA1 are connected to the Pi directly. The Pi has
-            resistors to 'pull' the voltage to +3.3V on these pins so
-            using a logic level shifter is probably unnecessary.
-
-            The RST (hardware reset) pin is kept high for normal operation.
-
-            The I2C address device is addressed as follows:
-
-                +-----+-----+-----+-----+-----+-----+-----+-----+
-                |  0  |  1  |  0  |  0  |  A2 |  A1 |  A0 | R/W |
-                +-----+-----+-----+-----+-----+-----+-----+-----+
-                : <----------- slave address -----------> :     :
-                : <--------------- control byte --------------> :
-
-                R/W = 0: write.
-                R/W = 1: read.
-
-            Possible addresses are therefore 0x20 to 0x27 and set by wiring
-            pins A0 to A2 low (GND) or high (+5V). If wiring high, the pins
-            should be connected to +5V via a 10k resistor.
-
-            Further HD44780 displays may be added by wiring the LCD EN pin to
-            another MCP23017 pin. The RS, R/W and DB pins can be wired in
-            parallel to the exisiting connections.
 
 //  ---------------------------------------------------------------------------
 
-    Reading/writing to the MCP23017:
+    Wiring the HD44780 Display to the MCP23017:
 
         The MCP23017 has two 8-bit ports (PORTA & PORTB) that can operate in
-        8-bit or 16-bit modes. Each port has associated registers but share
-        a configuration register IOCON.
+        8-bit or 16-bit modes. The RS, R/W, E and DB4-DB7 need to be attached
+        to GPIOs on either PORTA (GPA0-GPA7) or PORTB (GPB0-GPB7). Further
+        displays can share the same GPIOs except the E pin, which must have a
+        unique GPIO for each display.
 
-    MCP23017 register addresses:
+        It is advised that the RS, R/W & E pins, and the DB4-DB7 pins are on
+        contiguous GPIOs to make it easier to send byte data.
 
-            +----------------------------------------------------------+
-            | BANK1 | BANK0 | Register | Description                   |
-            |-------+-------+----------+-------------------------------|
-            |  0x00 |  0x00 | IODIRA   | IO direction (port A).        |
-            |  0x10 |  0x01 | IODIRB   | IO direction (port B).        |
-            |  0x01 |  0x02 | IPOLA    | Polarity (port A).            |
-            |  0x11 |  0x03 | IPOLB    | Polarity (port B).            |
-            |  0x02 |  0x04 | GPINTENA | Interrupt on change (port A). |
-            |  0x12 |  0x05 | GPINTENB | Interrupt on change (port B). |
-            |  0x03 |  0x06 | DEFVALA  | Default compare (port A).     |
-            |  0x13 |  0x07 | DEFVALB  | Default compare (port B).     |
-            |  0x04 |  0x08 | INTCONA  | Interrupt control (port A).   |
-            |  0x14 |  0x09 | INTCONB  | Interrupt control (port B).   |
-            |  0x05 |  0x0a | IOCON    | Configuration.                |
-            |  0x15 |  0x0b | IOCON    | Configuration.                |
-            |  0x06 |  0x0c | GPPUA    | Pull-up resistors (port A).   |
-            |  0x16 |  0x0d | GPPUB    | Pull-up resistors (port B).   |
-            |  0x07 |  0x0e | INTFA    | Interrupt flag (port A).      |
-            |  0x17 |  0x0f | INTFB    | Interrupt flag (port B).      |
-            |  0x08 |  0x10 | INTCAPA  | Interrupt capture (port A).   |
-            |  0x18 |  0x11 | INTCAPB  | Interrupt capture (port B).   |
-            |  0x09 |  0x12 | GPIOA    | GPIO ports (port A).          |
-            |  0x19 |  0x13 | GPIOB    | GPIO ports (port B).          |
-            |  0x0a |  0x14 | OLATA    | Output latches (port A).      |
-            |  0x1a |  0x15 | OLATB    | Output latches (port B).      |
-            +----------------------------------------------------------+
-
-        The IOCON register bits set various configurations including the BANK
-        bit (bit 7):
-
-            +-------------------------------------------------------+
-            | BIT7 | BIT6 | BIT5 | BIT4 | BIT3 | BIT2 | BIT1 | BIT0 |
-            |------+------+------+------+------+------+------+------|
-            | BANK |MIRROR|SEQOP |DISSLW| HAEN | ODR  |INTPOL| ---- |
-            +-------------------------------------------------------+
-
-            BANK   = 1: PORTS are segregated, i.e. 8-bit mode.
-            BANK   = 0: PORTS are paired into 16-bit mode.
-            MIRROR = 1: INT pins are connected.
-            MIRROR = 0: INT pins operate independently.
-            SEQOP  = 1: Sequential operation disabled.
-            SEQOP  = 0: Sequential operation enabled.
-            DISSLW = 1: Slew rate disabled.
-            DISSLW = 0: Slew rate enabled.
-            HAEN   = 1: N/A for MCP23017.
-            HAEN   = 0: N/A for MCP23017.
-            ODR    = 1: INT pin configured as open-drain output.
-            ODR    = 0: INT pin configured as active driver output.
-            INTPOL = 1: Polarity of INT pin, active = low.
-            INTPOL = 0: Polarity of INT pin, active = high.
-
-            Default is 0 for all bits.
-
-            The internal pull-up resistors are 100kOhm.
+        The HD44780 operates slightly faster at 5V but 3.3V works fine. The
+        MCP23017 expander can operate at both levels. The Pi's I2C pins have
+        pull-up resistors that should protect against 5V levels but use a
+        logic level shifter if there is any doubt.
 */
 
 //  Macros. -------------------------------------------------------------------
@@ -267,157 +192,33 @@
 #define ADDRESS_ROW_2   0x14 // Row 3 start address.
 #define ADDRESS_ROW_3   0x54 // Row 4 start address.
 
-//  MCP23017 ------------------------------------------------------------------
-
-#define MCP23017_CHIPS         1 // Number of MCP20317 expander chips (max 8).
-
-// I2C base addresses, set according to A0-A2. Maximum of 8.
-#define MCP23017_ADDRESS_0  0x20
-/*
-#define MCP23017_ADDRESS_1  0x21 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_2  0x22 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_3  0x23 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_4  0x24 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_5  0x25 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_6  0x26 // Dummy address for additional chip.
-#define MCP23017_ADDRESS_7  0x27 // Dummy address for additional chip.
-*/
-
-#define MCP23017_REGISTERS    22
-#define MCP23017_BANKS         2
-
-// MCP23017 registers.
-enum mcp23017Reg_t
-    { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
-      DEFVALA,  DEFVALB,  INTCONA,  INTCONB,  IOCONA,   IOCONB,
-      GPPUA,    GPPUB,    INTFA,    INTFB,    INTCAPA,  INTCAPB,
-      GPIOA,    GPIOB,    OLATA,    OLATB };
-
-// MCP23017 register addresses ( IOCON.BANK = 0).
-#define BANK0_IODIRA   0x00
-#define BANK0_IODIRB   0x01
-#define BANK0_IPOLA    0x02
-#define BANK0_IPOLB    0x03
-#define BANK0_GPINTENA 0x04
-#define BANK0_GPINTENB 0x05
-#define BANK0_DEFVALA  0x06
-#define BANK0_DEFVALB  0x07
-#define BANK0_INTCONA  0x08
-#define BANK0_INTCONB  0x09
-#define BANK0_IOCONA   0x0a
-#define BANK0_IOCONB   0x0b
-#define BANK0_GPPUA    0x0c
-#define BANK0_GPPUB    0x0d
-#define BANK0_INTFA    0x0e
-#define BANK0_INTFB    0x0f
-#define BANK0_INTCAPA  0x10
-#define BANK0_INTCAPB  0x11
-#define BANK0_GPIOA    0x12
-#define BANK0_GPIOB    0x13
-#define BANK0_OLATA    0x14
-#define BANK0_OLATB    0x15
-
-// MCP23017 register addresses (IOCON.BANK = 1).
-
-#define BANK1_IODIRA   0x00
-#define BANK1_IODIRB   0x10
-#define BANK1_IPOLA    0x01
-#define BANK1_IPOLB    0x11
-#define BANK1_GPINTENA 0x02
-#define BANK1_GPINTENB 0x12
-#define BANK1_DEFVALA  0x03
-#define BANK1_DEFVALB  0x13
-#define BANK1_INTCONA  0x04
-#define BANK1_INTCONB  0x14
-#define BANK1_IOCONA   0x05
-#define BANK1_IOCONB   0x15
-#define BANK1_GPPUA    0x06
-#define BANK1_GPPUB    0x16
-#define BANK1_INTFA    0x07
-#define BANK1_INTFB    0x17
-#define BANK1_INTCAPA  0x08
-#define BANK1_INTCAPB  0x18
-#define BANK1_GPIOA    0x09
-#define BANK1_GPIOB    0x19
-#define BANK1_OLATA    0x0a
-#define BANK1_OLATB    0x1a
-
-static const char *i2cDevice = "/dev/i2c-1"; // Path to I2C file system.
-static int mcp23017ID[MCP23017_CHIPS];       // IDs (handles) for each chip.
-
-// Array of addresses for each MCP23017.
-static uint8_t mcp23017Addr[MCP23017_CHIPS] = { MCP23017_ADDRESS_0 };
-/*
-    = { MCP23017_ADDRESS_0,
-        MCP23017_ADDRESS_1,
-        MCP23017_ADDRESS_2,
-        MCP23017_ADDRESS_3,
-        MCP23017_ADDRESS_4,
-        MCP23017_ADDRESS_5,
-        MCP23017_ADDRESS_6,
-        MCP23017_ADDRESS_7 }
-*/
 
 //  Mutex. --------------------------------------------------------------------
 
 pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
-//  Data structures. ----------------------------------------------------------
 
-unit8_t mcp23017Reg[MCP23017_REGISTERS][MCP23017_BANKS] =
-/*
-    Register address can be reference with enumerated type
-         {          BANK0, BANK1          }
-*/
-        {{   BANK0_IODIRA, BANK1_IODIRA   },
-         {   BANK0_IODIRB, BANK1_IODIRB   },
-         {    BANK0_IPOLA, BANK1_IPOLA    },
-         {    BANK0_IPOLB, BANK1_IPOLB    },
-         { BANK0_GPINTENA, BANK1_GPINTENA },
-         { BANK0_GPINTENB, BANK1_GPINTENB },
-         {  BANK0_DEFVALA, BANK1_DEFVALA  },
-         {  BANK0_DEFVALB, BANK1_DEFVALB  },
-         {  BANK0_INTCONA, BANK1_INTCONA  },
-         {  BANK0_INTCONB, BANK1_INTCONB  },
-         {   BANK0_IOCONA, BANK1_IOCONA   },
-         {   BANK0_IOCONB, BANK1_IOCONB   },
-         {    BANK0_GPPUA, BANK1_GPPUA    },
-         {    BANK0_GPPUB, BANK1_GPPUB    },
-         {    BANK0_INTFA, BANK1_INTFA    },
-         {    BANK0_INTFB, BANK1_INTFB    },
-         {  BANK0_INTCAPA, BANK1_INTCAPA  },
-         {  BANK0_INTCAPB, BANK1_INTCAPB  },
-         {    BANK0_GPIOA, BANK1_GPIOA    },
-         {    BANK0_GPIOB, BANK1_GPIOB    },
-         {    BANK0_OLATA, BANK1_OLATA    },
-         {    BANK0_OLATB, BANK1_OLATB    }};
+//  Data structures. ----------------------------------------------------------
 
 struct HD44780i2c
 {
-    uint8_t addr;   // I2C address.
-    uint8_t bank;   // MCP23017 BANK.
-    uint8_t rs;     // MCP23017 GPIO pin address for HD44780 RS pin.
-    uint8_t rw;     // MCP23017 GPIO pin address for HD44780 R/W pin.
-    uint8_t en;     // MCP23017 GPIO pin address for HD44780 EN pin.
-    uint8_t db[4];  // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
+    mcp23017_s *mcp23017; // MCP23017 specific data.
+    uint8_t    id;        // Display handle.
+    uint8_t    rs;        // MCP23017 GPIO pin address for HD44780 RS pin.
+    uint8_t    rw;        // MCP23017 GPIO pin address for HD44780 R/W pin.
+    uint8_t    en;        // MCP23017 GPIO pin address for HD44780 EN pin.
+    uint8_t    db[4];     // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
 }
-    hd44780i2c =   // Defaults based on wiring. All in the same BANK.
+    hd44780i2c =    // Defaults. Make sure addresses are appropriate for BANK mode.
 {
-    .rs     = 0x80, // Bit 7.
-    .rw     = 0x40, // Bit 6.
-    .en     = 0x20, // Bit 5.
-    .db[0]  = 0x08, // Bit 3.
-    .db[1]  = 0x04, // Bit 2.
-    .db[2]  = 0x02, // Bit 1.
-    .db[3]  = 0x01  // Bit 0.
-};
-
-struct HD44780pins
-{
-    bool rs;    // Pin value for RS pin.
-    bool rw;    // Pin value for R/W pin.
-    bool en;    // Pin value for EN pin.
-    bool db[4]; // Pin value for DB4-DB7 pins.
+    // BANK = 1 (8-bit mode), PORT B GPIOs:
+    .rs     = 0x01, // GPB0.
+    .rw     = 0x02, // GPB1.
+    .en     = 0x04, // GPB2.
+    .db[0]  = 0x10, // GPB4.
+    .db[1]  = 0x20, // GPB5.
+    .db[2]  = 0x40, // GPB6.
+    .db[3]  = 0x80  // GPB7.
 };
 
 struct Text
@@ -470,17 +271,7 @@ struct HD44780ticker
     .length + .padding must be < TEXT_MAX_LENGTH.
 */
 
-//  Hardware functions. -------------------------------------------------------
-
-//  ---------------------------------------------------------------------------
-//  Writes byte to register of MCP23017.
-//  ---------------------------------------------------------------------------
-static int8_t mcp23017WriteByte( uint8_t handle, uint8_t reg, uint8_t byte );
-
-//  ---------------------------------------------------------------------------
-//  Initialises MCP23017 chips.
-//  ---------------------------------------------------------------------------
-static int8_t mcp23017init( void );
+//  HD44780 display functions. ------------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Toggles E (enable) bit in byte mode without changing other bits.

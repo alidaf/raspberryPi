@@ -1,4 +1,4 @@
-/*
+./*
 //  ===========================================================================
 
     hd44780i2cPi:
@@ -34,7 +34,7 @@
 
     Compile with:
 
-        gcc -c -fpic -Wall hd44780i2c.c -lwiringPi -lpthread
+        gcc -c -fpic -Wall hd44780i2c.c mcp23017.c -lpthread
 
     Also use the following flags for Raspberry Pi optimisation:
 
@@ -43,14 +43,13 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    15/12/2015  This program.
+    Authors:        D.Faulke    20/12/2015  This program.
 
     Contributors:
 
     Changelog:
 
         v0.1    Original version.
-        v0.2    Rewrote code into libraries.
 
 //  ---------------------------------------------------------------------------
 
@@ -81,6 +80,7 @@
 
 #include "hd44780i2cPi.h"
 
+
 //  Debugging functions. ------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
@@ -95,64 +95,6 @@ static int8_t *getBinaryString( uint8_t data, uint8_t bits )
         binary[i] = (( data >> ( bits - i - 1 )) & 1 ) + '0';
     binary[i] = '\0';
     return binary;
-};
-
-//  MCP23017 functions. -------------------------------------------------------
-
-//  ---------------------------------------------------------------------------
-//  Writes byte to register of MCP23017.
-//  ---------------------------------------------------------------------------
-static int8_t mcp23017WriteByte( uint8_t handle, uint8_t reg, uint8_t byte )
-{
-    uint8_t i;
-    uint8_t data = byte;
-
-    printf( "I2C handle = %d, MCP23017 register = 0x%02x.\n", handle, reg );
-    printf( "RS EN RW NC DB DB DB DB\n" );
-    for ( i = 0; i < BITS_BYTE; i++ )
-        printf( "%2d ", ( data >> BITS_BYTE - i - 1 ) & 1 );
-    printf( "\n" );
-    i2c_smbus_write_byte_data( handle, reg, byte );
-}
-
-//  ---------------------------------------------------------------------------
-//  Initialises MCP23017 chips.
-//  ---------------------------------------------------------------------------
-static int8_t mcp23017init( void )
-{
-
-    uint8_t i;
-
-    for ( i = 0; i < MCP23017_CHIPS; i++ )
-	{
-        // I2C communication is via device file (/dev/i2c-1).
-        if (( mcp23017ID[i] = open( i2cDevice, O_RDWR )) < 0 )
-        {
-            printf( "Couldn't open I2C device %s.\n", i2cDevice );
-            printf( "Error code = %d.\n", errno );
-            return -1;
-        }
-        // Set slave address for each MCP23017 device.
-        if ( ioctl( mcp23017ID[i], I2C_SLAVE, mcp23017Addr[i] ) < 0 )
-        {
-            printf( "Couldn't set slave address 0x%02x.\n",
-                     mcp23017Addr[i] );
-            printf( "Error code = %d.\n", errno );
-            return -2;
-        }
-
-        printf( "\nSetting up MCP23017.\n\n" );
-        // Set directions to out (PORTA).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_IODIRA, 0x00 );
-        // Set directions to out (PORTB).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_IODIRB, 0x00 );
-        // Set all outputs to low (PORTA).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_OLATA, 0x00 );
-        // Set all outputs to low (PORTB).
-        mcp23017WriteByte( mcp23017ID[i], MCP23017_0_OLATB, 0x00 );
-	}
-
-    return 0;
 };
 
 //  HD44780 display functions. ------------------------------------------------
