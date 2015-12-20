@@ -135,6 +135,9 @@
         logic level shifter if there is any doubt.
 */
 
+#ifndef HD44780I2C_H
+#define HD44780I2C_H
+
 //  Macros. -------------------------------------------------------------------
 
 // Constants. Change these according to needs.
@@ -200,18 +203,20 @@ pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
 //  Data structures. ----------------------------------------------------------
 
-struct HD44780i2c
+struct hd44780i2c
 {
     mcp23017_s *mcp23017; // MCP23017 specific data.
+    mcp23017Reg_t reg;
     uint8_t    id;        // Display handle.
-    uint8_t    rs;        // MCP23017 GPIO pin address for HD44780 RS pin.
-    uint8_t    rw;        // MCP23017 GPIO pin address for HD44780 R/W pin.
-    uint8_t    en;        // MCP23017 GPIO pin address for HD44780 EN pin.
-    uint8_t    db[4];     // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
+    uint8_t    rs;     // MCP23017 GPIO pin address for HD44780 RS pin.
+    uint8_t    rw;     // MCP23017 GPIO pin address for HD44780 R/W pin.
+    uint8_t    en;     // MCP23017 GPIO pin address for HD44780 EN pin.
+    uint8_t    db[4];  // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
 }
     hd44780i2c =    // Defaults. Make sure addresses are appropriate for BANK mode.
 {
-    // BANK = 1 (8-bit mode), PORT B GPIOs:
+    // BANK = 1 (8-bit mode), GPIOB.
+    .reg    = GPIOB,
     .rs     = 0x01, // GPB0.
     .rw     = 0x02, // GPB1.
     .en     = 0x04, // GPB2.
@@ -223,6 +228,7 @@ struct HD44780i2c
 
 struct Text
 {
+    struct  hd44780i2c display;
     uint8_t row;        // Display row.
     uint8_t col;        // Display column.
     char    *buffer;    // Display text.
@@ -230,6 +236,7 @@ struct Text
 
 struct Calendar
 {
+    struct  hd44780i2c display;
     uint8_t row;        // Display row (y).
     uint8_t col;        // Display col (x).
     uint8_t length;     // Length of formatting string.
@@ -257,6 +264,7 @@ struct Calendar
 
 struct HD44780ticker
 {
+    struct   hd44780i2c display;
     char     text[TEXT_MAX_LENGTH]; // Display text.
     uint16_t length;                // Text length.
     uint16_t padding;               // Text padding between end to start.
@@ -276,18 +284,18 @@ struct HD44780ticker
 //  ---------------------------------------------------------------------------
 //  Toggles E (enable) bit in byte mode without changing other bits.
 //  ---------------------------------------------------------------------------
-static void hd44780ToggleEnable( uint8_t handle, uint8_t reg, uint8_t byte );
+void hd44780ToggleEnable( struct hd44780i2c display );
 
 //  ---------------------------------------------------------------------------
 //  Writes a command or data byte (according to mode) to HD44780 via MCP23017.
 //  ---------------------------------------------------------------------------
-static int8_t hd44780WriteByte( uint8_t handle, uint8_t reg,
-                                uint8_t data,   uint8_t mode );
+int8_t hd44780WriteByte( struct hd44780i2c display, uint8_t data,
+                                                    uint8_t mode );
 
 //  ---------------------------------------------------------------------------
 //  Writes a data string to LCD.
 //  ---------------------------------------------------------------------------
-static int8_t hd44780WriteString( uint8_t handle, uint8_t reg, char *string );
+int8_t hd44780WriteString( struct hd44780i2c display, char *string );
 
 //  ---------------------------------------------------------------------------
 //  Moves cursor to row, position.
@@ -297,20 +305,19 @@ static int8_t hd44780WriteString( uint8_t handle, uint8_t reg, char *string );
     row due to common architecture. Moving from the end of a line to the start
     of the next is not contiguous memory.
 */
-static int8_t hd44780Goto( uint8_t handle, uint8_t reg,
-                           uint8_t row,    uint8_t pos );
+int8_t hd44780Goto( struct hd44780i2c display, uint8_t row, uint8_t pos );
 
 //  Display init and mode functions. ------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Clears display.
 //  ---------------------------------------------------------------------------
-static int8_t displayClear( uint8_t handle, uint8_t reg );
+int8_t displayClear( struct hd44780i2c display );
 
 //  ---------------------------------------------------------------------------
 //  Clears memory and returns cursor/screen to original position.
 //  ---------------------------------------------------------------------------
-static int8_t displayHome( uint8_t handle, uint8_t reg );
+int8_t displayHome( struct hd44780i2c display );
 
 //  ---------------------------------------------------------------------------
 //  Initialises display. Must be called before any other LCD functions.
@@ -333,11 +340,11 @@ static int8_t displayHome( uint8_t handle, uint8_t reg );
         Display clear.
         Set entry mode.
 */
-static int8_t initialiseDisplay( uint8_t handle, uint8_t reg,
-                                 bool data,    bool lines,  bool font,
-                                 bool display, bool cursor, bool blink,
-                                 bool counter, bool shift,
-                                 bool mode,    bool direction );
+int8_t initialiseDisplay( struct hd44780i2c display,
+                          bool data,    bool lines,  bool font,
+                          bool display, bool cursor, bool blink,
+                          bool counter, bool shift,
+                          bool mode,    bool direction );
 /*
     data      = 0: 4-bit mode.
     data      = 1: 8-bit mode.
@@ -372,8 +379,7 @@ static int8_t initialiseDisplay( uint8_t handle, uint8_t reg,
     shift =   0: Do not shift display after data write.
     shift =   1: Shift display after data write.
 */
-static int8_t setEntryMode( uint8_t handle, uint8_t reg,
-                            bool counter, bool shift );
+int8_t setEntryMode( struct hd44780i2c display, bool counter, bool shift );
 
 //  ---------------------------------------------------------------------------
 //  Sets display mode.
@@ -386,8 +392,8 @@ static int8_t setEntryMode( uint8_t handle, uint8_t reg,
     blink   = 0: Blink (block cursor) on.
     blink   = 0: Blink (block cursor) off.
 */
-static int8_t setDisplayMode( uint8_t handle, uint8_t reg,
-                              bool display, bool cursor, bool blink );
+int8_t setDisplayMode( struct hd44780i2c display,
+                       bool display, bool cursor, bool blink );
 
 //  ---------------------------------------------------------------------------
 //  Shifts cursor or display.
@@ -398,8 +404,7 @@ static int8_t setDisplayMode( uint8_t handle, uint8_t reg,
     direction = 0: Left.
     direction = 1: Right.
 */
-static int8_t setMoveMode( uint8_t handle, uint8_t reg,
-                           bool mode, bool direction );
+int8_t setMoveMode( struct hd44780i2c display, bool mode, bool direction );
 
 //  Custom characters and animation. ------------------------------------------
 /*
@@ -427,15 +432,15 @@ struct customCharsStruct
     pointer is auto-incremented. Set command to point to start of DDRAM to
     finish.
 */
-static int8_t loadCustom( uint8_t handle, uint8_t reg,
-                    const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] );
+int8_t loadCustom( struct hd44780i2c display,
+                   const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] );
 
 //  Display functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Displays text on display row as a tickertape.
 //  ---------------------------------------------------------------------------
-static void *displayTicker( void *threadTicker );
+void *displayTicker( void *threadTicker );
 /*
     text:      Tickertape text.
     length:    Length of tickertape text.
@@ -451,3 +456,5 @@ static void *displayTicker( void *threadTicker );
 //  Displays formatted date/time strings.
 //  ---------------------------------------------------------------------------
 void *displayCalendar( void *threadCalendar );
+
+#endif
