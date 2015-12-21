@@ -95,8 +95,8 @@ uint8_t mcp23017Register[MCP23017_REGISTERS][MCP23017_BANKS] =
 //  ---------------------------------------------------------------------------
 //  Writes byte to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterByte( struct mcp23017_s *mcp23017,
-                                  uint8_t reg, uint8_t data )
+int8_t mcp23017WriteByte( struct mcp23017 *mcp23017,
+                          uint8_t reg, uint8_t data )
 {
     // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
     uint8_t handle = mcp23017->id;
@@ -110,8 +110,8 @@ int8_t mcp23017WriteRegisterByte( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Writes word to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterWord( struct mcp23017_s *mcp23017,
-                                  uint8_t reg, uint16_t data )
+int8_t mcp23017WriteWord( struct mcp23017 *mcp23017,
+                          uint8_t reg, uint16_t data )
 /*
     Currently undefined if IOCON.BANK = 1 and PORT = B.
     Need to be able to check PORT - lookup table?
@@ -128,7 +128,7 @@ int8_t mcp23017WriteRegisterWord( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Reads byte from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ReadRegisterByte( struct mcp23017_s *mcp23017, uint8_t reg )
+int8_t mcp23017ReadByte( struct mcp23017 *mcp23017, uint8_t reg )
 {
     // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
     uint8_t handle = mcp23017->id;
@@ -142,7 +142,7 @@ int8_t mcp23017ReadRegisterByte( struct mcp23017_s *mcp23017, uint8_t reg )
 //  ---------------------------------------------------------------------------
 //  Reads word from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int16_t mcp23017ReadRegisterWord( struct mcp23017_s *mcp23017, uint8_t reg )
+int16_t mcp23017ReadWord( struct mcp23017 *mcp23017, uint8_t reg )
 {
 /*
     Currently undefined if IOCON.BANK = 1 and PORT = B.
@@ -159,7 +159,7 @@ int16_t mcp23017ReadRegisterWord( struct mcp23017_s *mcp23017, uint8_t reg )
 //  ---------------------------------------------------------------------------
 //  Checks byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-bool mcp23017CheckBitsByte( struct mcp23017_s *mcp23017,
+bool mcp23017CheckBitsByte( struct mcp23017 *mcp23017,
                             uint8_t reg, uint8_t data )
 {
     // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
@@ -176,7 +176,7 @@ bool mcp23017CheckBitsByte( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Checks word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-bool mcp23017CheckBitsWord( struct mcp23017_s *mcp23017,
+bool mcp23017CheckBitsWord( struct mcp23017 *mcp23017,
                             uint8_t reg, uint16_t data )
 /*
     Currently undefined if IOCON.BANK = 1 and PORT = B.
@@ -196,7 +196,7 @@ bool mcp23017CheckBitsWord( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Toggles byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ToggleBitsByte( struct mcp23017_s *mcp23017,
+int8_t mcp23017ToggleBitsByte( struct mcp23017 *mcp23017,
                                uint8_t reg, uint8_t data )
 {
     // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B
@@ -213,7 +213,7 @@ int8_t mcp23017ToggleBitsByte( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Toggles word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ToggleBitsWord( struct mcp23017_s *mcp23017,
+int8_t mcp23017ToggleBitsWord( struct mcp23017 *mcp23017,
                                uint8_t reg, uint16_t data )
 /*
     Currently undefined if IOCON.BANK = 1 and PORT = B.
@@ -233,7 +233,7 @@ int8_t mcp23017ToggleBitsWord( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Sets byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017SetBitsByte( struct mcp23017_s *mcp23017,
+int8_t mcp23017SetBitsByte( struct mcp23017 *mcp23017,
                             uint8_t reg, uint8_t data )
 {
     // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B
@@ -250,7 +250,7 @@ int8_t mcp23017SetBitsByte( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Sets word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017SetBitsWord( struct mcp23017_s *mcp23017,
+int8_t mcp23017SetBitsWord( struct mcp23017 *mcp23017,
                             uint8_t reg, uint16_t data )
 /*
     Currently undefined if IOCON.BANK = 1 and PORT = B.
@@ -270,7 +270,7 @@ int8_t mcp23017SetBitsWord( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Clears byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ClearBitsByte( struct mcp23017_s *mcp23017,
+int8_t mcp23017ClearBitsByte( struct mcp23017 *mcp23017,
                               uint8_t reg, uint8_t data )
 {
     // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
@@ -287,7 +287,7 @@ int8_t mcp23017ClearBitsByte( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 //  Clears word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ClearBitsWord( struct mcp23017_s *mcp23017,
+int8_t mcp23017ClearBitsWord( struct mcp23017 *mcp23017,
                               uint8_t reg, uint16_t data )
 /*
     Currently undefined if IOCON.BANK = 1 and PORT = B.
@@ -309,8 +309,8 @@ int8_t mcp23017ClearBitsWord( struct mcp23017_s *mcp23017,
 //  ---------------------------------------------------------------------------
 int8_t mcp23017Init( uint8_t addr )
 {
-    struct mcp23017_s *mcp23017this;  // current MCP23017.
-    static bool init = false;         // 1st call.
+    struct mcp23017 *mcp23017this;  // MCP23017 instance.
+    static bool init = false;       // 1st call.
     static uint8_t index = 0;
 
     int8_t  id = -1;
@@ -337,7 +337,7 @@ int8_t mcp23017Init( uint8_t addr )
     if ( id < 0 ) return -1;        // Return if not init.
 
     // Allocate memory for MCP23017 data structure.
-    mcp23017this = malloc( sizeof ( struct mcp23017_s ));
+    mcp23017this = malloc( sizeof ( struct mcp23017 ));
 
     // Return if unable to allocate memory.
     if ( mcp23017this == NULL ) return -1;

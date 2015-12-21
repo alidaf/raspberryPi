@@ -112,7 +112,7 @@ int main()
     {
         // Start off with BANK = 0.
         mcp23017[i]->bank = 0;
-        mcp23017WriteRegisterByte( mcp23017[i], IOCONA, 0x00 );
+        mcp23017WriteByte( mcp23017[i], IOCONA, 0x00 );
 
         // Make sure MCP23017s have been initialised OK.
         printf( "\tDevice %d:\n", i );
@@ -121,12 +121,12 @@ int main()
         printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
 
         // Set direction of GPIOs and clear latches.
-        mcp23017WriteRegisterByte( mcp23017[i], IODIRA, 0xff ); // Input.
-        mcp23017WriteRegisterByte( mcp23017[i], IODIRB, 0x00 ); // Output.
+        mcp23017WriteByte( mcp23017[i], IODIRA, 0xff ); // Input.
+        mcp23017WriteByte( mcp23017[i], IODIRB, 0x00 ); // Output.
 
         // Writes to latches are the same as writes to GPIOs.
-        mcp23017WriteRegisterByte( mcp23017[i], OLATA, 0x00 ); // Clear pins.
-        mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 ); // Clear pins.
+        mcp23017WriteByte( mcp23017[i], OLATA, 0x00 ); // Clear pins.
+        mcp23017WriteByte( mcp23017[i], OLATB, 0x00 ); // Clear pins.
 
     }
     printf( "\n" );
@@ -147,18 +147,18 @@ int main()
 
             for ( k = 0; k < 0xff; k++ ) // Write 0x00 to 0xff.
             {
-                mcp23017WriteRegisterByte( mcp23017[i], OLATB, k );
+                mcp23017WriteByte( mcp23017[i], OLATB, k );
                 usleep( 50000 );
             }
 
             // Reset all LEDs.
-            mcp23017WriteRegisterByte( mcp23017[i], OLATB, 0x00 );
+            mcp23017WriteByte( mcp23017[i], OLATB, 0x00 );
 
             // Toggle BANK bit.
             if ( mcp23017[i]->bank == 0 )
-                mcp23017WriteRegisterByte( mcp23017[i], IOCONA, 0x80 );
+                mcp23017WriteByte( mcp23017[i], IOCONA, 0x80 );
             else
-                mcp23017WriteRegisterByte( mcp23017[i], IOCONA, 0x00 );
+                mcp23017WriteByte( mcp23017[i], IOCONA, 0x00 );
             mcp23017[i]->bank = !mcp23017[i]->bank;
         }
 
@@ -177,8 +177,8 @@ int main()
     {
         printf( "MCP23017 %d:\n", i );
 
-        data = mcp23017ReadRegisterByte( mcp23017[i], GPIOA );
-        mcp23017WriteRegisterByte( mcp23017[i], OLATB, data );
+        data = mcp23017ReadByte( mcp23017[i], GPIOA );
+        mcp23017WriteByte( mcp23017[i], OLATB, data );
         printf( "\tGPIOA = 0x%02x, checking...", data );
         for ( j = 0; j < 0xff; j++ )
         {
@@ -242,7 +242,7 @@ int main()
             printf( "Setting and clearing bits 0 - 7 in sequence.\n" );
             for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
             {
-                mcp23017WriteRegisterByte( mcp23017[i], GPIOB, 0x00 );
+                mcp23017WriteByte( mcp23017[i], GPIOB, 0x00 );
                 usleep( 50000 );
                 for ( k = 0; k < 8; k++ )
                 {

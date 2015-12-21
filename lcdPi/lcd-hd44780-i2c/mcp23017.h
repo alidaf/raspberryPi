@@ -148,7 +148,7 @@
 typedef enum reg { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
                    DEFVALA,  DEFVALB,  INTCONA,  INTCONB,  IOCONA,   IOCONB,
                    GPPUA,    GPPUB,    INTFA,    INTFB,    INTCAPA,  INTCAPB,
-                   GPIOA,    GPIOB,    OLATA,    OLATB } mcp23017Reg_t;
+                   GPIOA,    GPIOB,    OLATA,    OLATB } mcp23017Reg;
 
 // MCP23017 register addresses ( IOCON.BANK = 0).
 #define BANK0_IODIRA   0x00
@@ -201,16 +201,16 @@ typedef enum reg { IODIRA,   IODIRB,   IPOLA,    IPOLB,    GPINTENA, GPINTENB,
 
 //  Data structures. ----------------------------------------------------------
 
-typedef enum mcp23017Bank_t { BANK_0, BANK_1 } mcp23017Bank_t; // BANK mode.
+typedef enum mcp23017Bank { BANK_0, BANK_1 } mcp23017Bank; // BANK mode.
 
-struct mcp23017_s
+struct mcp23017
 {
-    uint8_t        id;   // I2C handle.
-    uint8_t        addr; // Address of MCP23017.
-    mcp23017Bank_t bank; // 8-bit or 16-bit mode.
+    uint8_t      id;   // I2C handle.
+    uint8_t      addr; // Address of MCP23017.
+    mcp23017Bank bank; // 8-bit or 16-bit mode.
 };
 
-struct mcp23017_s *mcp23017[MCP23017_MAX];
+struct mcp23017 *mcp23017[MCP23017_MAX];
 
 
 //  MCP23017 functions. -------------------------------------------------------
@@ -218,71 +218,71 @@ struct mcp23017_s *mcp23017[MCP23017_MAX];
 //  ---------------------------------------------------------------------------
 //  Writes byte to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterByte( struct mcp23017_s *mcp23017,
+int8_t mcp23017WriteByte( struct mcp23017 *mcp23017,
                                   uint8_t reg, uint8_t data );
 
 //  ---------------------------------------------------------------------------
 //  Writes word to register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017WriteRegisterWord( struct mcp23017_s *mcp23017,
+int8_t mcp23017WriteWord( struct mcp23017 *mcp23017,
                                   uint8_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
 //  Reads byte from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ReadRegisterByte( struct mcp23017_s *mcp23017, uint8_t reg );
+int8_t mcp23017ReadByte( struct mcp23017 *mcp23017, uint8_t reg );
 
 //  ---------------------------------------------------------------------------
 //  Reads word from register of MCP23017.
 //  ---------------------------------------------------------------------------
-int16_t mcp23017ReadRegisterWord( struct mcp23017_s *mcp23017, uint8_t reg );
+int16_t mcp23017ReadWord( struct mcp23017 *mcp23017, uint8_t reg );
 
 //  ---------------------------------------------------------------------------
 //  Checks byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-bool mcp23017CheckBitsByte( struct mcp23017_s *mcp23017,
+bool mcp23017CheckBitsByte( struct mcp23017 *mcp23017,
                             uint8_t reg, uint8_t data );
 
 //  ---------------------------------------------------------------------------
 //  Checks word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-bool mcp23017CheckBitsWord( struct mcp23017_s *mcp23017,
+bool mcp23017CheckBitsWord( struct mcp23017 *mcp23017,
                             uint8_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
 //  Toggles byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ToggleBitsByte( struct mcp23017_s *mcp23017,
+int8_t mcp23017ToggleBitsByte( struct mcp23017 *mcp23017,
                                uint8_t reg, uint8_t data );
 
 //  ---------------------------------------------------------------------------
 //  Toggles word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ToggleBitsWord( struct mcp23017_s *mcp23017,
+int8_t mcp23017ToggleBitsWord( struct mcp23017 *mcp23017,
                                uint8_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
 //  Sets byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017SetBitsByte( struct mcp23017_s *mcp23017,
+int8_t mcp23017SetBitsByte( struct mcp23017 *mcp23017,
                             uint8_t reg, uint8_t data );
 
 //  ---------------------------------------------------------------------------
 //  Sets word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017SetBitsWord( struct mcp23017_s *mcp23017,
+int8_t mcp23017SetBitsWord( struct mcp23017 *mcp23017,
                             uint8_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
 //  Clears byte bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ClearBitsByte( struct mcp23017_s *mcp23017,
+int8_t mcp23017ClearBitsByte( struct mcp23017 *mcp23017,
                               uint8_t reg, uint8_t data );
 
 //  ---------------------------------------------------------------------------
 //  Clears word bits of MCP23017 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp23017ClearBitsWord( struct mcp23017_s *mcp23017,
+int8_t mcp23017ClearBitsWord( struct mcp23017 *mcp23017,
                               uint8_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
