@@ -43,7 +43,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    20/12/2015  This program.
+    Authors:        D.Faulke    21/12/2015  This program.
 
     Contributors:
 
@@ -81,6 +81,7 @@
 #include "hd44780i2c.h"
 #include "mcp23017.h"
 
+
 //  Debugging functions. ------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
@@ -102,27 +103,23 @@ static int8_t *getBinaryString( uint8_t data, uint8_t bits )
 //  ---------------------------------------------------------------------------
 //  Toggles EN (enable) bit in byte mode without changing other bits.
 //  ---------------------------------------------------------------------------
-void hd44780ToggleEnable( struct hd44780i2c display )
+void hd44780ToggleEnable( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
-    mcp23017SetBitsByte( display->mcp23017,
-                         display->reg,
-                         display->en );
+    mcp23017SetBitsWord( mcp23017, GPIOA, hd44780->en );
     usleep( 5000 ); // 5mS.
-    mcp23017UnsetBitsByte( display->mcp23017,
-                           display->reg,
-                           display->en );
+    mcp23017UnsetBitsWord( mcp23017, GPIOA, hd44780->en );
     usleep( 5000 ); // 5mS.
 }
 
 //  ---------------------------------------------------------------------------
 //  Writes a command or data byte (according to mode).
 //  ---------------------------------------------------------------------------
-int8_t hd44780WriteByte( struct hd44780i2c display, uint8_t data,
-                                                    uint8_t mode )
+int8_t hd44780WriteByte( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                         uint8_t data, bool mode )
 {
-    uint8_t i;        // Loop counter.
-    uint8_t byte = 0; // MCP23017 constructed byte.
-    uint8_t hi, lo;   // data nibbles.
+    uint8_t  i;             // Loop counter.
+    uint8_t  hi, lo;        // Data nibbles.
+    uint16_t mcp23017Data;  // Data to send via MCP23017.
 
     // LCD is in 4-bit mode so byte needs to be separated into nibbles.
     hi = ( data >> BITS_NIBBLE ) & 0xf;
@@ -132,34 +129,34 @@ int8_t hd44780WriteByte( struct hd44780i2c display, uint8_t data,
     else printf( "\nData byte = 0x%02x.\n", data );
 
     // High nibble first.
-    // Create a byte containing the address of the MCP23017 pins to be changed.
-    byte = display->rs * mode; // Set RS pin according to mode.
+    // Set RS bit according to mode.
+    mcp23017Data = hd44780->rs * mode;
 
     for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits.
-        byte |= display->db[i] * (( hi < i ) & 0x1 );
+        mcp23017Data |= ( hd44780->db[i] * (( hi << i ) & 0x1 ));
 
     // Write byte to MCP23017 via output latch.
     printf( "Writing high nibble 0x%x.\n", hi );
-    mcp23017SetBitsByte( display->mcp23017, display->reg, byte );
+    mcp23017SetBitsWord( mcp23017, GPIOA, mcp23017Data );
 
     // Toggle enable bit to send nibble via output latch.
     printf( "Toggling EN bit for high nibble.\n" );
-    hd44780ToggleEnable( display->mcp23017 );
+    hd44780ToggleEnable( mcp23017, hd44780 );
 
     // Low nibble next.
     // Create a byte containing the address of the MCP23017 pins to be changed.
-    byte = display->rs * mode; // Set RS pin according to mode.
+    mcp23017Data = hd44780->rs * mode; // Set RS pin according to mode.
 
     for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits.
-        byte |= display->db[i] * (( lo < i ) & 0x1 );
+        mcp23017Data |= ( hd44780->db[i] * (( lo < i ) & 0x1 ));
 
     // Write byte to MCP23017 via output latch.
     printf( "Writing low nibble 0x%x.\n", lo );
-    mcp23017SetBitsByte( display->mcp23017, display->reg, byte );
+    mcp23017SetBitsWord( mcp23017, GPIOA, mcp23017Data );
 
     // Toggle enable bit to send nibble via output latch.
     printf( "Toggling EN bit for low nibble.\n" );
-    hd44780ToggleEnable( display->mcp23017 );
+    hd44780ToggleEnable( mcp23017, hd44780 );
 
     return 0;
 };
@@ -167,13 +164,14 @@ int8_t hd44780WriteByte( struct hd44780i2c display, uint8_t data,
 //  ---------------------------------------------------------------------------
 //  Writes a data string.
 //  ---------------------------------------------------------------------------
-int8_t hd44780WriteString( struct hd44780i2c display, char *string )
+int8_t hd44780WriteString( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                           char *string )
 {
     uint8_t i;
 
     // Sends string to LCD byte by byte.
     for ( i = 0; i < strlen( string ); i++ )
-        hd44780WriteByte( display, string[i], MODE_DATA );
+        hd44780WriteByte( mcp23017, hd44780, string[i], MODE_DATA );
     return 0;
 };
 
@@ -185,7 +183,8 @@ int8_t hd44780WriteString( struct hd44780i2c display, char *string )
     row due to common architecture. Moving from the end of a line to the start
     of the next is not contiguous memory.
 */
-int8_t hd44780Goto( struct hd44780i2c display, uint8_t row, uint8_t pos )
+int8_t hd44780Goto( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                    uint8_t row, uint8_t pos )
 {
     if (( pos < 0 ) | ( pos > DISPLAY_COLUMNS - 1 )) return -1;
     if (( row < 0 ) | ( row > DISPLAY_ROWS - 1 )) return -1;
@@ -196,8 +195,8 @@ int8_t hd44780Goto( struct hd44780i2c display, uint8_t row, uint8_t pos )
     uint8_t rows[DISPLAY_ROWS_MAX] = { ADDRESS_ROW_0, ADDRESS_ROW_1,
                                        ADDRESS_ROW_2, ADDRESS_ROW_3 };
 
-    hd44780WriteByte( display, ( ADDRESS_DDRAM | rows[row] ) + pos,
-    				             MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, ( ADDRESS_DDRAM | rows[row] ) + pos,
+    				                       MODE_COMMAND );
     return 0;
 };
 
@@ -206,9 +205,9 @@ int8_t hd44780Goto( struct hd44780i2c display, uint8_t row, uint8_t pos )
 //  ---------------------------------------------------------------------------
 //  Clears display.
 //  ---------------------------------------------------------------------------
-int8_t displayClear( struct hd44780i2c display )
+int8_t displayClear( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
-    hd44780WriteByte( display, DISPLAY_CLEAR, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, DISPLAY_CLEAR, MODE_COMMAND );
     usleep( 1600 ); // Data sheet doesn't give execution time!
     return 0;
 };
@@ -216,9 +215,9 @@ int8_t displayClear( struct hd44780i2c display )
 //  ---------------------------------------------------------------------------
 //  Clears memory and returns cursor/screen to original position.
 //  ---------------------------------------------------------------------------
-int8_t displayHome( struct hd44780i2c display )
+int8_t displayHome( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
-    hd44780WriteByte( display, DISPLAY_HOME, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, DISPLAY_HOME, MODE_COMMAND );
     usleep( 1600 ); // Needs 1.52ms to execute.
     return 0;
 };
@@ -226,7 +225,7 @@ int8_t displayHome( struct hd44780i2c display )
 //  ---------------------------------------------------------------------------
 //  Initialises display. Must be called before any other display functions.
 //  ---------------------------------------------------------------------------
-int8_t initialiseDisplay( struct hd44780i2c display,
+int8_t initialiseDisplay( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
                           bool data,    bool lines,  bool font,
                           bool display, bool cursor, bool blink,
                           bool counter, bool shift,
@@ -239,53 +238,57 @@ int8_t initialiseDisplay( struct hd44780i2c display,
     // Sending high nibble first (0x0) causes init to fail and the display
     // subsequently shows garbage.
     printf( "\nInitialising LCD display.\n\n" );
-    mcp23017WriteByte( display, 0x03 );
-    hd44780ToggleEnable( display, 0x03 );
+    hd44780WriteByte( mcp23017, hd44780, 0x03 );
+    hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 4200 );  // >4.1mS.
-    mcp23017WriteByte( display, 0x03 );
-    hd44780ToggleEnable( display, 0x03 );
+    hd44780WriteByte( mcp23017, hd44780, 0x03 );
+    hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 150 );   // >100uS.
-    mcp23017WriteByte( display, 0x03 );
-    hd44780ToggleEnable( display, 0x03 );
+    hd44780WriteByte( mcp23017, hd44780, 0x03 );
+    hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 150 );   // >100uS.
-    mcp23017WriteByte( display, 0x02);
-    hd44780ToggleEnable( display, 0x03 );
+    hd44780WriteByte( mcp23017, hd44780, 0x02);
+    hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 50 );   // >37uS.
 
     // Set actual function mode - cannot be changed after this point
     // without reinitialising.
     printf( "\nSetting LCD functions.\n" );
-    hd44780WriteByte( display, FUNCTION_BASE | ( data * FUNCTION_DATA )
-                                             | ( lines * FUNCTION_LINES )
-                                             | ( font * FUNCTION_FONT ),
-                               MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780,
+                      FUNCTION_BASE | ( data  * FUNCTION_DATA  )
+                                    | ( lines * FUNCTION_LINES )
+                                    | ( font  * FUNCTION_FONT  ),
+                      MODE_COMMAND );
     // Display off.
-    hd44780WriteByte( display, DISPLAY_BASE, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, DISPLAY_BASE, MODE_COMMAND );
 
     // Set entry mode.
-    hd44780WriteByte( display, ENTRY_BASE | ( counter * ENTRY_COUNTER )
-                                          | ( shift * ENTRY_SHIFT ),
-                               MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780,
+                      ENTRY_BASE | ( counter * ENTRY_COUNTER )
+                                 | ( shift   * ENTRY_SHIFT   ),
+                      MODE_COMMAND );
 
     // Display should be initialised at this point. Function can no longer
     // be changed without re-initialising.
 
     // Set display properties.
-    hd44780WriteByte( display, DISPLAY_BASE | ( display * DISPLAY_ON )
-                                            | ( cursor * DISPLAY_CURSOR )
-                                            | ( blink * DISPLAY_BLINK ),
-                               MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780,
+                      DISPLAY_BASE | ( display * DISPLAY_ON     )
+                                   | ( cursor  * DISPLAY_CURSOR )
+                                   | ( blink   * DISPLAY_BLINK  ),
+                      MODE_COMMAND );
 
     // Set initial display/cursor movement mode.
-    hd44780WriteByte( display, MOVE_BASE | ( mode * MOVE_DISPLAY )
-                                         | ( direction * MOVE_DIRECTION ),
-                               MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780,
+                      MOVE_BASE | ( mode      * MOVE_DISPLAY   )
+                                | ( direction * MOVE_DIRECTION ),
+                      MODE_COMMAND );
 
     // Goto start of DDRAM.
-    hd44780WriteByte( display, ADDRESS_DDRAM, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, ADDRESS_DDRAM, MODE_COMMAND );
 
     // Wipe any previous display.
-    displayClear( display );
+    displayClear( mcp23017, hd44780 );
 
     printf( "\nFinished initialising LCD display.\n" );
     return 0;
@@ -296,13 +299,15 @@ int8_t initialiseDisplay( struct hd44780i2c display,
 //  ---------------------------------------------------------------------------
 //  Sets entry mode.
 //  ---------------------------------------------------------------------------
-int8_t setEntryMode( struct hd44780i2c display, bool counter, bool shift )
+int8_t hd44780EntryMode( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                         bool counter, bool shift )
 {
-    hd44780WriteByte( display, ENTRY_BASE | ( counter * ENTRY_COUNTER )
-                                          | ( shift * ENTRY_SHIFT ),
-                               MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780,
+                      ENTRY_BASE | ( counter * ENTRY_COUNTER )
+                                 | ( shift   * ENTRY_SHIFT   ),
+                      MODE_COMMAND );
     // Clear display.
-    hd44780WriteByte( display, DISPLAY_CLEAR, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, DISPLAY_CLEAR, MODE_COMMAND );
 
     return 0;
 };
@@ -310,15 +315,16 @@ int8_t setEntryMode( struct hd44780i2c display, bool counter, bool shift )
 //  ---------------------------------------------------------------------------
 //  Sets display mode.
 //  ---------------------------------------------------------------------------
-int8_t setDisplayMode( struct hd44780i2c display,
-                       bool display, bool cursor, bool blink )
+int8_t hd44780DisplayMode( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                           bool display, bool cursor, bool blink )
 {
-    hd44780WriteByte( display, DISPLAY_BASE | ( display * DISPLAY_ON )
-                                            | ( cursor * DISPLAY_CURSOR )
-                                            | ( blink * DISPLAY_BLINK ),
-                               MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780,
+                      DISPLAY_BASE | ( display * DISPLAY_ON     )
+                                   | ( cursor  * DISPLAY_CURSOR )
+                                   | ( blink   * DISPLAY_BLINK  ),
+                      MODE_COMMAND );
     // Clear display.
-    hd44780WriteByte( display, DISPLAY_CLEAR, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, DISPLAY_CLEAR, MODE_COMMAND );
 
     return 0;
 };
@@ -326,13 +332,15 @@ int8_t setDisplayMode( struct hd44780i2c display,
 //  ---------------------------------------------------------------------------
 //  Shifts cursor or display.
 //  ---------------------------------------------------------------------------
-int8_t setMoveMode( struct hd44780i2c display, bool mode, bool direction )
+int8_t hd44780MoveMode( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                        bool mode, bool direction )
 {
-    hd44780WriteByte( display, MOVE_BASE | ( mode * MOVE_DISPLAY )
-                                         | ( direction * MOVE_DIRECTION ),
-                               MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780,
+                      MOVE_BASE | ( mode      * MOVE_DISPLAY   )
+                                | ( direction * MOVE_DIRECTION ),
+                      MODE_COMMAND );
     // Clear display.
-    hd44780WriteByte( display, DISPLAY_CLEAR, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, DISPLAY_CLEAR, MODE_COMMAND );
 
     return 0;
 };
@@ -376,15 +384,15 @@ const uint8_t pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
 //  ---------------------------------------------------------------------------
 //  Loads custom characters into CGRAM.
 //  ---------------------------------------------------------------------------
-int8_t loadCustom( struct hd44780i2c display,
-                   const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
+int8_t hd44780LoadCustom( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                          const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
 {
-    hd44780WriteByte( display, ADDRESS_CGRAM, MODE_COMMAND );
+    hd44780WriteByte( mcp23017, hd44780, ADDRESS_CGRAM, MODE_COMMAND );
     uint8_t i, j;
     for ( i = 0; i < CUSTOM_CHARS; i++ )
         for ( j = 0; j < CUSTOM_SIZE; j++ )
-            hd44780WriteByte( display, newChar[i][j], MODE_DATA );
-    hd44780WriteByte( display, ADDRESS_DDRAM, MODE_COMMAND );
+            hd44780WriteByte( mcp23017, hd44780, newChar[i][j], MODE_DATA );
+    hd44780WriteByte( mcp23017, hd44780, ADDRESS_DDRAM, MODE_COMMAND );
     return 0;
 };
 
@@ -456,8 +464,8 @@ void *displayTicker( void *threadTicker )
 
         // Lock thread and display ticker text.
         pthread_mutex_lock( &displayBusy );
-        gotoRowPos( ticker->display, ticker->row, 0 );
-        hd44780writeString( ticker->display, buffer );
+        hd44780Goto( ticker->mcp23017, ticker->hd44780, ticker->row, 0 );
+        hd44780WriteString( ticker->mcp23017, ticker->hd44780, buffer );
         pthread_mutex_unlock( &displayBusy );
 
         // Delay for readability.
@@ -504,8 +512,11 @@ void *displayCalendar( void *threadCalendar )
 
         // Display time string.
         pthread_mutex_lock( &displayBusy );
-        gotoRowPos( calendar->display, calendar->row, calendar->col );
-        writeDataString( buffer );
+        hd44780Goto( calendar->mcp23017,
+                     calendar->hd44780,
+                     calendar->row,
+                     calendar->col );
+        hd44780WriteString( calendar->mcp23017, calendar->hd44780, buffer );
         pthread_mutex_unlock( &displayBusy );
 
         // Sleep for designated delay.

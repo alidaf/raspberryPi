@@ -126,6 +126,10 @@
         displays can share the same GPIOs except the E pin, which must have a
         unique GPIO for each display.
 
+        This driver uses 16-bit mode to allow up to 10 devices to use the
+        MCP23017. If any other devices are connected, they should not be
+        affected as long as 16-bit mode remains unchanged.
+
         It is advised that the RS, R/W & E pins, and the DB4-DB7 pins are on
         contiguous GPIOs to make it easier to send byte data.
 
@@ -144,7 +148,7 @@
 #define BITS_BYTE          8 // Number of bits in a byte.
 #define BITS_NIBBLE        4 // Number of bits in a nibble.
 #define PINS_DATA          4 // Number of data pins used.
-#define MAX_DISPLAYS       1 // Number of displays.
+#define HD44780_MAX       10 // Max number of displays (single MCP23017).
 #define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
 
 // These should be replaced by command line options.
@@ -203,40 +207,43 @@ pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
 //  Data structures. ----------------------------------------------------------
 
-struct hd44780i2c
+struct hd44780
 {
-    mcp23017_s *mcp23017; // MCP23017 specific data.
-    mcp23017Reg_t reg;
-    uint8_t    id;        // Display handle.
-    uint8_t    rs;     // MCP23017 GPIO pin address for HD44780 RS pin.
-    uint8_t    rw;     // MCP23017 GPIO pin address for HD44780 R/W pin.
-    uint8_t    en;     // MCP23017 GPIO pin address for HD44780 EN pin.
-    uint8_t    db[4];  // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
-}
-    hd44780i2c =    // Defaults. Make sure addresses are appropriate for BANK mode.
-{
-    // BANK = 1 (8-bit mode), GPIOB.
-    .reg    = GPIOB,
-    .rs     = 0x01, // GPB0.
-    .rw     = 0x02, // GPB1.
-    .en     = 0x04, // GPB2.
-    .db[0]  = 0x10, // GPB4.
-    .db[1]  = 0x20, // GPB5.
-    .db[2]  = 0x40, // GPB6.
-    .db[3]  = 0x80  // GPB7.
+    uint16_t rs;    // MCP23017 GPIO pin address for HD44780 RS pin.
+    uint16_t rw;    // MCP23017 GPIO pin address for HD44780 R/W pin.
+    uint16_t en;    // MCP23017 GPIO pin address for HD44780 EN pin.
+    uint16_t db[4]; // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
 };
+
+struct hd44780 *hd44780[HD44780_MAX];
+
+/*
+struct hd44780 hd44780 =
+{
+    // BANK = 1 (8-bit mode).
+    .rs     = 0x0001, // GPB0.
+    .rw     = 0x0002, // GPB1.
+    .en     = 0x0004, // GPB2.
+    .db[0]  = 0x0010, // GPB4.
+    .db[1]  = 0x0020, // GPB5.
+    .db[2]  = 0x0040, // GPB6.
+    .db[3]  = 0x0080  // GPB7.
+};
+*/
 
 struct Text
 {
-    struct  hd44780i2c display;
-    uint8_t row;        // Display row.
-    uint8_t col;        // Display column.
-    char    *buffer;    // Display text.
+    struct  mcp23017 *mcp23017;
+    struct  hd44780  *hd44780;
+    uint8_t row;     // Display row.
+    uint8_t col;     // Display column.
+    char    *buffer; // Display text.
 };
 
 struct Calendar
 {
-    struct  hd44780i2c display;
+    struct  mcp23017 *mcp23017;
+    struct  hd44780  *hd44780;
     uint8_t row;        // Display row (y).
     uint8_t col;        // Display col (x).
     uint8_t length;     // Length of formatting string.
@@ -264,7 +271,8 @@ struct Calendar
 
 struct HD44780ticker
 {
-    struct   hd44780i2c display;
+    struct   mcp23017 *mcp23017;
+    struct   hd44780  *hd44780;
     char     text[TEXT_MAX_LENGTH]; // Display text.
     uint16_t length;                // Text length.
     uint16_t padding;               // Text padding between end to start.
@@ -284,18 +292,19 @@ struct HD44780ticker
 //  ---------------------------------------------------------------------------
 //  Toggles E (enable) bit in byte mode without changing other bits.
 //  ---------------------------------------------------------------------------
-void hd44780ToggleEnable( struct hd44780i2c display );
+void hd44780Enable( struct mcp23017 *mcp23017, struct hd44780 *hd44780 );
 
 //  ---------------------------------------------------------------------------
 //  Writes a command or data byte (according to mode) to HD44780 via MCP23017.
 //  ---------------------------------------------------------------------------
-int8_t hd44780WriteByte( struct hd44780i2c display, uint8_t data,
-                                                    uint8_t mode );
+int8_t hd44780WriteByte( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                         uint8_t data, bool mode );
 
 //  ---------------------------------------------------------------------------
 //  Writes a data string to LCD.
 //  ---------------------------------------------------------------------------
-int8_t hd44780WriteString( struct hd44780i2c display, char *string );
+int8_t hd44780WriteString( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                           char *string );
 
 //  ---------------------------------------------------------------------------
 //  Moves cursor to row, position.
@@ -305,19 +314,20 @@ int8_t hd44780WriteString( struct hd44780i2c display, char *string );
     row due to common architecture. Moving from the end of a line to the start
     of the next is not contiguous memory.
 */
-int8_t hd44780Goto( struct hd44780i2c display, uint8_t row, uint8_t pos );
+int8_t hd44780Goto( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                    uint8_t row, uint8_t pos );
 
 //  Display init and mode functions. ------------------------------------------
 
 //  ---------------------------------------------------------------------------
 //  Clears display.
 //  ---------------------------------------------------------------------------
-int8_t displayClear( struct hd44780i2c display );
+int8_t hd44780Clear( struct mcp23017 *mcp23017, struct hd44780 *hd44780 );
 
 //  ---------------------------------------------------------------------------
 //  Clears memory and returns cursor/screen to original position.
 //  ---------------------------------------------------------------------------
-int8_t displayHome( struct hd44780i2c display );
+int8_t hd44780Home( struct mcp23017 *mcp23017, struct hd44780 *hd44780 );
 
 //  ---------------------------------------------------------------------------
 //  Initialises display. Must be called before any other LCD functions.
@@ -340,11 +350,11 @@ int8_t displayHome( struct hd44780i2c display );
         Display clear.
         Set entry mode.
 */
-int8_t initialiseDisplay( struct hd44780i2c display,
-                          bool data,    bool lines,  bool font,
-                          bool display, bool cursor, bool blink,
-                          bool counter, bool shift,
-                          bool mode,    bool direction );
+int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                     bool data,    bool lines,  bool font,
+                     bool display, bool cursor, bool blink,
+                     bool counter, bool shift,
+                     bool mode,    bool direction );
 /*
     data      = 0: 4-bit mode.
     data      = 1: 8-bit mode.
@@ -379,7 +389,8 @@ int8_t initialiseDisplay( struct hd44780i2c display,
     shift =   0: Do not shift display after data write.
     shift =   1: Shift display after data write.
 */
-int8_t setEntryMode( struct hd44780i2c display, bool counter, bool shift );
+int8_t hd44780EntryMode( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                         bool counter, bool shift );
 
 //  ---------------------------------------------------------------------------
 //  Sets display mode.
@@ -392,8 +403,8 @@ int8_t setEntryMode( struct hd44780i2c display, bool counter, bool shift );
     blink   = 0: Blink (block cursor) on.
     blink   = 0: Blink (block cursor) off.
 */
-int8_t setDisplayMode( struct hd44780i2c display,
-                       bool display, bool cursor, bool blink );
+int8_t hd44780DisplayMode( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                           bool display, bool cursor, bool blink );
 
 //  ---------------------------------------------------------------------------
 //  Shifts cursor or display.
@@ -404,7 +415,8 @@ int8_t setDisplayMode( struct hd44780i2c display,
     direction = 0: Left.
     direction = 1: Right.
 */
-int8_t setMoveMode( struct hd44780i2c display, bool mode, bool direction );
+int8_t hd44780MoveMode( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                        bool mode, bool direction );
 
 //  Custom characters and animation. ------------------------------------------
 /*
@@ -415,7 +427,7 @@ int8_t setMoveMode( struct hd44780i2c display, bool mode, bool direction );
 #define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
 #define CUSTOM_MAX   8 // Max number of custom chars allowed.
 
-struct customCharsStruct
+struct customChars
 {
     uint8_t num; // Number of custom chars (max 8).
     uint8_t data[CUSTOM_MAX][CUSTOM_SIZE];
@@ -432,8 +444,8 @@ struct customCharsStruct
     pointer is auto-incremented. Set command to point to start of DDRAM to
     finish.
 */
-int8_t loadCustom( struct hd44780i2c display,
-                   const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] );
+int8_t hd44780LoadCustom( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                          const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] );
 
 //  Display functions. --------------------------------------------------------
 
