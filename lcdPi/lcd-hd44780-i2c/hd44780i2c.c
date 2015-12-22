@@ -87,7 +87,7 @@
 //  ---------------------------------------------------------------------------
 //  Returns binary string for a number of bits.
 //  ---------------------------------------------------------------------------
-static int8_t *getBinaryString( uint8_t data, uint8_t bits )
+static char *getBinaryString( uint8_t data, uint8_t bits )
 {
     static char binary[128]; // Arbitrary limit.
     if ( bits > 128 ) bits = 128;
@@ -107,7 +107,7 @@ void hd44780ToggleEnable( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
     mcp23017SetBitsWord( mcp23017, GPIOA, hd44780->en );
     usleep( 5000 ); // 5mS.
-    mcp23017UnsetBitsWord( mcp23017, GPIOA, hd44780->en );
+    mcp23017ClearBitsWord( mcp23017, GPIOA, hd44780->en );
     usleep( 5000 ); // 5mS.
 }
 
@@ -205,7 +205,7 @@ int8_t hd44780Goto( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
 //  ---------------------------------------------------------------------------
 //  Clears display.
 //  ---------------------------------------------------------------------------
-int8_t displayClear( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
+int8_t hd44780Clear( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
     hd44780WriteByte( mcp23017, hd44780, DISPLAY_CLEAR, MODE_COMMAND );
     usleep( 1600 ); // Data sheet doesn't give execution time!
@@ -215,7 +215,7 @@ int8_t displayClear( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 //  ---------------------------------------------------------------------------
 //  Clears memory and returns cursor/screen to original position.
 //  ---------------------------------------------------------------------------
-int8_t displayHome( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
+int8_t hd44780Home( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
     hd44780WriteByte( mcp23017, hd44780, DISPLAY_HOME, MODE_COMMAND );
     usleep( 1600 ); // Needs 1.52ms to execute.
@@ -225,11 +225,11 @@ int8_t displayHome( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 //  ---------------------------------------------------------------------------
 //  Initialises display. Must be called before any other display functions.
 //  ---------------------------------------------------------------------------
-int8_t initialiseDisplay( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
-                          bool data,    bool lines,  bool font,
-                          bool display, bool cursor, bool blink,
-                          bool counter, bool shift,
-                          bool mode,    bool direction )
+int8_t hd44780init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+                    bool data,    bool lines,  bool font,
+                    bool display, bool cursor, bool blink,
+                    bool counter, bool shift,
+                    bool mode,    bool direction )
 {
     // Allow a start-up delay.
     usleep( 42000 ); // >40mS@3V.
@@ -238,16 +238,16 @@ int8_t initialiseDisplay( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
     // Sending high nibble first (0x0) causes init to fail and the display
     // subsequently shows garbage.
     printf( "\nInitialising LCD display.\n\n" );
-    hd44780WriteByte( mcp23017, hd44780, 0x03 );
+    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
     hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 4200 );  // >4.1mS.
-    hd44780WriteByte( mcp23017, hd44780, 0x03 );
+    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
     hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 150 );   // >100uS.
-    hd44780WriteByte( mcp23017, hd44780, 0x03 );
+    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
     hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 150 );   // >100uS.
-    hd44780WriteByte( mcp23017, hd44780, 0x02);
+    hd44780WriteByte( mcp23017, hd44780, 0x02, MODE_COMMAND );
     hd44780ToggleEnable( mcp23017, hd44780 );
     usleep( 50 );   // >37uS.
 
@@ -288,7 +288,7 @@ int8_t initialiseDisplay( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
     hd44780WriteByte( mcp23017, hd44780, ADDRESS_DDRAM, MODE_COMMAND );
 
     // Wipe any previous display.
-    displayClear( mcp23017, hd44780 );
+    hd44780Clear( mcp23017, hd44780 );
 
     printf( "\nFinished initialising LCD display.\n" );
     return 0;
@@ -371,7 +371,7 @@ int8_t hd44780MoveMode( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
     00100 = 0x04,   00000 = 0x00,   11110 = 0x1e
     00000 = 0x00,   00000 = 0x00,   00000 = 0x00
 */
-const uint8_t pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
+const uint8_t pacMan[CUSTOM_MAX][CUSTOM_SIZE] =
 {
  { 0x00, 0x00, 0x0e, 0x1b, 0x1f, 0x1f, 0x0e, 0x00 },
  { 0x00, 0x00, 0x0f, 0x16, 0x1c, 0x1e, 0x0f, 0x00 },
@@ -385,11 +385,11 @@ const uint8_t pacMan[CUSTOM_CHARS][CUSTOM_SIZE] =
 //  Loads custom characters into CGRAM.
 //  ---------------------------------------------------------------------------
 int8_t hd44780LoadCustom( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
-                          const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] )
+                          const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] )
 {
     hd44780WriteByte( mcp23017, hd44780, ADDRESS_CGRAM, MODE_COMMAND );
     uint8_t i, j;
-    for ( i = 0; i < CUSTOM_CHARS; i++ )
+    for ( i = 0; i < CUSTOM_MAX; i++ )
         for ( j = 0; j < CUSTOM_SIZE; j++ )
             hd44780WriteByte( mcp23017, hd44780, newChar[i][j], MODE_DATA );
     hd44780WriteByte( mcp23017, hd44780, ADDRESS_DDRAM, MODE_COMMAND );
@@ -436,7 +436,7 @@ static void rotateString( char *buffer, size_t length, size_t increments )
 void *displayTicker( void *threadTicker )
 {
     // Get parameters.
-    struct tickerStruct *ticker = threadTicker;
+    struct ticker *ticker = threadTicker;
 
     // Close thread if text string is too big.
     if ( ticker->length + ticker->padding > TEXT_MAX_LENGTH )
@@ -484,7 +484,7 @@ void *displayTicker( void *threadTicker )
 void *displayCalendar( void *threadCalendar )
 {
     // Get parameters.
-    struct Calendar *calendar = threadCalendar;
+    struct calendar *calendar = threadCalendar;
 
     // Definitions for time.h functions.
     struct tm *timePtr;

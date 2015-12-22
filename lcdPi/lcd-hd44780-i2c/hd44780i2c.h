@@ -231,7 +231,7 @@ struct hd44780 hd44780 =
 };
 */
 
-struct Text
+struct text
 {
     struct  mcp23017 *mcp23017;
     struct  hd44780  *hd44780;
@@ -240,7 +240,7 @@ struct Text
     char    *buffer; // Display text.
 };
 
-struct Calendar
+struct calendar
 {
     struct  mcp23017 *mcp23017;
     struct  hd44780  *hd44780;
@@ -269,13 +269,13 @@ struct Calendar
             %p  AM/PM.
 */
 
-struct HD44780ticker
+struct ticker
 {
     struct   mcp23017 *mcp23017;
     struct   hd44780  *hd44780;
     char     text[TEXT_MAX_LENGTH]; // Display text.
     uint16_t length;                // Text length.
-    uint16_t padding;               // Text padding between end to start.
+    uint16_t padding;               // Text padding between end and start.
     uint8_t  row;                   // Display row.
     int16_t  increment;             // Size and direction of tick movement.
     uint16_t delay;                 // Delay between ticks (mS).
@@ -433,9 +433,6 @@ struct customChars
     uint8_t data[CUSTOM_MAX][CUSTOM_SIZE];
 };
 
-#define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
-#define CUSTOM_MAX   8 // Max number of custom chars allowed.
-
 //  ---------------------------------------------------------------------------
 //  Loads custom characters into CGRAM.
 //  ---------------------------------------------------------------------------
@@ -445,7 +442,7 @@ struct customChars
     finish.
 */
 int8_t hd44780LoadCustom( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
-                          const uint8_t newChar[CUSTOM_CHARS][CUSTOM_SIZE] );
+                          const uint8_t newChar[CUSTOM_MAX][CUSTOM_SIZE] );
 
 //  Display functions. --------------------------------------------------------
 

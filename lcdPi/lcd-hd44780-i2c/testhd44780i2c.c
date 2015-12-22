@@ -102,6 +102,7 @@
 #include <pthread.h>
 
 #include "hd44780i2c.h"
+#include "mcp23017.h"
 
 int main()
 {
@@ -116,12 +117,32 @@ int main()
     bool mode      = 0;  // Shift cursor.
     bool direction = 0;  // Right.
 
+    int8_t err;
+
+    // Initialise MCP23017.
+    err = mcp23017Init( 0x20 );
+    if ( err < 0 )
+    {
+        printf( "Couldn't init.\n" );
+        return -1;
+    }
+
+    // Set up hd44780 data.
+    hd44780[0]->rs    = 0x0001; // GPB0.
+    hd44780[0]->rw    = 0x0002; // GPB1.
+    hd44780[0]->en    = 0x0004; // GPB2.
+    hd44780[0]->db[0] = 0x0010; // GPB4.
+    hd44780[0]->db[1] = 0x0020; // GPB5.
+    hd44780[0]->db[2] = 0x0040; // GPB6.
+    hd44780[0]->db[3] = 0x0080; // GPB7.
+
     // Initialise display.
-    hd44780i2cInit( data, lines, font, display, cursor, blink,
-                    counter, shift, mode, direction );
+    hd44780Init( mcp23017[0], hd44780[0],
+                 data, lines, font, display, cursor, blink,
+                 counter, shift, mode, direction );
 
     // Set up structure to display current time.
-    struct Calendar time =
+    struct calendar time =
     {
         .row = 1,
         .col = 4,
@@ -132,7 +153,7 @@ int main()
     };
 
     // Set up structure to display current date.
-    struct Calendar date =
+    struct calendar date =
     {
         .row = 0,
         .col = 0,
@@ -143,7 +164,7 @@ int main()
     };
 
     // Set ticker tape properties.
-    struct tickerStruct ticker =
+    struct ticker ticker =
     {
         .text = "This text is really long and used to demonstrate the ticker!",
         .length = strlen( ticker.text ),
@@ -166,8 +187,8 @@ int main()
     {
     };
 
-    displayClear();
-    displayHome();
+    hd44780Clear( mcp23017[0], hd44780[0] );
+    hd44780Home( mcp23017[0], hd44780[0] );
 
     // Clean up threads.
     pthread_mutex_destroy( &displayBusy );
