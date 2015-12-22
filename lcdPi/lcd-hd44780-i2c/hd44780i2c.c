@@ -43,7 +43,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    21/12/2015  This program.
+    Authors:        D.Faulke    22/12/2015  This program.
 
     Contributors:
 
@@ -105,17 +105,11 @@ static char *getBinaryString( uint16_t data, uint8_t bits )
 //  ---------------------------------------------------------------------------
 void hd44780ToggleEnable( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
-    printf( "Toggling enable.\n" );
-
-    mcp23017SetBitsByte( mcp23017, GPIOA, hd44780->en );
+    mcp23017SetBitsByte( mcp23017, OLATA, hd44780->en );
     usleep( 5000 ); // 5mS.
-    printf( "GPIOA -> %s.\n", getBinaryString(
-                              mcp23017ReadByte( mcp23017, GPIOA ), 8 ));
 
-    mcp23017ClearBitsByte( mcp23017, GPIOA, hd44780->en );
+    mcp23017ClearBitsByte( mcp23017, OLATA, hd44780->en );
     usleep( 5000 ); // 5mS.
-    printf( "GPIOA -> %s.\n", getBinaryString(
-                              mcp23017ReadByte( mcp23017, GPIOA ), 8 ));
 }
 
 //  ---------------------------------------------------------------------------
@@ -135,15 +129,26 @@ int8_t hd44780WriteByte( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
 */
 
     // Set RS bit according to mode.
-    mcp23017SetBitsByte( mcp23017, GPIOA, hd44780->rs * mode );
+    if ( mode == 0 )
+    {
+        printf( "Writing command %s.\n", getBinaryString( data, 8 ));
+        mcp23017ClearBitsByte( mcp23017, OLATA, hd44780->rs );
+    }
+    else
+    {
+        printf( "Writing data %s.\n", getBinaryString( data, 8 ));
+        mcp23017SetBitsByte( mcp23017, OLATA, hd44780->rs );
+    }
 
     // Write byte to HD44780 via MCP23017.
-    mcp23017WriteByte( mcp23017, GPIOB, data );
+    mcp23017WriteByte( mcp23017, OLATB, data );
 
-    printf( "GPIOB <- %s.\n", getBinaryString( data, 8 ));
-    printf( "GPIOB -> %s GPIOA -> %s.\n",
-            getBinaryString( mcp23017ReadByte( mcp23017, GPIOB ), 8 ),
-            getBinaryString( mcp23017ReadByte( mcp23017, GPIOA ), 8 ));
+    printf( "GPIOB <- %s, GPIOA <- %s.\n",
+            getBinaryString( data, 8 ),
+            getBinaryString( hd44780->rs, 8 ));
+    printf( "GPIOB -> %s, GPIOA -> %s.\n",
+            getBinaryString( mcp23017ReadByte( mcp23017, OLATB ), 8 ),
+            getBinaryString( mcp23017ReadByte( mcp23017, OLATA ), 8 ));
 
     // Toggle enable bit to send nibble via output latch.
     hd44780ToggleEnable( mcp23017, hd44780 );

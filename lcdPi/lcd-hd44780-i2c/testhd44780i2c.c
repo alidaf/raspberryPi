@@ -126,6 +126,17 @@ int main()
         return -1;
     }
 
+    // Set direction of GPIOs.
+    mcp23017WriteByte( mcp23017[0], IODIRA, 0x00 ); // Output.
+    mcp23017WriteByte( mcp23017[0], IODIRB, 0x00 ); // Output.
+
+    // Writes to latches are the same as writes to GPIOs.
+    mcp23017WriteByte( mcp23017[0], OLATA, 0x00 ); // Clear pins.
+    mcp23017WriteByte( mcp23017[0], OLATB, 0x00 ); // Clear pins.
+
+    // Set BANK bit for 8-bit mode.
+    mcp23017WriteByte( mcp23017[0], IOCONA, 0x80 );
+
     printf( "Initialised MCP23017.\n" );
 
     struct hd44780 *hd44780this;
@@ -157,6 +168,7 @@ int main()
                  counter, shift, mode, direction );
 
     printf( "Initialised display.\n" );
+    hd44780WriteString( mcp23017[0], hd44780[0], "Initialised" );
 
     // Set up structure to display current time.
     struct calendar time =
