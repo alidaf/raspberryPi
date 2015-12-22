@@ -225,7 +225,7 @@ int8_t hd44780Home( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 //  ---------------------------------------------------------------------------
 //  Initialises display. Must be called before any other display functions.
 //  ---------------------------------------------------------------------------
-int8_t hd44780init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
+int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
                     bool data,    bool lines,  bool font,
                     bool display, bool cursor, bool blink,
                     bool counter, bool shift,

@@ -46,7 +46,6 @@
     Changelog:
 
         v0.1    Original version.
-        v0.2    Rewrote code into libraries.
 
 //  Information. --------------------------------------------------------------
 
@@ -127,19 +126,31 @@ int main()
         return -1;
     }
 
+    printf( "Initialised MCP23017.\n" );
+
+    struct hd44780 *hd44780this;
+
+    hd44780this = malloc( sizeof( struct hd44780 ));
+
     // Set up hd44780 data.
-    hd44780[0]->rs    = 0x0001; // GPB0.
-    hd44780[0]->rw    = 0x0002; // GPB1.
-    hd44780[0]->en    = 0x0004; // GPB2.
-    hd44780[0]->db[0] = 0x0010; // GPB4.
-    hd44780[0]->db[1] = 0x0020; // GPB5.
-    hd44780[0]->db[2] = 0x0040; // GPB6.
-    hd44780[0]->db[3] = 0x0080; // GPB7.
+    hd44780this->rs    = 0x0001; // GPB0.
+    hd44780this->rw    = 0x0002; // GPB1.
+    hd44780this->en    = 0x0004; // GPB2.
+    hd44780this->db[0] = 0x0010; // GPB4.
+    hd44780this->db[1] = 0x0020; // GPB5.
+    hd44780this->db[2] = 0x0040; // GPB6.
+    hd44780this->db[3] = 0x0080; // GPB7.
+
+    hd44780[0] = hd44780this;
+
+    printf( "Initialised data structure.\n" );
 
     // Initialise display.
     hd44780Init( mcp23017[0], hd44780[0],
                  data, lines, font, display, cursor, blink,
                  counter, shift, mode, direction );
+
+    printf( "Initialised display.\n" );
 
     // Set up structure to display current time.
     struct calendar time =
