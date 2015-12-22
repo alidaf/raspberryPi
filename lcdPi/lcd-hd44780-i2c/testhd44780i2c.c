@@ -122,7 +122,7 @@ int main()
     err = mcp23017Init( 0x20 );
     if ( err < 0 )
     {
-        printf( "Couldn't init.\n" );
+        printf( "Couldn't init. Try loading i2c-dev module.\n" );
         return -1;
     }
 
@@ -132,14 +132,20 @@ int main()
 
     hd44780this = malloc( sizeof( struct hd44780 ));
 
+/*
+    +---------------------------------------------------------------+
+    |             GPIOB             |             GPIOA             |
+    |-------------------------------+-------------------------------|
+    | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    |---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|
+    |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|RS |R/W| E |---|---|---|---|---|
+    +---------------------------------------------------------------+
+*/
+
     // Set up hd44780 data.
-    hd44780this->rs    = 0x0001; // GPB0.
-    hd44780this->rw    = 0x0002; // GPB1.
-    hd44780this->en    = 0x0004; // GPB2.
-    hd44780this->db[0] = 0x0010; // GPB4.
-    hd44780this->db[1] = 0x0020; // GPB5.
-    hd44780this->db[2] = 0x0040; // GPB6.
-    hd44780this->db[3] = 0x0080; // GPB7.
+    hd44780this->rs    = 0x80; // HD44780 RS pin.
+    hd44780this->rw    = 0x40; // HD44780 R/W pin.
+    hd44780this->en    = 0x20; // HD44780 E pin.
 
     hd44780[0] = hd44780this;
 
@@ -163,6 +169,8 @@ int main()
         .delay = 0.5
     };
 
+    printf( "Initialised calendar time data structure.\n" );
+
     // Set up structure to display current date.
     struct calendar date =
     {
@@ -173,6 +181,8 @@ int main()
         .format[1] = "%a %d %b %Y",
         .delay = 360
     };
+
+    printf( "Initialised calendar date data structure.\n" );
 
     // Set ticker tape properties.
     struct ticker ticker =
@@ -185,9 +195,13 @@ int main()
         .delay = 300
     };
 
+    printf( "Initialised ticker data structure.\n" );
+
     // Create threads and mutex for animated display functions.
     pthread_mutex_init( &displayBusy, NULL );
     pthread_t threads[2];
+
+    printf( "Initialised threads.\n" );
 
     pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
     pthread_create( &threads[1], NULL, displayCalendar, (void *) &time );

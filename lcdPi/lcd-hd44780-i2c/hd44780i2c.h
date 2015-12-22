@@ -121,22 +121,59 @@
     Wiring the HD44780 Display to the MCP23017:
 
         The MCP23017 has two 8-bit ports (PORTA & PORTB) that can operate in
-        8-bit or 16-bit modes. The RS, R/W, E and DB4-DB7 need to be attached
-        to GPIOs on either PORTA (GPA0-GPA7) or PORTB (GPB0-GPB7). Further
-        displays can share the same GPIOs except the E pin, which must have a
-        unique GPIO for each display.
+        8-bit or 16-bit modes. This driver assumes that the HD44780 display is
+        attached to the MCP23017 in 8-bit mode with all data pins (DB0-DB7)
+        attached to GPIOB. The RS, R/W, and E pins are attached to GPIOA.
+        Further displays can share the same GPIOs except the E pin, which must
+        have a unique GPIOA pin for each display.
 
-        This driver uses 16-bit mode to allow up to 10 devices to use the
-        MCP23017. If any other devices are connected, they should not be
-        affected as long as 16-bit mode remains unchanged.
+        This driver uses 8-bit mode to allow up to 6 devices to use a single
+        MCP23017. If any other devices are connected, they should only operate
+        by setting individual pins rather than an 8-bit write to the PORT.
 
-        It is advised that the RS, R/W & E pins, and the DB4-DB7 pins are on
-        contiguous GPIOs to make it easier to send byte data.
+                       GND
+                        |    10k
+        +-----------+   +---\/\/\--x
+        | pin | Fn  |   |     |
+        |-----+-----|   |     |   ,----------------------------------,
+        |   1 | VSS |---'     |   | ,--------------------------------|-,
+        |   2 | VDD |--> 5V   |   | | ,------------------------------|-|-,
+        |   3 | Vo  |---------'   | | |                              | | |
+        |   4 | RS  |-------------' | | +-----------( )-----------+  | | |
+        |   5 | R/W |---------------' | |  Fn  | pin | pin |  Fn  |  | | |
+        |   6 | E   |-----------------' |------+-----+-----+------|  | | |
+        |   7 | DB0 |------------------>| GPB0 |  01 | 28  | GPA7 |<-' | |
+        |   8 | DB1 |------------------>| GPB1 |  02 | 27  | GPA6 |<---' |
+        |   9 | DB2 |------------------>| GPB2 |  03 | 26  | GPA5 |<-----'
+        |  10 | DB3 |------------------>| GPB3 |  04 | 25  | GPA4 |
+        |  11 | DB4 |------------------>| GPB4 |  05 | 24  | GPA3 |
+        |  12 | DB5 |------------------>| GPB5 |  06 | 23  | GPA2 |
+        |  13 | DB6 |------------------>| GPB6 |  07 | 22  | GPA1 |
+        |  14 | DB7 |------------------>| GPB7 |  08 | 21  | GPA0 |
+        |  15 | A   |--+----------------|  VDD |  09 | 20  | INTA |
+        |  16 | K   |--|----+-----------|  VSS |  10 | 19  | INTB |
+        +-----------+  |    |           |   NC |  11 | 18  | RST  |----> +3.3V.
+                       |    |      ,----|  SCL |  12 | 17  | A2   |---,
+                       |    |      |  ,-|  SDA |  13 | 16  | A1   |---+-> GND
+                       |    |      |  | |   NC |  14 | 15  | A0   |---'
+                       v    v      |  | +-------------------------+
+                      +5V  GND     |  |
+                                 {-+  +-}
+                                 {  <<  } Logic level shifter *
+                                 {-+  +-}   (bi-directional)
+                                   |  |
+                                   v  v
+                                SCL1  SDA1
 
-        The HD44780 operates slightly faster at 5V but 3.3V works fine. The
-        MCP23017 expander can operate at both levels. The Pi's I2C pins have
-        pull-up resistors that should protect against 5V levels but use a
-        logic level shifter if there is any doubt.
+    Notes:  Vo is connected to the wiper of a 10k trim pot to adjust the
+            contrast. A similar (perhaps 5k) pot, could be used to adjust the
+            backlight but connecting to 3.3V works OK instead. These displays
+            are commonly sold with a single 10k pot.
+
+            * The HD44780 operates slightly faster at 5V but 3.3V works fine.
+            The MCP23017 expander can operate at both levels. The Pi's I2C
+            pins have pull-up resistors that should protect against 5V levels
+            but use a logic level shifter if there is any doubt.
 */
 
 #ifndef HD44780I2C_H
@@ -148,7 +185,7 @@
 #define BITS_BYTE          8 // Number of bits in a byte.
 #define BITS_NIBBLE        4 // Number of bits in a nibble.
 #define PINS_DATA          4 // Number of data pins used.
-#define HD44780_MAX       10 // Max number of displays (single MCP23017).
+#define HD44780_MAX        6 // Max number of displays (single MCP23017).
 #define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
 
 // These should be replaced by command line options.
@@ -209,27 +246,12 @@ pthread_mutex_t displayBusy; // Locks further writes to display until finished.
 
 struct hd44780
 {
-    uint16_t rs;    // MCP23017 GPIO pin address for HD44780 RS pin.
-    uint16_t rw;    // MCP23017 GPIO pin address for HD44780 R/W pin.
-    uint16_t en;    // MCP23017 GPIO pin address for HD44780 EN pin.
-    uint16_t db[4]; // MCP23017 GPIO pin addresses for HD44780 DB4-DB7 pins.
+    uint8_t rs;    // MCP23017 GPIOA pin address for HD44780 RS pin.
+    uint8_t rw;    // MCP23017 GPIOA pin address for HD44780 R/W pin.
+    uint8_t en;    // MCP23017 GPIOA pin address for HD44780 E pin.
 };
 
 struct hd44780 *hd44780[HD44780_MAX];
-
-/*
-struct hd44780 hd44780 =
-{
-    // BANK = 1 (8-bit mode).
-    .rs     = 0x0001, // GPB0.
-    .rw     = 0x0002, // GPB1.
-    .en     = 0x0004, // GPB2.
-    .db[0]  = 0x0010, // GPB4.
-    .db[1]  = 0x0020, // GPB5.
-    .db[2]  = 0x0040, // GPB6.
-    .db[3]  = 0x0080  // GPB7.
-};
-*/
 
 struct text
 {

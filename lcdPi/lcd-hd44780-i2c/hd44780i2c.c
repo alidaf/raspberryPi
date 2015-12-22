@@ -87,11 +87,11 @@
 //  ---------------------------------------------------------------------------
 //  Returns binary string for a number of bits.
 //  ---------------------------------------------------------------------------
-static char *getBinaryString( uint8_t data, uint8_t bits )
+static char *getBinaryString( uint16_t data, uint8_t bits )
 {
     static char binary[128]; // Arbitrary limit.
     if ( bits > 128 ) bits = 128;
-    uint8_t i;
+    uint16_t i;
     for ( i = 0; i < bits; i++ )
         binary[i] = (( data >> ( bits - i - 1 )) & 1 ) + '0';
     binary[i] = '\0';
@@ -105,10 +105,17 @@ static char *getBinaryString( uint8_t data, uint8_t bits )
 //  ---------------------------------------------------------------------------
 void hd44780ToggleEnable( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 {
-    mcp23017SetBitsWord( mcp23017, GPIOA, hd44780->en );
+    printf( "Toggling enable.\n" );
+
+    mcp23017SetBitsByte( mcp23017, GPIOA, hd44780->en );
     usleep( 5000 ); // 5mS.
-    mcp23017ClearBitsWord( mcp23017, GPIOA, hd44780->en );
+    printf( "GPIOA -> %s.\n", getBinaryString(
+                              mcp23017ReadByte( mcp23017, GPIOA ), 8 ));
+
+    mcp23017ClearBitsByte( mcp23017, GPIOA, hd44780->en );
     usleep( 5000 ); // 5mS.
+    printf( "GPIOA -> %s.\n", getBinaryString(
+                              mcp23017ReadByte( mcp23017, GPIOA ), 8 ));
 }
 
 //  ---------------------------------------------------------------------------
@@ -117,45 +124,28 @@ void hd44780ToggleEnable( struct mcp23017 *mcp23017, struct hd44780 *hd44780 )
 int8_t hd44780WriteByte( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
                          uint8_t data, bool mode )
 {
-    uint8_t  i;             // Loop counter.
-    uint8_t  hi, lo;        // Data nibbles.
-    uint16_t mcp23017Data;  // Data to send via MCP23017.
+/*
+    +---------------------------------------------------------------+
+    |             GPIOB             |             GPIOA             |
+    |-------------------------------+-------------------------------|
+    | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    |---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|
+    |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|RS |R/W| E |---|---|---|---|---|
+    +---------------------------------------------------------------+
+*/
 
-    // LCD is in 4-bit mode so byte needs to be separated into nibbles.
-    hi = ( data >> BITS_NIBBLE ) & 0xf;
-    lo = data & 0xf;
-
-    if ( !mode ) printf( "\nCommand byte = 0x%02x.\n", data );
-    else printf( "\nData byte = 0x%02x.\n", data );
-
-    // High nibble first.
     // Set RS bit according to mode.
-    mcp23017Data = hd44780->rs * mode;
+    mcp23017SetBitsByte( mcp23017, GPIOA, hd44780->rs * mode );
 
-    for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits.
-        mcp23017Data |= ( hd44780->db[i] * (( hi << i ) & 0x1 ));
+    // Write byte to HD44780 via MCP23017.
+    mcp23017WriteByte( mcp23017, GPIOB, data );
 
-    // Write byte to MCP23017 via output latch.
-    printf( "Writing high nibble 0x%x.\n", hi );
-    mcp23017SetBitsWord( mcp23017, GPIOA, mcp23017Data );
-
-    // Toggle enable bit to send nibble via output latch.
-    printf( "Toggling EN bit for high nibble.\n" );
-    hd44780ToggleEnable( mcp23017, hd44780 );
-
-    // Low nibble next.
-    // Create a byte containing the address of the MCP23017 pins to be changed.
-    mcp23017Data = hd44780->rs * mode; // Set RS pin according to mode.
-
-    for ( i = 0; i < BITS_NIBBLE; i++ ) // Add GPIO bits.
-        mcp23017Data |= ( hd44780->db[i] * (( lo < i ) & 0x1 ));
-
-    // Write byte to MCP23017 via output latch.
-    printf( "Writing low nibble 0x%x.\n", lo );
-    mcp23017SetBitsWord( mcp23017, GPIOA, mcp23017Data );
+    printf( "GPIOB <- %s.\n", getBinaryString( data, 8 ));
+    printf( "GPIOB -> %s GPIOA -> %s.\n",
+            getBinaryString( mcp23017ReadByte( mcp23017, GPIOB ), 8 ),
+            getBinaryString( mcp23017ReadByte( mcp23017, GPIOA ), 8 ));
 
     // Toggle enable bit to send nibble via output latch.
-    printf( "Toggling EN bit for low nibble.\n" );
     hd44780ToggleEnable( mcp23017, hd44780 );
 
     return 0;
@@ -238,18 +228,18 @@ int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
     // Sending high nibble first (0x0) causes init to fail and the display
     // subsequently shows garbage.
     printf( "\nInitialising LCD display.\n\n" );
-    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
-    hd44780ToggleEnable( mcp23017, hd44780 );
-    usleep( 4200 );  // >4.1mS.
-    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
-    hd44780ToggleEnable( mcp23017, hd44780 );
-    usleep( 150 );   // >100uS.
-    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
-    hd44780ToggleEnable( mcp23017, hd44780 );
-    usleep( 150 );   // >100uS.
-    hd44780WriteByte( mcp23017, hd44780, 0x02, MODE_COMMAND );
-    hd44780ToggleEnable( mcp23017, hd44780 );
-    usleep( 50 );   // >37uS.
+//    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
+//    hd44780ToggleEnable( mcp23017, hd44780 );
+//    usleep( 4200 );  // >4.1mS.
+//    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
+//    hd44780ToggleEnable( mcp23017, hd44780 );
+//    usleep( 150 );   // >100uS.
+//    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
+//    hd44780ToggleEnable( mcp23017, hd44780 );
+//    usleep( 150 );   // >100uS.
+//    hd44780WriteByte( mcp23017, hd44780, 0x02, MODE_COMMAND );
+//    hd44780ToggleEnable( mcp23017, hd44780 );
+//    usleep( 50 );   // >37uS.
 
     // Set actual function mode - cannot be changed after this point
     // without reinitialising.
@@ -486,6 +476,8 @@ void *displayCalendar( void *threadCalendar )
     // Get parameters.
     struct calendar *calendar = threadCalendar;
 
+    printf( "Set up local calendar data structure.\n" );
+
     // Definitions for time.h functions.
     struct tm *timePtr;
     time_t timeVar;
@@ -494,6 +486,8 @@ void *displayCalendar( void *threadCalendar )
     struct timespec sleepTime = { 0 };
     if ( calendar->delay < 1 )
         sleepTime.tv_nsec = calendar->delay * 1000000000;
+
+    printf( "Set up time types.\n" );
 
     // Display string.
     char buffer[20] = "";
