@@ -350,9 +350,6 @@ struct customCharsStruct
 
 };
 
-#define CUSTOM_SIZE  8 // Size of char (rows) for custom chars (5x8).
-#define CUSTOM_MAX   8 // Max number of custom chars allowed.
-
 //  ---------------------------------------------------------------------------
 //  Loads custom characters into CGRAM.
 //  ---------------------------------------------------------------------------
