@@ -38,7 +38,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    17/12/2015.
+    Authors:        D.Faulke    23/12/2015.
 
     Contributors:
 
@@ -356,7 +356,6 @@ int8_t mcp23017Init( uint8_t addr )
             return -1;
         }
 
-        printf( "Opened I2C device OK.\n" );
         init = true;
     }
 
