@@ -129,28 +129,15 @@ int8_t hd44780WriteByte( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
 
     // Set RS bit according to mode.
     if ( mode == 0 )
-    {
-        printf( "Writing command %s.\n", getBinaryString( data, 8 ));
         mcp23017ClearBitsByte( mcp23017, OLATA, hd44780->rs );
-    }
     else
-    {
-        printf( "Writing data %s.\n", getBinaryString( data, 8 ));
         mcp23017SetBitsByte( mcp23017, OLATA, hd44780->rs );
-    }
 
     // Make sure R/W pin is cleared.
     mcp23017ClearBitsByte( mcp23017, OLATA, hd44780->rw );
 
     // Write byte to HD44780 via MCP23017.
     mcp23017WriteByte( mcp23017, OLATB, data );
-
-    printf( "GPIOB <- %s, GPIOA <- %s.\n",
-            getBinaryString( data, 8 ),
-            getBinaryString( hd44780->rs, 8 ));
-    printf( "GPIOB -> %s, GPIOA -> %s.\n",
-            getBinaryString( mcp23017ReadByte( mcp23017, OLATB ), 8 ),
-            getBinaryString( mcp23017ReadByte( mcp23017, OLATA ), 8 ));
 
     // Toggle enable bit to send nibble via output latch.
     hd44780ToggleEnable( mcp23017, hd44780 );
@@ -237,6 +224,12 @@ int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
                                     | ( lines * FUNCTION_LINES )
                                     | ( font  * FUNCTION_FONT  ),
                       MODE_COMMAND );
+    printf( "Function mode = 0x%02x.\n",
+                      FUNCTION_BASE | ( data  * FUNCTION_DATA  )
+                                    | ( lines * FUNCTION_LINES )
+                                    | ( font  * FUNCTION_FONT  ),
+                      MODE_COMMAND );
+
     // Display off.
     hd44780WriteByte( mcp23017, hd44780, DISPLAY_BASE, MODE_COMMAND );
 
@@ -434,6 +427,8 @@ void *displayTicker( void *threadTicker )
     // Set up a text window equal to the number of display columns.
     char buffer[DISPLAY_COLUMNS];
 
+    hd44780Clear( ticker->mcp23017, ticker->hd44780 );
+
     while ( 1 )
     {
         // Copy the display text.
@@ -475,6 +470,8 @@ void *displayCalendar( void *threadCalendar )
     // Display string.
     char buffer[20] = "";
     uint8_t frame = 0; // Animation frames
+
+    hd44780Clear( calendar->mcp23017, calendar->hd44780 );
 
     while ( 1 )
     {

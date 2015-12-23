@@ -39,7 +39,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    20/12/2015
+    Authors:        D.Faulke    23/12/2015
 
     Contributors:
 
@@ -168,7 +168,11 @@ int main()
     // Set up structure to display current time.
     struct calendar time =
     {
-        .row = 1,
+        .mcp23017 = mcp23017[0],
+        .hd44780 = hd44780[0],
+//        .row = 1,
+//        .col = 4,
+        .row = 0,
         .col = 4,
         .length = 16,
         .format[0] = "%H:%M:%S",
@@ -179,6 +183,8 @@ int main()
     // Set up structure to display current date.
     struct calendar date =
     {
+        .mcp23017 = mcp23017[0],
+        .hd44780 = hd44780[0],
         .row = 0,
         .col = 0,
         .length = 16,
@@ -190,6 +196,8 @@ int main()
     // Set ticker tape properties.
     struct ticker ticker =
     {
+        .mcp23017 = mcp23017[0],
+        .hd44780 = hd44780[0],
         .text = "This text is really long and used to demonstrate the ticker!",
         .length = strlen( ticker.text ),
         .padding = 6,
@@ -202,10 +210,10 @@ int main()
     pthread_mutex_init( &displayBusy, NULL );
     pthread_t threads[2];
 
-    pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
+//    pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
     pthread_create( &threads[1], NULL, displayCalendar, (void *) &time );
 //    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
-//    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
+    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
 
     while (1)
     {

@@ -7,15 +7,6 @@
     port expander.
 
     Copyright 2015 Darren Faulke <darren@alidaf.co.uk>
-    Based on the following guides and codes:
-        HD44780 data sheet.
-        - see https://www.sparkfun.com/datasheets/LCD/HD44780.pdf
-        MCP23017 data sheet.
-        - see http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf
-        An essential article on LCD initialisation by Donald Weiman.
-        - see http://web.alfredstate.edu/weimandn/
-        Interfacing with I2C Devices.
-        - see http://elinux.org/Interfacing_with_I2C_Devices
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -43,7 +34,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    20/12/2015  This program.
+    Authors:        D.Faulke    23/12/2015  This program.
 
     Contributors:
 
