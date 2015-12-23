@@ -255,14 +255,14 @@ struct text
 
 struct calendar
 {
-    struct  mcp23017 *mcp23017;
-    struct  hd44780  *hd44780;
-    uint8_t row;        // Display row (y).
-    uint8_t col;        // Display col (x).
-    uint8_t length;     // Length of formatting string.
-    uint8_t frames;     // Actual number of animation frames.
-    char    *format[2]; // format strings. Use for animating.
-    float   delay;      // Delay between updates (Seconds).
+    struct  mcp23017 *mcp23017; // MCP23017 instance.
+    struct  hd44780  *hd44780;  // HD44780 instance.
+    struct  timeval  delay;     // Delay between updates.
+    uint8_t row;                // Display row (y).
+    uint8_t col;                // Display col (x).
+    uint8_t length;             // Length of formatting string.
+    uint8_t frames;             // Actual number of animation frames.
+    char    *format[2];         // format strings. Use for animating.
 };
 /*
         format[n] is a string containing <time.h> formatting codes.
@@ -284,14 +284,14 @@ struct calendar
 
 struct ticker
 {
-    struct   mcp23017 *mcp23017;
-    struct   hd44780  *hd44780;
+    struct   mcp23017 *mcp23017;    // MCP23017 instance.
+    struct   hd44780  *hd44780;     // HD44780 instance.
+    struct   timeval  delay;        // Delay between updates.
     char     text[TEXT_MAX_LENGTH]; // Display text.
     uint16_t length;                // Text length.
     uint16_t padding;               // Text padding between end and start.
     uint8_t  row;                   // Display row.
     int16_t  increment;             // Size and direction of tick movement.
-    uint16_t delay;                 // Delay between ticks (mS).
 };
 /*
     .increment = Number and direction of characters to rotate.

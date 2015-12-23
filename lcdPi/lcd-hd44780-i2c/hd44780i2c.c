@@ -371,6 +371,21 @@ static void reverseString( char *buffer, size_t start, size_t end )
 };
 
 //  ---------------------------------------------------------------------------
+//  Calculates time difference in milliseconds in diff. Returns 0 on success.
+//  ---------------------------------------------------------------------------
+static int8_t timeDiff( struct timeval *diff, struct timeval *t2,
+                                              struct timeval *t1 )
+{
+    long int d = ( t2->tv_usec + 1000000 * t2->tv_sec ) -
+                 ( t1->tv_usec + 1000000 * t1->tv_sec );
+
+    diff->tv_sec  = d / 1000000;
+    diff->tv_usec = d % 1000000;
+
+    return ( d < 0 ) * -1;
+}
+
+//  ---------------------------------------------------------------------------
 //  Rotates a string passed as buffer by increments.
 //  ---------------------------------------------------------------------------
 static void rotateString( char *buffer, size_t length, size_t increments )
@@ -397,9 +412,9 @@ void *displayTicker( void *threadTicker )
          pthread_exit( NULL );
 
     // Variables for nanosleep function.
-    struct timespec sleepTime = { 0 };  // Structure defined in time.h.
-    sleepTime.tv_sec = 0;
-    sleepTime.tv_nsec = ticker->delay * 1000000;
+    struct timeval sleepTime = { 0 };  // Structure defined in time.h.
+    sleepTime.tv_sec  = ticker->delay->tv_sec;
+    sleepTime.tv_nsec = ticker->delay->tv_nsec;
 
     // Add some padding so rotated text looks better.
     size_t i;
@@ -439,17 +454,21 @@ void *displayTicker( void *threadTicker )
 //  ---------------------------------------------------------------------------
 void *displayCalendar( void *threadCalendar )
 {
+
+    float fac  = 0.9;        // Sleep time factor.
+
     // Get parameters.
     struct calendar *calendar = threadCalendar;
 
     // Definitions for time.h functions.
-    struct tm *timePtr;
+    struct timeval *timePtr;
     time_t timeVar;
+    struct timeval *diff = { 0 };
 
     // Definitions for nanosleep function.
-    struct timespec sleepTime = { 0 };
-    if ( calendar->delay < 1 )
-        sleepTime.tv_nsec = calendar->delay * 1000000000;
+    struct timeval sleepTime = { 0 };
+    sleepTime.tv_sec = calendar->delay->tv_sec;
+    sleepTime.tv_usec = fac * calendar->delay->tv_usec;
 
     // Display string.
     char buffer[20] = "";
@@ -478,8 +497,13 @@ void *displayCalendar( void *threadCalendar )
         pthread_mutex_unlock( &displayBusy );
 
         // Sleep for designated delay.
-        if ( calendar->delay < 1 ) nanosleep( &sleepTime, NULL );
-        else sleep( calendar->delay );
+        nanosleep( &sleepTime, NULL );
+
+        // Loop until time. Adjust fac to make this as small as possible.
+        while ( diff < calendar->delay )
+        {
+            timeDiff( diff, localtime( &timeVar ), timePtr );
+        }
     }
     pthread_exit( NULL );
 };

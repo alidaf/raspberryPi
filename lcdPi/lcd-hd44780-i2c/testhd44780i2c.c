@@ -177,42 +177,43 @@ int main()
     // Set up structure to display current time.
     struct calendar time =
     {
-        .mcp23017 = mcp23017[0],
-        .hd44780 = hd44780[0],
-//        .row = 1,
-//        .col = 4,
+        .mcp23017      = mcp23017[0],  // Initialised MCP23017.
+        .hd44780       = hd44780[0],   // Initialised HD44780.
+        .delay.tv_sec  = 0,            // 0 full seconds.
+        .delay.tv_usec = 500000,       // 0.5 seconds.
         .row = 0,
         .col = 4,
         .length = 16,
         .format[0] = "%H:%M:%S",
-        .format[1] = "%H %M %S",
-        .delay = 0.51
+        .format[1] = "%H %M %S"
     };
 
     // Set up structure to display current date.
     struct calendar date =
     {
-        .mcp23017 = mcp23017[0],
-        .hd44780 = hd44780[0],
+        .mcp23017      = mcp23017[0],  // Initialised MCP23017.
+        .hd44780       = hd44780[0],   // Initialised HD44780.
+        .delay.tv_sec  = 60,           // 1 minute.
+        .delay.tv_usec = 0,            // 0 microseconds.
         .row = 0,
         .col = 0,
         .length = 16,
         .format[0] = "%a %d %b %Y",
-        .format[1] = "%a %d %b %Y",
-        .delay = 360
+        .format[1] = "%a %d %b %Y"
     };
 
     // Set ticker tape properties.
     struct ticker ticker =
     {
-        .mcp23017 = mcp23017[0],
-        .hd44780 = hd44780[0],
+        .mcp23017      = mcp23017[0],  // Initialised MCP23017.
+        .hd44780       = hd44780[0],   // Initialised HD44780.
+        .delay.tv_sec  = 0,            // 0 full seconds.
+        .delay.tv_usec = 300000,       // Microseconds. Adjust for flicker.
         .text = "This text is really long and used to demonstrate the ticker!",
         .length = strlen( ticker.text ),
         .padding = 6,
         .row = 1,
-        .increment = 1,
-        .delay = 300
+        .increment = 1
     };
 
     // Create threads and mutex for animated display functions.
