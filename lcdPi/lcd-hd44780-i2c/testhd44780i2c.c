@@ -53,40 +53,49 @@
 
     For testing, the HD44780 LCD was connected via a breadboard as follows:
 
-                          GND
-        +-----------+      |   10k
-        | pin | Fn  |   ,--+--/\/\/--
-        |-----+-----|   |       |
-        |   1 | VSS |---'       |       +-----------( )-----------+
-        |   1 | VDD |--> 5V     |       |  Fn  | pin | pin |  Fn  |
-        |   2 | Vo  |-----------'       |------+-----+-----+------|
-        |   3 | RS  |------------------>| GPB0 |  01 | 28  | GPA7 |
-        |   4 | R/W |------------------>| GPB1 |  02 | 27  | GPA6 |
-        |   5 | E   |------------------>| GPB2 |  03 | 26  | GPA5 |
-        |   6 | DB0 |                   | GPB3 |  04 | 25  | GPA4 |
-        |   7 | DB1 | ,---------------->| GPB4 |  05 | 24  | GPA3 |
-        |   8 | DB2 | | ,-------------->| GPB5 |  06 | 23  | GPA2 |
-        |   9 | DB3 | | | ,------------>| GPB6 |  07 | 22  | GPA1 |
-        |  10 | DB4 |-' | | ,---------->| GPB7 |  08 | 21  | GPA0 |
-        |  11 | DB5 |---' | |    3.3V <-|  VDD |  09 | 20  | INTA |
-        |  12 | DB6 |-----' |     GND <-|  VSS |  10 | 19  | INTB |
-        |  13 | DB7 |-------'           |   NC |  11 | 18  | RST  |----> +3.3V.
-        |  14 | A   |--> 3.3V      ,----|  SCL |  12 | 17  | A2   |---,
-        |  15 | K   |--> GND       |  ,-|  SDA |  13 | 16  | A1   |---+-> GND
-        +-----------+              |  | |   NC |  14 | 15  | A0   |---'
-                                   |  | +-------------------------+
+                       GND
+                        |    10k
+        +-----------+   +---\/\/\--x
+        | pin | Fn  |   |     |
+        |-----+-----|   |     |   ,----------------------------------,
+        |   1 | VSS |---'     |   | ,--------------------------------|-,
+        |   2 | VDD |--> 5V   |   | | ,------------------------------|-|-,
+        |   3 | Vo  |---------'   | | |                              | | |
+        |   4 | RS  |-------------' | | +-----------( )-----------+  | | |
+        |   5 | R/W |---------------' | |  Fn  | pin | pin |  Fn  |  | | |
+        |   6 | E   |-----------------' |------+-----+-----+------|  | | |
+        |   7 | DB0 |------------------>| GPB0 |  01 | 28  | GPA7 |<-' | |
+        |   8 | DB1 |------------------>| GPB1 |  02 | 27  | GPA6 |<---' |
+        |   9 | DB2 |------------------>| GPB2 |  03 | 26  | GPA5 |<-----'
+        |  10 | DB3 |------------------>| GPB3 |  04 | 25  | GPA4 |
+        |  11 | DB4 |------------------>| GPB4 |  05 | 24  | GPA3 |
+        |  12 | DB5 |------------------>| GPB5 |  06 | 23  | GPA2 |
+        |  13 | DB6 |------------------>| GPB6 |  07 | 22  | GPA1 |
+        |  14 | DB7 |------------------>| GPB7 |  08 | 21  | GPA0 |
+        |  15 | A   |--+----------------|  VDD |  09 | 20  | INTA |
+        |  16 | K   |--|----+-----------|  VSS |  10 | 19  | INTB |
+        +-----------+  |    |           |   NC |  11 | 18  | RST  |-----> +5V
+                       |    |      ,----|  SCL |  12 | 17  | A2   |---,
+                       |    |      |  ,-|  SDA |  13 | 16  | A1   |---+-> GND
+                       |    |      |  | |   NC |  14 | 15  | A0   |---'
+                       v    v      |  | +-------------------------+
+                      +5V  GND     |  |
+                                 {-+  +-}
+                                 {  <<  } Logic level shifter *
+                                 {-+  +-}   (bi-directional)
                                    |  |
-                                   |  v
-                                   v SDA1  } Pi
-                                  SCL1     } I2C
+                                   v  v
+                                SCL1  SDA1
 
     Notes:  Vo is connected to the wiper of a 10k trim pot to adjust the
-            contrast. A similar (perhaps 5k) pot, could be used to adjust the
+            contrast. A similar (perhaps 5k) pot could be used to adjust the
             backlight but connecting to 3.3V works OK instead. These displays
             are commonly sold with a single 10k pot.
 
-            The HD44780 logic voltage doesn't seem to like 3.3V but the
-            MCP23017 can handle 5V signals.
+            * The HD44780 operates slightly faster at 5V but 3.3V works fine.
+            The MCP23017 expander can operate at both levels. The Pi's I2C
+            pins have pull-up resistors that should protect against 5V levels
+            but use a logic level shifter if there is any doubt.
 
 //  ---------------------------------------------------------------------------
 */
@@ -177,7 +186,7 @@ int main()
         .length = 16,
         .format[0] = "%H:%M:%S",
         .format[1] = "%H %M %S",
-        .delay = 0.5
+        .delay = 0.51
     };
 
     // Set up structure to display current date.

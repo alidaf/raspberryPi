@@ -143,7 +143,7 @@
         |  14 | DB7 |------------------>| GPB7 |  08 | 21  | GPA0 |
         |  15 | A   |--+----------------|  VDD |  09 | 20  | INTA |
         |  16 | K   |--|----+-----------|  VSS |  10 | 19  | INTB |
-        +-----------+  |    |           |   NC |  11 | 18  | RST  |----> +3.3V.
+        +-----------+  |    |           |   NC |  11 | 18  | RST  |-----> +5V
                        |    |      ,----|  SCL |  12 | 17  | A2   |---,
                        |    |      |  ,-|  SDA |  13 | 16  | A1   |---+-> GND
                        |    |      |  | |   NC |  14 | 15  | A0   |---'
@@ -157,7 +157,7 @@
                                 SCL1  SDA1
 
     Notes:  Vo is connected to the wiper of a 10k trim pot to adjust the
-            contrast. A similar (perhaps 5k) pot, could be used to adjust the
+            contrast. A similar (perhaps 5k) pot could be used to adjust the
             backlight but connecting to 3.3V works OK instead. These displays
             are commonly sold with a single 10k pot.
 
