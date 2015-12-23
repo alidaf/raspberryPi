@@ -41,7 +41,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    22/12/2015  This program.
+    Authors:        D.Faulke    23/12/2015  This program.
 
     Contributors:
 
@@ -80,22 +80,6 @@
 #include "hd44780i2c.h"
 #include "mcp23017.h"
 
-
-//  Debugging functions. ------------------------------------------------------
-
-//  ---------------------------------------------------------------------------
-//  Returns binary string for a number of bits.
-//  ---------------------------------------------------------------------------
-static char *getBinaryString( uint16_t data, uint8_t bits )
-{
-    static char binary[128]; // Arbitrary limit.
-    if ( bits > 128 ) bits = 128;
-    uint16_t i;
-    for ( i = 0; i < bits; i++ )
-        binary[i] = (( data >> ( bits - i - 1 )) & 1 ) + '0';
-    binary[i] = '\0';
-    return binary;
-};
 
 //  HD44780 display functions. ------------------------------------------------
 
