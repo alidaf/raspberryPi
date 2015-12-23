@@ -105,7 +105,7 @@
 
 int main()
 {
-    bool data      = 0;  // 4-bit mode.
+    bool data      = 1;  // 8-bit mode.
     bool lines     = 1;  // 2 display lines.
     bool font      = 1;  // 5x8 font.
     bool display   = 1;  // Display on.
@@ -137,8 +137,6 @@ int main()
     // Set BANK bit for 8-bit mode.
     mcp23017WriteByte( mcp23017[0], IOCONA, 0x80 );
 
-    printf( "Initialised MCP23017.\n" );
-
     struct hd44780 *hd44780this;
 
     hd44780this = malloc( sizeof( struct hd44780 ));
@@ -160,14 +158,11 @@ int main()
 
     hd44780[0] = hd44780this;
 
-    printf( "Initialised data structure.\n" );
-
     // Initialise display.
     hd44780Init( mcp23017[0], hd44780[0],
                  data, lines, font, display, cursor, blink,
                  counter, shift, mode, direction );
 
-    printf( "Initialised display.\n" );
     hd44780WriteString( mcp23017[0], hd44780[0], "Initialised" );
 
     // Set up structure to display current time.
@@ -181,8 +176,6 @@ int main()
         .delay = 0.5
     };
 
-    printf( "Initialised calendar time data structure.\n" );
-
     // Set up structure to display current date.
     struct calendar date =
     {
@@ -193,8 +186,6 @@ int main()
         .format[1] = "%a %d %b %Y",
         .delay = 360
     };
-
-    printf( "Initialised calendar date data structure.\n" );
 
     // Set ticker tape properties.
     struct ticker ticker =
@@ -207,13 +198,9 @@ int main()
         .delay = 300
     };
 
-    printf( "Initialised ticker data structure.\n" );
-
     // Create threads and mutex for animated display functions.
     pthread_mutex_init( &displayBusy, NULL );
     pthread_t threads[2];
-
-    printf( "Initialised threads.\n" );
 
     pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
     pthread_create( &threads[1], NULL, displayCalendar, (void *) &time );

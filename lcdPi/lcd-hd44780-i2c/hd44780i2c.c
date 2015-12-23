@@ -11,8 +11,6 @@
         HD44780 data sheet.
         - see https://www.sparkfun.com/datasheets/LCD/HD44780.pdf
         MCP23017 data sheet.
-        - see http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf
-        An essential article on LCD initialisation by Donald Weiman.
         - see http://web.alfredstate.edu/weimandn/
         Interfacing with I2C Devices.
         - see http://elinux.org/Interfacing_with_I2C_Devices
@@ -50,6 +48,7 @@
     Changelog:
 
         v0.1    Original version.
+        v0.2    Rewrote to use 8-bit interface.
 
 //  ---------------------------------------------------------------------------
 
@@ -140,6 +139,9 @@ int8_t hd44780WriteByte( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
         mcp23017SetBitsByte( mcp23017, OLATA, hd44780->rs );
     }
 
+    // Make sure R/W pin is cleared.
+    mcp23017ClearBitsByte( mcp23017, OLATA, hd44780->rw );
+
     // Write byte to HD44780 via MCP23017.
     mcp23017WriteByte( mcp23017, OLATB, data );
 
@@ -229,26 +231,7 @@ int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
     // Allow a start-up delay.
     usleep( 42000 ); // >40mS@3V.
 
-    // Need to write low nibbles only as display starts off in 8-bit mode.
-    // Sending high nibble first (0x0) causes init to fail and the display
-    // subsequently shows garbage.
-    printf( "\nInitialising LCD display.\n\n" );
-//    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
-//    hd44780ToggleEnable( mcp23017, hd44780 );
-//    usleep( 4200 );  // >4.1mS.
-//    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
-//    hd44780ToggleEnable( mcp23017, hd44780 );
-//    usleep( 150 );   // >100uS.
-//    hd44780WriteByte( mcp23017, hd44780, 0x03, MODE_COMMAND );
-//    hd44780ToggleEnable( mcp23017, hd44780 );
-//    usleep( 150 );   // >100uS.
-//    hd44780WriteByte( mcp23017, hd44780, 0x02, MODE_COMMAND );
-//    hd44780ToggleEnable( mcp23017, hd44780 );
-//    usleep( 50 );   // >37uS.
-
-    // Set actual function mode - cannot be changed after this point
-    // without reinitialising.
-    printf( "\nSetting LCD functions.\n" );
+    // Set function mode.
     hd44780WriteByte( mcp23017, hd44780,
                       FUNCTION_BASE | ( data  * FUNCTION_DATA  )
                                     | ( lines * FUNCTION_LINES )
@@ -285,7 +268,6 @@ int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
     // Wipe any previous display.
     hd44780Clear( mcp23017, hd44780 );
 
-    printf( "\nFinished initialising LCD display.\n" );
     return 0;
 };
 
@@ -481,8 +463,6 @@ void *displayCalendar( void *threadCalendar )
     // Get parameters.
     struct calendar *calendar = threadCalendar;
 
-    printf( "Set up local calendar data structure.\n" );
-
     // Definitions for time.h functions.
     struct tm *timePtr;
     time_t timeVar;
@@ -491,8 +471,6 @@ void *displayCalendar( void *threadCalendar )
     struct timespec sleepTime = { 0 };
     if ( calendar->delay < 1 )
         sleepTime.tv_nsec = calendar->delay * 1000000000;
-
-    printf( "Set up time types.\n" );
 
     // Display string.
     char buffer[20] = "";
