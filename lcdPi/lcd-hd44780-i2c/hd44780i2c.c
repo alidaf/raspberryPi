@@ -201,7 +201,14 @@ int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
                     bool mode,    bool direction )
 {
     // Allow a start-up delay.
-    usleep( 42000 ); // >40mS@3V.
+    usleep( 40000 );    // >40mS@3V.
+
+    hd44780WriteByte( mcp23017, hd44780, 0x30, MODE_DATA );
+    usleep( 4100 );     // >4.1mS.
+    hd44780WriteByte( mcp23017, hd44780, 0x30, MODE_DATA );
+    usleep( 100 );      // >100uS.
+    hd44780WriteByte( mcp23017, hd44780, 0x30, MODE_DATA );
+    usleep( 100 );      // >100uS.
 
     // Set function mode.
     hd44780WriteByte( mcp23017, hd44780,
@@ -408,9 +415,9 @@ void *displayTicker( void *threadTicker )
          pthread_exit( NULL );
 
     // Variables for nanosleep function.
-    struct timeval sleepTime = { 0 };  // Structure defined in time.h.
-//    sleepTime.tv_sec  = ticker->delay->tv_sec;
-//    sleepTime.tv_nsec = ticker->delay->tv_usec;
+    struct timespec sleepTime = { 0 };  // Structure defined in time.h.
+    sleepTime.tv_sec  = ticker->delay.tv_sec;
+    sleepTime.tv_nsec = ticker->delay.tv_usec * 1000;
 
     // Add some padding so rotated text looks better.
     size_t i;
@@ -436,7 +443,7 @@ void *displayTicker( void *threadTicker )
         pthread_mutex_unlock( &displayBusy );
 
         // Delay for readability.
-//        nanosleep( &sleepTime, NULL );
+        nanosleep( &sleepTime, NULL );
 
         // Rotate the ticker text.
         rotateString( ticker->text, ticker->length, ticker->increment );

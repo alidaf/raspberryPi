@@ -181,7 +181,7 @@ int main()
         .hd44780       = hd44780[0],   // Initialised HD44780.
         .delay.tv_sec  = 0,            // 0 full seconds.
         .delay.tv_usec = 500000,       // 0.5 seconds.
-        .row = 0,
+        .row = 1,
         .col = 4,
         .length = 16,
         .frames = FRAMES_MAX,
@@ -208,8 +208,8 @@ int main()
     {
         .mcp23017      = mcp23017[0],  // Initialised MCP23017.
         .hd44780       = hd44780[0],   // Initialised HD44780.
-        .delay.tv_sec  = 0,            // 0 full seconds.
-        .delay.tv_usec = 300000,       // Microseconds. Adjust for flicker.
+        .delay.tv_sec  = 0,            // Seconds.      }
+        .delay.tv_usec = 100000,       // Microseconds. } Adjust for flicker.
         .text = "This text is really long and used to demonstrate the ticker!",
         .length = strlen( ticker.text ),
         .padding = 6,
@@ -221,7 +221,12 @@ int main()
     pthread_mutex_init( &displayBusy, NULL );
     pthread_t threads[2];
 
-//    pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
+    /*
+        The HD44780 has a slow response so animation times should be as
+        large as possible and not mixed with other routines that have high
+        animation duty, e.g. ticker and time display with animation.
+    */
+    pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
     pthread_create( &threads[1], NULL, displayCalendar, (void *) &time );
 //    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
 //    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
