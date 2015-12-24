@@ -11,9 +11,9 @@ A rotary encoder library providing five different methods of decoding using inte
 Libraries providing support for various displays. 
 
 * hd44780gpio provides support for HD44780 displays in 4-bit mode via GPIOs.
-* hd44780i2c provides the same support but using the I2C bus via a port expander. The MCP23017 expander library used includes bitwise set, clear and toggle modes as well as read/write byte and word modes.
+* hd44780i2c provides the same support but using the I2C bus via a port expander and 8-bit mode. The MCP23017 expander library used includes bitwise set, clear and toggle modes as well as read/write byte and word modes.
 
-These libraries enable up to 8 custom characters for animation, go to any position and display text. Has a tickertape mode that can display text many times larger than the screen size by rotating the text left or right. Some animation examples using custom characters and threading are included. A function to display formattable date and time information with simple animation such as blinking colons between numbers is also provided.
+These libraries can initialise the display into different modes and enable up to 8 custom characters for animation, move to any position and display text. They also have a tickertape mode that can display text many times larger than the screen size by rotating the text left or right. Some animation examples using custom characters and threading are included. The libraries include a function to display formattable date and time information with simple animation such as blinking colons between numbers is also provided.
 
 * amg19264i2c will provide support for the display, and backlight control in the Popcorn C200.
 
