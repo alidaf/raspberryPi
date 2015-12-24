@@ -34,7 +34,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    23/12/2015  This program.
+    Authors:        D.Faulke    24/12/2015
 
     Contributors:
 
@@ -178,6 +178,7 @@
 #define PINS_DATA          4 // Number of data pins used.
 #define HD44780_MAX        6 // Max number of displays (single MCP23017).
 #define TEXT_MAX_LENGTH  512 // Arbitrary length limit for text string.
+#define FRAMES_MAX         2 // Maximum animation frames.
 
 // These should be replaced by command line options.
 #define DISPLAY_COLUMNS   16 // No of LCD display characters.
@@ -255,14 +256,14 @@ struct text
 
 struct calendar
 {
-    struct  mcp23017 *mcp23017; // MCP23017 instance.
-    struct  hd44780  *hd44780;  // HD44780 instance.
-    struct  timeval  delay;     // Delay between updates.
-    uint8_t row;                // Display row (y).
-    uint8_t col;                // Display col (x).
-    uint8_t length;             // Length of formatting string.
-    uint8_t frames;             // Actual number of animation frames.
-    char    *format[2];         // format strings. Use for animating.
+    struct  mcp23017 *mcp23017;  // MCP23017 instance.
+    struct  hd44780  *hd44780;   // HD44780 instance.
+    struct  timeval  delay;      // Delay between updates.
+    uint8_t row;                 // Display row (y).
+    uint8_t col;                 // Display col (x).
+    uint8_t length;              // Length of formatting string.
+    uint8_t frames;              // Actual number of animation frames.
+    char    *format[FRAMES_MAX]; // format strings. Use for animating.
 };
 /*
         format[n] is a string containing <time.h> formatting codes.

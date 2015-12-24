@@ -39,7 +39,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    23/12/2015
+    Authors:        D.Faulke    24/12/2015
 
     Contributors:
 
@@ -184,6 +184,7 @@ int main()
         .row = 0,
         .col = 4,
         .length = 16,
+        .frames = FRAMES_MAX,
         .format[0] = "%H:%M:%S",
         .format[1] = "%H %M %S"
     };
@@ -198,8 +199,8 @@ int main()
         .row = 0,
         .col = 0,
         .length = 16,
-        .format[0] = "%a %d %b %Y",
-        .format[1] = "%a %d %b %Y"
+        .frames = 1,
+        .format[0] = "%a %d %b %Y"
     };
 
     // Set ticker tape properties.
@@ -223,7 +224,7 @@ int main()
 //    pthread_create( &threads[0], NULL, displayCalendar, (void *) &date );
     pthread_create( &threads[1], NULL, displayCalendar, (void *) &time );
 //    pthread_create( &threads[1], NULL, displayPacMan, (void *) pacManRow );
-    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
+//    pthread_create( &threads[1], NULL, displayTicker, (void *) &ticker );
 
     while (1)
     {

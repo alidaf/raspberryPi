@@ -41,7 +41,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    23/12/2015  This program.
+    Authors:        D.Faulke    24/12/2015  This program.
 
     Contributors:
 
@@ -69,6 +69,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/time.h>
 #include <pthread.h>
 #include <unistd.h>
 
@@ -204,11 +205,6 @@ int8_t hd44780Init( struct mcp23017 *mcp23017, struct hd44780 *hd44780,
 
     // Set function mode.
     hd44780WriteByte( mcp23017, hd44780,
-                      FUNCTION_BASE | ( data  * FUNCTION_DATA  )
-                                    | ( lines * FUNCTION_LINES )
-                                    | ( font  * FUNCTION_FONT  ),
-                      MODE_COMMAND );
-    printf( "Function mode = 0x%02x.\n",
                       FUNCTION_BASE | ( data  * FUNCTION_DATA  )
                                     | ( lines * FUNCTION_LINES )
                                     | ( font  * FUNCTION_FONT  ),
@@ -413,8 +409,8 @@ void *displayTicker( void *threadTicker )
 
     // Variables for nanosleep function.
     struct timeval sleepTime = { 0 };  // Structure defined in time.h.
-    sleepTime.tv_sec  = ticker->delay->tv_sec;
-    sleepTime.tv_nsec = ticker->delay->tv_nsec;
+//    sleepTime.tv_sec  = ticker->delay->tv_sec;
+//    sleepTime.tv_nsec = ticker->delay->tv_usec;
 
     // Add some padding so rotated text looks better.
     size_t i;
@@ -440,7 +436,7 @@ void *displayTicker( void *threadTicker )
         pthread_mutex_unlock( &displayBusy );
 
         // Delay for readability.
-        nanosleep( &sleepTime, NULL );
+//        nanosleep( &sleepTime, NULL );
 
         // Rotate the ticker text.
         rotateString( ticker->text, ticker->length, ticker->increment );
@@ -454,31 +450,37 @@ void *displayTicker( void *threadTicker )
 //  ---------------------------------------------------------------------------
 void *displayCalendar( void *threadCalendar )
 {
-
-    float fac  = 0.9;        // Sleep time factor.
-
-    // Get parameters.
+    // Cast void into struct.
     struct calendar *calendar = threadCalendar;
 
     // Definitions for time.h functions.
-    struct timeval *timePtr;
+    struct tm *timePtr;
     time_t timeVar;
-    struct timeval *diff = { 0 };
+
+    // Structs to determine time to sleep at end of loop.
+    struct timeval tpStart; // Time stamp at beginning of loop.
+    struct timeval tpEnd;   // Time stamp at end of loop.
+    struct timeval tpDiff;  // Taken taken to execute loop.
 
     // Definitions for nanosleep function.
-    struct timeval sleepTime = { 0 };
-    sleepTime.tv_sec = calendar->delay->tv_sec;
-    sleepTime.tv_usec = fac * calendar->delay->tv_usec;
+    struct timespec sleepTime = { 0 };
+//    sleepTime.tv_sec = calendar->delay->tv_sec;
+//    sleepTime.tv_usec = calendar->delay->tv_usec;
 
-    // Display string.
-    char buffer[20] = "";
-    uint8_t frame = 0; // Animation frames
+    char buffer[20] = "";   // Display string.
+    uint8_t frame = 0;      // Animation frame.
 
     hd44780Clear( calendar->mcp23017, calendar->hd44780 );
 
     while ( 1 )
     {
-        if ( frame > 1 ) frame = 0;
+
+        // Get time stamp.
+        gettimeofday( &tpStart, NULL );
+
+        // Cycle through frames.
+        if ( frame >= calendar->frames ) frame = 0;
+
         // Get current date & time.
         timeVar = time( NULL );
         timePtr = localtime( &timeVar );
@@ -496,14 +498,19 @@ void *displayCalendar( void *threadCalendar )
         hd44780WriteString( calendar->mcp23017, calendar->hd44780, buffer );
         pthread_mutex_unlock( &displayBusy );
 
+        // Get time stamp and calculate time elapsed.
+        gettimeofday( &tpEnd, NULL );
+        timeDiff( &tpDiff, &tpEnd, &tpStart );
+
+        sleepTime.tv_sec = calendar->delay.tv_sec - tpDiff.tv_sec;
+        sleepTime.tv_nsec = ( calendar->delay.tv_usec - tpDiff.tv_usec ) * 1000;
+
+        if ( sleepTime.tv_sec < 0 ) sleepTime.tv_sec = 0;
+        if ( sleepTime.tv_nsec < 0 ) sleepTime.tv_nsec = 0;
+
         // Sleep for designated delay.
         nanosleep( &sleepTime, NULL );
 
-        // Loop until time. Adjust fac to make this as small as possible.
-        while ( diff < calendar->delay )
-        {
-            timeDiff( diff, localtime( &timeVar ), timePtr );
-        }
     }
     pthread_exit( NULL );
 };
