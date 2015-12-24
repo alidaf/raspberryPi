@@ -31,7 +31,7 @@
     Compile with:
 
     gcc testHD44780gpio.c hd44780.c -Wall -o testhd44780gpio
-                     -lwiringPi -lpthread -lhd44780Pi
+                     -lwiringPi -lpthread
 
     Also use the following flags for Raspberry Pi optimisation:
         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
@@ -39,7 +39,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    14/12/2015  This program.
+    Authors:        D.Faulke    24/12/2015
 
     Contributors:
 

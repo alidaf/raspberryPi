@@ -1,7 +1,7 @@
 /*
 //  ===========================================================================
 
-    hd44780gpioPi:
+    hd44780gpio:
 
     HD44780 LCD display driver for the Raspberry Pi (GPIO version).
 
@@ -38,7 +38,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    14/12/2015  This program.
+    Authors:        D.Faulke    24/12/2015
 
     Contributors:
 
@@ -46,11 +46,11 @@
 
         v0.1    Original version.
         v0.2    Rewrote code into libraries.
+        v0.3    Updated some functions in line with I2C library.
 
 //  ---------------------------------------------------------------------------
 
     To Do:
-        Add animation functions.
         Add routine to check validity of GPIOs.
         Add support for multiple displays.
         Add read function to check ready (replace delays?).

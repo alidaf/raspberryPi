@@ -6,16 +6,16 @@ RaspberryPi projects, libraries and utilities. Read the various header files for
 
 A rotary encoder library providing five different methods of decoding using interrupts. At some point, support for decoder chips may be included with some circuit diagrams. At the moment the decoding routines are interrupt driven but set a global variable that still needs to be polled. It is anticipated that the code will change to avoid this at some point.
 
-###lcdPi:
+###displayPi:
 
-Various libraries providing support for some LCD displays. 
+Libraries providing support for various displays. 
 
-* lcd-hd44780-gpio provides support for HD44780 displays in 4-bit mode via GPIOs.
-* lcd-hd44780-i2c provides the same support but using the I2C bus via a port expander. Still in development but I now have a driver for an MCP23017 port expander working, including bit modes.
+* hd44780gpio provides support for HD44780 displays in 4-bit mode via GPIOs.
+* hd44780i2c provides the same support but using the I2C bus via a port expander. The MCP23017 expander library used includes bitwise set, clear and toggle modes as well as read/write byte and word modes.
 
 These libraries enable up to 8 custom characters for animation, go to any position and display text. Has a tickertape mode that can display text many times larger than the screen size by rotating the text left or right. Some animation examples using custom characters and threading are included. A function to display formattable date and time information with simple animation such as blinking colons between numbers is also provided.
 
-* lcd-amg19264-i2c will provide support for the display, and backlight control in the Popcorn C200.
+* amg19264i2c will provide support for the display, and backlight control in the Popcorn C200.
 
 ###alsaPi:
 

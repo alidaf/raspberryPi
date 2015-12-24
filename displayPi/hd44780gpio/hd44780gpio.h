@@ -1,7 +1,7 @@
 /*
 //  ===========================================================================
 
-    hd44780gpioPi:
+    hd44780gpio:
 
     HD44780 LCD display driver for the Raspberry Pi (GPIO version).
 
@@ -22,7 +22,7 @@
 
 //  ===========================================================================
 
-    Authors:        D.Faulke    14/12/2015.
+    Authors:        D.Faulke    24/12/2015
 
     Contributors:
 
@@ -75,8 +75,8 @@
 
 //  Macros. -------------------------------------------------------------------
 
-#ifndef HD44780GPIOPI_H
-#define HD44780GPIOPI_H
+#ifndef HD44780GPIO_H
+#define HD44780GPIO_H
 
 // Constants. Change these according to needs.
 #define BITS_BYTE          8 // Number of bits in a byte.
