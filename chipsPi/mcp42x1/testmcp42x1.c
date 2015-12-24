@@ -56,24 +56,25 @@
                         +-----------( )-----------+
                         |  Fn  | pin | pin |  Fn  |
                         |------+-----+-----+------|
-                        | CS   |  01 | 14  |  VDD |---> +5V
-                        | SCK  |  02 | 13  |  SDO |
-                        | SDI  |  03 | 12  | SHDN |
-                        | VSS  |  04 | 11  |   WP |
+               CE0 <----| CS   |  01 | 14  |  VDD |---> +5V
+             SCKL1 <----| SCK  |  02 | 13  |  SDO |----> MISO
+              MOSI <----| SDI  |  03 | 12  | SHDN |
+               GND <----| VSS  |  04 | 11  |   NC |----> GND
                         | P1B  |  05 | 10  |  P0B |
      +5V <--------------| P1W  |  06 | 09  |  P0W |-------> +5V
-     GND <--/\/\/--|<|--| P1A  |  07 | 08  |  P0A |--|>|--> GND
-             75R        +-------------------------+
+     GND <--/\/\/--|<|--| P1A  |  07 | 08  |  P0A |--|>|--/\/\/--> GND
+             75R        +-------------------------+        75R
 
-    The LEDs have a forward voltage and current of 1.8V and 20mA respectively
-    so a 160Ohms resistance is ideal (for 5V VDD) for placing in series with
-    it. However, the wiper resistance is 75Ohms so only an 85Ohms resistor is
-    needed.
+        The LEDs have a forward voltage and current of 1.8V and 20mA
+        respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing
+        in series with it. However, the wiper resistance is 75Ohms so only an
+        85Ohms resistor is needed. The closest I have is 75Ohms, which seems
+        fine.
 
                     R = (5 - 1.8) / 20x10-3 = 160 Ohms.
 
-            Wiper resistance = 75 Ohms.
-
+        NC is not internally connected but can be externally connected to VDD
+        or VSS to reduce noise coupling.
 
 //  Information. --------------------------------------------------------------
 
