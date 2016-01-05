@@ -191,6 +191,12 @@ struct mcp42x1 *mcp42x1[MCP42X1_MAX];
             reg = <0x7e204000 0x1000>;
             ...
         };
+
+    The most current dts file is here...
+    https://github.com/raspberrypi/linux/blob/rpi-4.1.y/arch/arm/boot/dts/
+            bcm2835.dtsi
+
+    There doesn't appear to be much in it!
 */
 
 //  Device tree information. --------------------------------------------------
