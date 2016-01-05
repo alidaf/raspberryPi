@@ -277,6 +277,11 @@ struct mcp42x1 *mcp42x1[MCP42X1_MAX];
         Mask for GPFSEL bits = b111 (0x7).
 */
 
+//  Array of GPFSEL{n} addresses.
+uint16_t bcm2835_gpfsel_addr[6] = { BCM2835_GPFSEL0, BCM2835_GPFSEL1,
+                                    BCM2835_GPFSEL2, BCM2835_GPFSEL3,
+                                    BCM2835_GPFSEL4, BCM2835_GPFSEL5 }
+
 typedef enum
 {
     BCM2835_GPFSEL_INPUT  = 0x00,

@@ -175,40 +175,67 @@ void bcm2835_gpio_fsel( uint8_t gpio, uint8_t mode )
     10 GPIOs by setting 3 bits for each, i.e. 30 bits in total. The remaining 2
     bits of each register are reserved, e.g.
 
-            +--------------------------------------------------+
-            |       |        GPIO numbers for GPFSEL{n}        |
-            | bits  |------------+-----------------------------|
-            |       | Mask / n = |  0 |  1 |  2 |  3 |  4 |  5 |
-            |-------+------------+----+----+----+----+----+----+
-            | 00-02 | 0x00000007 | 00 | 10 | 20 | 30 | 40 | 50 |
-            | 03-05 | 0x00000038 | 01 | 11 | 21 | 31 | 41 | 51 |
-            | 06-08 | 0x000001c0 | 02 | 12 | 22 | 32 | 42 | 52 |
-            | 09-11 | 0x00000e00 | 03 | 13 | 23 | 33 | 43 | 53 |
-            | 12-14 | 0x00007000 | 04 | 14 | 24 | 34 | 44 | 54 |
-            | 15-17 | 0x00038000 | 05 | 15 | 25 | 35 | 45 | 55 |
-            | 18-20 | 0x001c0000 | 06 | 16 | 26 | 36 | 46 | 56 |
-            | 21-23 | 0x00e00000 | 07 | 17 | 27 | 37 | 47 | 57 |
-            | 24-26 | 0x07000000 | 08 | 18 | 28 | 38 | 48 | 58 |
-            | 27-29 | 0x38000000 | 09 | 19 | 29 | 39 | 49 | 59 |
-            | 30-31 | 0xc0000000 | -- | -- | -- | -- | -- | -- |
-            +--------------------------------------------------+
+            +--------------------------------------------------------+
+            |       |        GPIO numbers for GPFSEL{n}        |     |
+            | bits  |------------+-----------------------------| off |
+            |       | Mask / n = |  0 |  1 |  2 |  3 |  4 |  5 |     |
+            |-------+------------+----+----+----+----+----+----+-----|
+            | 00-02 | 0x00000007 | 00 | 10 | 20 | 30 | 40 | 50 |  0  |
+            | 03-05 | 0x00000038 | 01 | 11 | 21 | 31 | 41 | 51 |  1  |
+            | 06-08 | 0x000001c0 | 02 | 12 | 22 | 32 | 42 | 52 |  2  |
+            | 09-11 | 0x00000e00 | 03 | 13 | 23 | 33 | 43 | 53 |  3  |
+            | 12-14 | 0x00007000 | 04 | 14 | 24 | 34 | 44 | 54 |  4  |
+            | 15-17 | 0x00038000 | 05 | 15 | 25 | 35 | 45 | 55 |  5  |
+            | 18-20 | 0x001c0000 | 06 | 16 | 26 | 36 | 46 | 56 |  6  |
+            | 21-23 | 0x00e00000 | 07 | 17 | 27 | 37 | 47 | 57 |  7  |
+            | 24-26 | 0x07000000 | 08 | 18 | 28 | 38 | 48 | 58 |  8  |
+            | 27-29 | 0x38000000 | 09 | 19 | 29 | 39 | 49 | 59 |  9  |
+            | 30-31 | 0xc0000000 | -- | -- | -- | -- | -- | -- |  -  |
+            +--------------------------------------------------------+
 
         The equation given in Mike's BCM2835 library to calculate the register
         value and mask is incorrect but the implementation using logical shift
-        is sound and is:
+        is sound and is given as:
 
                 shift = ( gpio % 10 ) * 3.  // Number of logical shifts.
                 mask = 0x07 << shift.       // Bit-mask is 0x07 << shift.
                 data = bits << shift.       // FSEL bits << shift.
 
-        The register address is the gpio base address + GPFSEL0 / 4 + gpio / 10
+        Also, the calculation of paddr looks like it can never move into any
+        GPFSEL above GPFSEL0. I think it should be calculated by:
 
-                gpio    mask    addr
-                 15
+                paddr = bcm2835_gpio + BCM2835_GPFSEL{n}
+            =>  paddr = bcm2835_gpio + gpfsel(n)
+            where
+            gpfsel(n) is an array of GPFSEL addresses and gpio/10 is the index.
+
+        Example calcs.
+                quo is the quotient ( gpio / 10 ).
+                mod is the modulus  ( gpio % 10 ).
+                bcm2835_gpio = 0x20000000.
+                gpfsel[6] = { 0x00, 0x04, 0x08, 0x0c, 0x10, 0x14 }
+
+            +--------------------------------------------+
+            | gpio | quo | mod | mask       | addr       |
+            |------+-----+-----+------------+------------|
+            |  15  |  1  |  5  | 0x00038000 | 0x20000004 |
+            |  19  |  1  |  9  | 0x38000000 | 0x20000004 |
+            |  21  |  2  |  1  | 0x00000038 | 0x20000008 |
+            |  30  |  3  |  0  | 0x00000007 | 0x2000000c |
+            |  32  |  3  |  2  | 0x000001c0 | 0x2000000c |
+            |  37  |  3  |  7  | 0x00e00000 | 0x2000001c |
+            |  42  |  4  |  4  | 0x000001c0 | 0x20000010 |
+            |  43  |  4  |  4  | 0x00000e00 | 0x20000010 |
+            |  54  |  5  |  5  | 0x00007000 | 0x20000014 |
+            +--------------------------------------------+
 */
 {
-    // 
-    volatile uint32_t addr = bcm2835_gpio + BCM2835_GPFSEL0/4 + ( gpio/10 );
+    // Caclulate FSEL address
+    volatile uint32_t addr = bcm2835_gpio + bcm2835_gpfsel_addr[gpio/10];
+    uint8_t     shift = ( gpio % 10 ) * 3;
+    uint32_t    mask  = BCM2835_GPIO_FSEL_MASK << shift;
+    uint32_t    data  = mode << shift;
+    bcm2835_peri_set_bits( addr, data, mask );
 }
 
 void spi_open( void )
