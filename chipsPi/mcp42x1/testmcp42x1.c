@@ -38,7 +38,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    24/12/2015
+    Authors:        D.Faulke    04/01/2016
 
     Contributors:
 
@@ -61,9 +61,10 @@
               MOSI <----| SDI  |  03 | 12  | SHDN |
                GND <----| VSS  |  04 | 11  |   NC |----> GND
                         | P1B  |  05 | 10  |  P0B |
-     +5V <--------------| P1W  |  06 | 09  |  P0W |-------> +5V
+     +5V <--------------| P1W  |  06 | 09  |  P0W |--------------> +5V
      GND <--/\/\/--|<|--| P1A  |  07 | 08  |  P0A |--|>|--/\/\/--> GND
-             75R        +-------------------------+        75R
+             75R   //   +-------------------------+   \\    75R
+                   LED                               LED
 
         The LEDs have a forward voltage and current of 1.8V and 20mA
         respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing
@@ -76,31 +77,6 @@
         NC is not internally connected but can be externally connected to VDD
         or VSS to reduce noise coupling.
 
-//  Information. --------------------------------------------------------------
-
-    The MCP23017 is an I2C bus operated 16-bit I/O port expander.
-
-
-                        +-----------( )-----------+
-                        |  Fn  | pin | pin |  Fn  |
-             100R  LED  |------+-----+-----+------|
-        .---/\/\/--|<|--| GPB0 |  01 | 28  | GPA7 |---/ ---.
-        |---/\/\/--|<|--| GPB1 |  02 | 27  | GPA6 |---/ ---|
-        |---/\/\/--|<|--| GPB2 |  03 | 26  | GPA5 |---/ ---|
-        |---/\/\/--|<|--| GPB3 |  04 | 25  | GPA4 |---/ ---|  8 port
-        |---/\/\/--|<|--| GPB4 |  05 | 24  | GPA3 |---/ ---| dip switch
-        |---/\/\/--|<|--| GPB5 |  06 | 23  | GPA2 |---/ ---|
-        |---/\/\/--|<|--| GPB6 |  07 | 22  | GPA1 |---/ ---|
-        |---/\/\/--|<|--| GPB7 |  08 | 21  | GPA0 |---/ ---|
-        |     +3.3V <---|  VDD |  09 | 20  | INTA |        |
- GND <--'---------------|  VSS |  10 | 19  | INTB |        |
-                        |   NC |  11 | 18  | RST  |--------'----> +3.3V.
-            I2C CLK <---|  SCL |  12 | 17  | A2   |---> GND }
-            I2C I/O <---|  SDA |  13 | 16  | A1   |---> GND } Address = 0x20.
-                        |   NC |  14 | 15  | A0   |---> GND }
-                        +-------------------------+
-
-
 //  ---------------------------------------------------------------------------
 */
 
@@ -112,7 +88,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "mcp23017.h"
+#include "mcp42x1.h"
 
 int main()
 {
