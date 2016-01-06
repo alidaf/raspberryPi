@@ -193,41 +193,74 @@ void bcm2835_gpio_fsel( uint8_t gpio, uint8_t mode )
             | 30-31 | 0xc0000000 | -- | -- | -- | -- | -- | -- |  -  |
             +--------------------------------------------------------+
 
-        The equation given in Mike's BCM2835 library to calculate the register
-        value and mask is incorrect but the implementation using logical shift
-        is sound and is given as:
+        There is a thread discussing the implementation of this function here..
 
-                shift = ( gpio % 10 ) * 3.  // Number of logical shifts.
-                mask = 0x07 << shift.       // Bit-mask is 0x07 << shift.
-                data = bits << shift.       // FSEL bits << shift.
+        https://groups.google.com/forum/#!msg/bcm2835/L-6miubsU0w/5qUpuQIUCgAJ
 
-        Also, the calculation of paddr looks like it can never move into any
-        GPFSEL above GPFSEL0. I think it should be calculated by:
+            shift = ( gpio % 10 ) * 3.  // Number of logical shifts.
+            mask = 0x07 << shift.       // Bit-mask is 0x07 << shift.
+            data = bits << shift.       // FSEL bits << shift.
 
-                paddr = bcm2835_gpio + BCM2835_GPFSEL{n}
-            =>  paddr = bcm2835_gpio + gpfsel(n)
-            where
-            gpfsel(n) is an array of GPFSEL addresses and gpio/10 is the index.
+            e.g. data = b001 = 0x1
 
-        Example calcs.
-                quo is the quotient ( gpio / 10 ).
-                mod is the modulus  ( gpio % 10 ).
-                bcm2835_gpio = 0x20000000.
-                gpfsel[6] = { 0x00, 0x04, 0x08, 0x0c, 0x10, 0x14 }
+                +--------------------------------------------+
+                | gpio | quo | mod | mask       | data       |
+                |------+-----+-----+------------+------------|
+                |  15  |  1  |  5  | 0x00038000 | 0x00008000 |
+                |  19  |  1  |  9  | 0x38000000 | 0x00000000 |
+                |  21  |  2  |  1  | 0x00000038 | 0x00000008 |
+                |  30  |  3  |  0  | 0x00000007 | 0x00000001 |
+                |  32  |  3  |  2  | 0x000001c0 | 0x00000040 |
+                |  37  |  3  |  7  | 0x00e00000 | 0x00200000 |
+                |  42  |  4  |  4  | 0x000001c0 | 0x00000040 |
+                |  43  |  4  |  4  | 0x00000e00 | 0x00000200 |
+                |  54  |  5  |  5  | 0x00007000 | 0x00001000 |
+                +--------------------------------------------+
 
-            +--------------------------------------------+
-            | gpio | quo | mod | mask       | addr       |
-            |------+-----+-----+------------+------------|
-            |  15  |  1  |  5  | 0x00038000 | 0x20000004 |
-            |  19  |  1  |  9  | 0x38000000 | 0x20000004 |
-            |  21  |  2  |  1  | 0x00000038 | 0x20000008 |
-            |  30  |  3  |  0  | 0x00000007 | 0x2000000c |
-            |  32  |  3  |  2  | 0x000001c0 | 0x2000000c |
-            |  37  |  3  |  7  | 0x00e00000 | 0x2000001c |
-            |  42  |  4  |  4  | 0x000001c0 | 0x20000010 |
-            |  43  |  4  |  4  | 0x00000e00 | 0x20000010 |
-            |  54  |  5  |  5  | 0x00007000 | 0x20000014 |
-            +--------------------------------------------+
+        The calculation of paddr is described by...
+
+        bcm2835_gpio is a pointer to the 32-bit address of the GPIO register.
+        We need to calculate the address of the GPFSEL register for a
+        particular GPIO. This means incrementing the pointer for each GPFSEL
+        register and not the address itself!
+
+        +--------------------------------------------+
+        | Register             | Offset | Address    |
+        |----------------------|--------|------------|
+        | GPIO base            | 0x0000 | 0x20000000 | <- bcm2835_gpio
+        | ...                  | ...    | ...        | }
+        | ...                  | ...    | ...        | } n = 0
+        | ...                  | ...    | ...        | }
+        | GPFSEL0 (GPIOs 00-09 | 0x0000 | 0x20000000 | <- bcm2835_gpio + n
+        | GPFSEL1 (GPIOs 10-19 | 0x0004 | 0x20000004 | <- bcm2835_gpio + n + 1
+        | GPFSEL2 (GPIOs 20-29 | 0x0008 | 0x20000008 | <- bcm2835_gpio + n + 2
+        | GPFSEL3 (GPIOs 30-39 | 0x000c | 0x2000000c | <- bcm2835_gpio + n + 3
+        | GPFSEL4 (GPIOs 40-49 | 0x0010 | 0x20000010 | <- bcm2835_gpio + n + 4
+        | GPFSEL5 (GPIOs 50-59 | 0x0014 | 0x20000014 | <- bcm2835_gpio + n + 5
+        +--------------------------------------------+
+
+            Assuming the GPFSEL register offsets are...
+            gpfsel[6] = { 0x08, 0x0c, 0x10, 0x14, 0x18, 0x1c }
+            i.e. n = 2
+
+            quo is the quotient ( gpio / 10 ).
+            paddr = *bcm2835_gpio + BCM2835_GPFSEL0/4 + (pin/10)
+        =>  paddr = *bcm2835_gpio + 2 + (pin/10)
+
+                        +---------------------------+
+                        | gpio | quo | inc | offset |
+                        |------+-----+-----+--------|
+                        |  15  |  1  |  3  | 0x000c |
+                        |  19  |  1  |  3  | 0x000c |
+                        |  21  |  2  |  4  | 0x0010 |
+                        |  30  |  3  |  5  | 0x0010 |
+                        |  32  |  3  |  5  | 0x0010 |
+                        |  37  |  3  |  5  | 0x0010 |
+                        |  42  |  4  |  6  | 0x0014 |
+                        |  43  |  4  |  6  | 0x0014 |
+                        |  54  |  5  |  7  | 0x0018 |
+                        +---------------------------+
+
 */
 {
     // Caclulate FSEL address
