@@ -25,7 +25,7 @@
 
 //  ===========================================================================
 /*
-    Authors:        D.Faulke    06/01/2016
+    Authors:        D.Faulke    07/01/2016
 
     Contributors:
 
@@ -115,23 +115,23 @@
             |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
             +--------------------------------------------------------------+
 
-                RxHW : Forces potentiometer x into shutdown configuration of
-                       the SHDN pin; 0 = normal, 1 = forced.
-                RxA  : Connects/disconnects potentiometer x pin A to/from the
-                       resistor network; 0 = connected, 1 = disconnected.
-                RxW  : Connects/disconnects potentiometer x wiper to/from the
-                       resistor network; 0 = connected, 1 = disconnected.
-                RxB  : Connects/disconnects potentiometer x pin B to/from the
-                       resistor network; 0 = connected, 1 = disconnected.
+            RxHW : Forces potentiometer x into shutdown configuration of
+                   the SHDN pin; 0 = normal, 1 = forced.
+            RxA  : Connects/disconnects potentiometer x pin A to/from the
+                   resistor network; 0 = connected, 1 = disconnected.
+            RxW  : Connects/disconnects potentiometer x wiper to/from the
+                   resistor network; 0 = connected, 1 = disconnected.
+            RxB  : Connects/disconnects potentiometer x pin B to/from the
+                   resistor network; 0 = connected, 1 = disconnected.
 
-                The SHDN pin, when active, overrides the state of these bits.
-
-            Thw resistance networks are controlled.......
+            The SHDN pin, when active, overrides the state of these bits.
 */
+
 
 //  MCP42x1 data. -------------------------------------------------------------
 
-#define MCP42X1_MAX 2 // Limited by number of CS (Chip Select) pins on Pi.
+//  Max number of MCP42X1 chips.
+#define MCP42X1_MAX 2 // SPI0 has 2 chip selects but AUX has 3.
 /*
     Mote:   It is possible to handle the chip select independently of the SPI
             controller and therefore have many more but that is outside the
@@ -141,23 +141,23 @@
 //  MCP42x1 register addresses.
 enum mcp42x1_registers
 {
-     MCP42X1_REG_WIPER0 = 0x00,
-     MCP42X1_REG_WIPER1 = 0x01,
-     MCP42X1_REG_TCON   = 0x04,
-     MCP42X1_REG_STATUS = 0x05
+     MCP42X1_REG_WIPER0 = 0x00, // Wiper for resistor network 0.
+     MCP42X1_REG_WIPER1 = 0x01, // Wiper for resistor network 1.
+     MCP42X1_REG_TCON   = 0x04, // Terminal control.
+     MCP42X1_REG_STATUS = 0x05  // Status.
 };
 
 //  TCON register masks.
 enum mcp42x1_tcon
 {
-    MCP42X1_TCON_R0B  = 0x01,
-    MCP42X1_TCON_R0W  = 0x02,
-    MCP42X1_TCON_R0A  = 0x04,
-    MCP42X1_TCON_R0HW = 0x08,
-    MCP42X1_TCON_R1B  = 0x10,
-    MCP42X1_TCON_R1W  = 0x20,
-    MCP42X1_TCON_R1A  = 0x40,
-    MCP42X1_TCON_R1HW = 0x80
+    MCP42X1_TCON_R0B  = 0x01, // Resistor newtork 0, pin B.
+    MCP42X1_TCON_R0W  = 0x02, // Resistor network 0, wiper.
+    MCP42X1_TCON_R0A  = 0x04, // Resistor network 0, pin A.
+    MCP42X1_TCON_R0HW = 0x08, // Resistor network 0, hardware configuration.
+    MCP42X1_TCON_R1B  = 0x10, // Resistor network 1, pin B.
+    MCP42X1_TCON_R1W  = 0x20, // Resistor network 1, wiper.
+    MCP42X1_TCON_R1A  = 0x40, // Resistor network 1, pin A.
+    MCP42X1_TCON_R1HW = 0x80  // Resistor network 1, hardware configuration.
 };
 
 struct mcp42x1
@@ -168,8 +168,8 @@ struct mcp42x1
 
 struct mcp42x1 *mcp42x1[MCP42X1_MAX];
 
-//  BCM2835 information. ------------------------------------------------------
 
+//  BCM2835 information. ------------------------------------------------------
 /*
     Most recent versions of Linux use device trees to hold hardware information
     including peripheral addresses. Mike MCauley's code defines offsets into
@@ -195,20 +195,24 @@ struct mcp42x1 *mcp42x1[MCP42X1_MAX];
     https://github.com/raspberrypi/linux/blob/rpi-4.1.y/arch/arm/boot/dts/
             bcm2835.dtsi
 
-    There doesn't appear to be much in it!
+    There doesn't appear to be much in it yet!
 */
 
-//  For non-device tree versions, from Raspberry Pi Hardware Reference.
-static const uint32_t bcm2835_peri_base = 0x20000000;
+
+//  Peripheral base address (for non-deice tree versions). --------------------
+static volatile uint32_t bcm2835_peri_base = 0x20000000; // Model 1.
+
 
 //  Offsets for specific peripheral registers. ---------------------------------
 static const uint32_t bcm2835_gpio_base = bcm2835_peri_base + 0x200000;
 static const uint32_t bcm2835_spi_base  = bcm2835_peri_base + 0x204000;
 static const uint32_t bcm2835_aux_base  = bcm2835_peri_base + 0x215000;
 
-//  RPi memory specifics - see Raspberry Pi Hardware Reference, .
+
+//  RPi memory specifics - see Raspberry Pi Hardware Reference. ---------------
 static const uint8_t bcm2835_page_size  = 4 * 1024;
 static const uint8_t bcm2835_block_size = 4 * 1024;
+
 
 //  Register offsets from BCM2835_GPIO_BASE. ----------------------------------
 enum bcm2835_gpio_registers     // BCM2835 ARM Peripherals, section 6.1
@@ -284,6 +288,7 @@ enum bcm2835_aux_registers
     BCM2835_AUX_SPI0_PEEK_REG   = 0xd4  // SPI2 peek.
 };
 
+
 //  BCM2835 GPIO function select registers (GPFSELn). -------------------------
 /*
     Each of the BCM2835 GPIO pins has at least two alternative functions. The
@@ -312,6 +317,8 @@ enum bcm2835_gppud
 //  Reserved                = 0x03
 };
 
+
+//  Core clock. ---------------------------------------------------------------
 #define BCM2835_CORE_FREQ 250000000 // Core clock frequency (250MHz).
 
 
@@ -343,10 +350,7 @@ enum bcm2835_gppud
 
 
 //  SPI register offset address map. ------------------------------------------
-/*
-    See BCM2835 ARM Peripherals, Section 10.5.
-*/
-enum bcm2835_spi_reg
+enum bcm2835_spi_reg // See BCM2835 ARM Peripherals, Section 10.5.
 {
     BCM2835_SPI_CS   // SPI master control and status.
     BCM2835_SPI_FIFO // SPI master Tx and Rx FIFOs.
@@ -385,8 +389,7 @@ enum bcm2835_spi_reg
                 +------+------------+--------+
 */
 
-//  Standard SPI controller (ALT0).
-enum bcm2835_spi_gpio_alt0
+enum bcm2835_spi_gpio_alt0       // Standard SPI controller (ALT0).
 {
     RPI_SPI_ALT0_GPIO_CE1  =  7, // Default GPIO pin for SPI0 CE1 (CS 1).
     RPI_SPI_ALT0_GPIO_CE0  =  8, // Default GPIO pin for SPI0 CE0 (CS 0).
@@ -399,11 +402,10 @@ enum bcm2835_spi_gpio_alt0
     The BCM2835 has two secondary low throughput SPI interfaces, SPI1 & SPI2,
     that need to be enabled in the AUX register before using. One of these
     may be needed if the primary SPI bus is being used for high throughput
-    data like audio.
+    data like audio. The aux controller has an additional chip select pin.
 */
 
-//  Auxiliary SPI controller (ALT4). Note: ALT4 has an additional chip select.
-enum bcm2835_spi_gpio_alt4
+enum bcm2835_spi_gpio_alt4       // Aux SPI controller (ALT4).
 {
     RPI_SPI_ALT4_GPIO_CE2  = 16, // Default GPIO pin for SPIn CE2 (CS2).
     RPI_SPI_ALT4_GPIO_CE1  = 17, // Default GPIO pin for SPIn CE1 (CS1).
@@ -440,7 +442,7 @@ enum bcm2835_spi_gpio_alt4
 #define BCM2835_SPI_CS_MODE(x)    ((x) <<  2) // Chip select mode.
 #define BCM2835_SPI_CS_CS(x)      ((x) <<  0) // Chip select.
 
-enum bcm2835_spi_cs_mode
+enum bcm2835_spi_cs_mode    // Chip select modes.
 {                           //  (CPOL, CPHA)
     BCM2835_SPI_CS_MODE0,   //     (0, 0)
     BCM2835_SPI_CS_MODE1,   //     (0, 1)
@@ -448,7 +450,7 @@ enum bcm2835_spi_cs_mode
     BCM2835_SPI_CS_MODE3    //     (1, 1)
 };
 
-enum bcm2835_spi_cs_cs
+enum bcm2835_spi_cs_cs      // Chip select values.
 {
     BCM2835_SPI_CS_CS0,     // Chip select 0.
     BCM2835_SPI_CS_CS1,     // Chip select 1.

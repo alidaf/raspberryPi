@@ -50,7 +50,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke    05/01/2016
+    Authors:        D.Faulke    07/01/2016
 
     Contributors:
 
@@ -70,6 +70,16 @@
 #include "mcp42x1.h"
 
 
+//  Macros. -------------------------------------------------------------------
+
+//  Number of known Pi revisions.
+#define PI_REVISIONS 17
+
+//  Pi revisions and corresponding ARM processor versions.
+#define PI_REVISION { "0002", "0003", "0004", "0005", "0006", "0007",\
+                      "0008", "0009", "0010", "0012", "0013", "000d",\
+                      "000e", "000f", "a01041", "a21041", "900092" }
+#define PI_ARM_VERS { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 6 }
 /*
 
     Recommended way of addressing registers
@@ -100,30 +110,76 @@
     }
 */
 
+//  Inline functions. ---------------------------------------------------------
 
+inline volatile uint32_t *bcm2835_reg_address( registers reg )
+{
+    return reinterpret_case<volatile uint32_t *>( bcm2835_peri_base + reg );
+}
 
-//  BCM2835 data. -------------------------------------------------------------
-/*
-    Register base address for SPI peripheral.
-    Note: MAP_FAILED is defined in sys/mman.h as ((void*)-1).
-          It is the mmap equivalent of NULL.
-*/
+inline uint32_t bcm2835_reg_read( registers reg )
+{
+    return *bcm2835_reg_address( reg );
+}
 
-//  Physical address of the mapped peripherals block.
-uint32_t *bcm2835_peripherals_base = (uint32_t *)BCM2835_PERI_BASE;
-uint32_t *bcm2835_peripherals_size = (uint32_t *)BCM2835_PERI_SIZE;
+inline void bcm2835_reg_write( registers reg, uint32_t data )
+{
+    *bcm2835_reg_address( reg ) = data;
+}
 
-//  Virtual memory address of the mapped peripherals block.
-uint32_t *bcm2835_peripherals = (uint32_t *)MAP_FAILED;
+//  Local functions. ----------------------------------------------------------
 
-//  Register base addresses for peripherals.
-volatile uint32_t *bcm2835_gpio (uint32_t *)MAP_FAILED; // GPIOs.
-volatile uint32_t *bcm2835_clk  (uint32_t *)MAP_FAILED; // Clock.
-volatile uint32_t *bcm2835_spi0 (uint32_t *)MAP_FAILED; // SPI0.
+//  ---------------------------------------------------------------------------
+//  Returns Pi revision and sets some global variables.
+//  ---------------------------------------------------------------------------
+uint8_t getPiRevision( void )
+{
+
+// Array of Pi revision numbers and ARM processor versions.
+static char *arm_versions[2][PI_REVISIONS] = { PI_REVISION, PI_ARM_VERS };
+
+    FILE *filePtr;                  // File to read in and search.
+    static char line[ 512 ];        // Storage for each line read in.
+    static char token;              // Storage for character token.
+    static unsigned int revision;   // Revision in hex format.
+
+    // Open file for reading.
+    filePtr = fopen( "/proc/cpuinfo", "r" );
+    if ( filePtr == NULL ) return( -1 );
+
+    // Get Revision.
+    while ( fgets( line, sizeof( line ), filePtr ) != NULL )
+        if ( strncmp ( line, "Revision", 8 ) == 0 )
+            if ( !strncasecmp( "revision\t", line, 9 ))
+            {
+                // line should be "string" "colon" "hex string" "line break"
+                sscanf( line, "%s%s%x%c", &line, &token, &revision, &token );
+                    if ( token == '\n' ) break;
+            }
+    fclose ( filePtr ) ;
+
+    // Now compare against arrays to find ARM version.
+    static uint8_t arm = 0;
+    static uint8_t i;
+    for ( i = 0; i < PI_REVISIONS; i++ )
+        if ( revision == strtol( armVersions[0][i], NULL, 16 ))
+            arm = armVersions[1][i];
+
+    // Set peripheral base address according to ARM version.
+    switch( arm )
+    {
+        case 6  : bcm2835_peri_base = 0x20000000; break;
+        case 7  : bcm2835_peri_base = 0x3f000000; break;
+        default : bcm2835_peri_base = 0x20000000; break;
+    }
+
+    if ( arm < 0 ) return 0; // If not found.
+
+    return revision;
+}
 
 
 //  BCM2835 functions. --------------------------------------------------------
-
 /*
     Note on reading/writing BCM2835 registers:
 
