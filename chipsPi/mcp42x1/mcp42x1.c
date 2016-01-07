@@ -70,6 +70,38 @@
 #include "mcp42x1.h"
 
 
+/*
+
+    Recommended way of addressing registers
+    see http://accu.org/index.php/journals/281...
+
+    static const uint32_t baseAddress = 0xfffe0000;
+    enum Registers
+    {
+        REG1 = 0x00,
+        REG2 = 0x01,
+        REG3 = 0x02,
+        ...etc...
+    };
+
+    inline volatile uint8_t *regAddress (Registers reg )
+    {
+        return reinterpret_case<volatile uint32_t *> (baseAddress + reg );
+    }
+
+    inline uint32_t regRead( Registers reg )
+    {
+        return *regAddress( reg );
+    }
+
+    inline void regWrite ( Registers reg, uint32_t data )
+    {
+        *regAddress( reg ) = data;
+    }
+*/
+
+
+
 //  BCM2835 data. -------------------------------------------------------------
 /*
     Register base address for SPI peripheral.
@@ -160,10 +192,17 @@ void bcm2835_peripheral_write_no_barrier( volatile uint32_t *addr,
 void bcm2835_peri_set_bits( volatile uint32_t *addr,
                                      uint32_t data,
                                      uint32_t mask )
+/*
+    Bit twiddling hacks
+*/
 {
+
+
     uint32_t temp = bcm2835_peri_read( addr );
     temp = ( temp & ~mask ) | ( data & mask );
     bcm2835_peri_write( addr, temp );
+
+
 }
 
 //  ---------------------------------------------------------------------------
@@ -264,39 +303,190 @@ void bcm2835_gpio_fsel( uint8_t gpio, uint8_t mode )
 */
 {
     // Caclulate FSEL address
-    volatile uint32_t addr = bcm2835_gpio + bcm2835_gpfsel_addr[gpio/10];
+    volatile uint32_t paddr = bcm2835_gpio + BCM2835_GPFSEL0/4 + ( pin/10 );
     uint8_t     shift = ( gpio % 10 ) * 3;
     uint32_t    mask  = BCM2835_GPIO_FSEL_MASK << shift;
     uint32_t    data  = mode << shift;
-    bcm2835_peri_set_bits( addr, data, mask );
+    bcm2835_peri_set_bits( paddr, data, mask );
 }
 
-void spi_open( void )
+//  SPI functions. ------------------------------------------------------------
+
+//  ---------------------------------------------------------------------------
+//  Enables SPI function on default GPIOs.
+//  ---------------------------------------------------------------------------
+void bcm2835_spi_open( void )
 {
-    // This driver assumes the default pins with GPFSEL alternative function ALT0.
-    gpio_fn_select( GPIO_PIN_CE0,  GPFSEL_ALTFN0 );
-    gpio_fn_select( GPIO_PIN_CE1,  GPFSEL_ALTFN0 );
-    gpio_fn_select( GPIO_PIN_MISO, GPFSEL_ALTFN0 );
-    gpio_fn_select( GPIO_PIN_MOSI, GPFSEL_ALTFN0 );
-    gpio_fn_select( GPIO_PIN_CLK,  GPFSEL_ALTFN0 );
+    // This driver uses the default pins with GPFSEL alternative function ALT0.
+    bcm2835_gpio_fsel( SPI_GPIO_CE0,  BCM2835_GPFSEL_ALT0 );
+    bcm2835_gpio_fsel( SPI_GPIO_CE1,  BCM2835_GPFSEL_ALT0 );
+    bcm2835_gpio_fsel( SPI_GPIO_MISO, BCM2835_GPFSEL_ALT0 );
+    bcm2835_gpio_fsel( SPI_GPIO_MOSI, BCM2835_GPFSEL_ALT0 );
+    bcm2835_gpio_fsel( SPI_GPIO_CLK,  BCM2835_GPFSEL_ALT0 );
 
     // Set SPI CS register to default values (0).
-    volatile uint32_t *addr;
-    addr = spi0 + SPI0_CS / 4; // Why / 4?
-    spi_write( addr, 0 );
+    volatile uint32_t *paddr;
+    paddr = bcm2835_spi0 + BCM2835_SPI0_CS / 4;
+    bcm2835_peri_write( paddr, 0 );
 
     // Clear FIFOs.
-    spi_write_nb( addr, SPIO_CS_CLEAR );
+    bcm2835_peri_write_nb( paddr, BCM2835_SPIO_CS_CLEAR );
 }
 
-void spi_close( void )
+//  ---------------------------------------------------------------------------
+//  Returns default SPI GPIOs back to inputs.
+//  ---------------------------------------------------------------------------
+void bcm2835_spi_close( void )
 {
     // Set all SPI GPIO pins to input mode.
-    gpio_fn_select( GPIO_CE0,  GPFSEL_INPUT );
-    gpio_fn_select( GPIO_CE1,  GPFSEL_INPUT );
-    gpio_fn_select( GPIO_MISO, GPFSEL_INPUT );
-    gpio_fn_select( GPIO_MOSI, GPFSEL_INPUT );
-    gpio_fn_select( GPIO_CLK,  GPFSEL_INPUT );
+    bcm2835_gpio_fsel( SPI_GPIO_CE0,  BCM2835_GPFSEL_INPUT );
+    bcm2835_gpio_fsel( SPI_GPIO_CE1,  BCM2835_GPFSEL_INPUT );
+    bcm2835_gpio_fsel( SPI_GPIO_MISO, BCM2835_GPFSEL_INPUT );
+    bcm2835_gpio_fsel( SPI_GPIO_MOSI, BCM2835_GPFSEL_INPUT );
+    bcm2835_gpio_fsel( SPI_GPIO_CLK,  BCM2835_GPFSEL_INPUT );
+}
+
+//  ---------------------------------------------------------------------------
+//  Sets clock divider to determine SPI bus speed.
+//  ---------------------------------------------------------------------------
+void bcm2835_spi_setDivider( uint16_t divider );
+/*
+    SPI0_CLK register:
+
+            +---------------------------------------+
+            | Bits  | Function  | Description       |
+            |-------+-----------+-------------------|
+            | 16-31 | ------    | Reserved.         |
+            | 00-15 | CDIV      | Clock divider.    |
+            +---------------------------------------+
+
+            SCLK = Core clock / CDIV.
+            if CDIV = 0, divisor is 65536.
+
+    According to the datasheet, CDIV must be a power of 2 with odd numbers
+    rounded down, i.e.
+
+            CDIV = n^2, where n = 2, 4, 6, 8...256.
+
+    However, a forum thread suggests that this may be an error and CDIV may
+    actually be any even multiple of 2, i.e.
+
+            CDIV = n * 2, where n = 2, 4, 6, 8...32768.
+
+    see https://www.raspberrypi.org/forums/viewtopic.php?f=44&t=43442&p=347073
+
+    The fastest possible bus speed is with divider = 2, i.e.
+
+                    250MHz / 2 = 125MHz.
+*/
+{
+    volatile uint32_t *paddr = bcm2835_spi0 + BCM2835_SPI0_CLK / 4;
+    bcm2835_peri_write( paddr, divider );
+}
+
+//  ---------------------------------------------------------------------------
+//  Sets SPI data mode.
+//  ---------------------------------------------------------------------------
+/*
+    There are 4 modes, which are set by the CPOL (clock polarity) and CPHA
+    (clock phase) bits in the CS register:
+
+        +---------------------------------------------------------------+
+        | CPOL | CPHA | Mode | Description                              |
+        |------+------+------+------------------------------------------|
+        |   0  |   0  |   0  | Normal clock, sampled on rising edge.    |
+        |   0  |   1  |   1  | Normal clock, sampled on falling edge.   |
+        |   1  |   0  |   2  | Inverted clock, sampled on rising edge.  |
+        |   1  |   1  |   3  | Inverted clock, sampled on falling edge. |
+        +---------------------------------------------------------------+
+
+    All slaves on the bus must operate in the same mode.
+*/
+void bcm2835_spi_setDataMode( uint8_t mode )
+{
+    volatile uint32_t *paddr = bcm2835_spi0 + BCM2835_SPI0_CS / 4;
+    uint32_t mask = ( BCM2835_SPI0_CS_CPOL | BCM2835_SPI0_CS_CPHA );
+    uint32_t data = mode << 2; // CPHA and CPOL are bits 2 and 3 of CS reg.
+    bcm2835_peri_set_bits( paddr, data, mask );
+}
+
+//  ---------------------------------------------------------------------------
+//  Transfers 1 byte on SPI bus in polled mode (simultaneous read and write).
+//  ---------------------------------------------------------------------------
+uint8_t bcm2835_spi_transferBytePolled( uint8_t data )
+/*
+    Polled software operation from BCM2835 ARM Peripherals:
+
+    (a) Set CS, CPOL and CPHA as required and set TA flag.
+    (b) Poll TXD writing bytes to SPI_FIFO, RXD reading bytes from SPI_FIFO
+        until all data written.
+    (c) Poll DONE until = 1.
+    (d) Set TA = 0.
+*/
+{
+    volatile uint32_t *paddr = bcm2835_spi0 + BCM2835_SPI0_CS / 4;
+    volatile uint32_t *fifo  = bcm2835_spi0 + BCM2835_SPI0_FIFO / 4;
+    volatile uint32_t bits;
+    volatile uint32_t mask;
+
+    // Clear FIFOs
+    bits = BCM2835_SPI0_CS_CLEAR;
+    mask = BCM2835_SPI0_CS_CLEAR;
+    bcm2835_peri_set_bits( paddr, bits, mask );
+
+    // (a) Mode should already be set before calling this function.
+
+    // (a) Set TA (transfer active flag).
+    bits = BCM2835_SPI0_CS_TA;
+    mask = BCM2835_SPI0_CS_TA;
+    bcm2835_peri_set_bits( paddr, bits, mask );
+
+    // (b) Wait for TX FIFO to have space for at least 1 byte (TXD flag = 1).
+    while ( !( bcm2835_peri_read( paddr ) & BCM2835_SPI0_CS_TXD ));
+
+    // Write to FIFO.
+    bcm2835_peri_write_nb( fifo, data );
+
+    // (c) Wait until DONE flag is set.
+    while ( !( bcm2835_peri_read_nb( paddr ) & BCM2835_SPI0_CS_DONE ));
+
+    // Read byte from slave.
+    uint32_t ret;
+    ret = bcm2835_peri_read_nb( fifo );
+
+    // (d) Clear TA (transfer active flag).
+    bits = 0;
+    mask = BCM2835_SPI0_CS_TA;
+    bcm2835_peri_set_bits( paddr, bits, mask );
+
+    return ret;
+}
+
+//  ---------------------------------------------------------------------------
+//  Sets appropriate CS bits for chip select.
+//  ---------------------------------------------------------------------------
+void bcm2835_spi_cs( uint8_t cs )
+{
+    volatile uint32_t *paddr = bcm2835_spi0 + BCM2835_SPI0_CS / 4;
+    uint32_t data = cs;
+    uint32_t mask = BCM2835_SPI0_CS_CS;
+    bcm2835_peri_set_bits( paddr, data, mask );
+}
+
+//  ---------------------------------------------------------------------------
+//  Sets chip select polarity.
+//  ---------------------------------------------------------------------------
+void bcm2835_spi_setPolarity( uint8_t cs, uint8_t polarity )
+/*
+    cs is 0, 1 or 2.
+    polarity is 0 (active low) or 1 (active high).
+*/
+{
+    volatile uint32_t *paddr = bcm2835_spi0 + BCM2835_SPI0_CS / 4;
+    uint8_t shift = cs + 21; // Lowest CS bit is 21 (CSPOL0).
+    uint32_t data = polarity << shift;
+    uint32_t mask = 1 << shift;
+    bcm2835_peri_set_bits( paddr, data, mask );
 }
 
 //  MCP42x1 functions. --------------------------------------------------------
