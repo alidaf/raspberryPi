@@ -23,7 +23,7 @@
 //  ===========================================================================
 */
 
-#define Version "Version 0.1"
+#define TESTMCP42X1_VERSION 01.00
 
 /*
 //  ---------------------------------------------------------------------------
@@ -38,13 +38,13 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke    07/01/2016
+    Authors:        D.Faulke            08/01/2016
 
     Contributors:
 
     Changelog:
 
-        v0.1    Original version.
+        v01.00      Original version.
 
 //  Information. --------------------------------------------------------------
 
@@ -93,180 +93,74 @@
 int main()
 {
 
-    int8_t err = 0; // Return code.
-    int8_t num = 1; // Number of MCP23017 devices.
+    uint8_t  cs    = 0; // Chip select.
+    uint8_t  flags = 0; // SPI flags.
+    uint16_t i, j, k;   // Loop counters.
 
-    // Initialise MCP23017. Only using 1 but should work for up to 8.
-    err = mcp23017Init( 0x20 );
-    if ( err < 0 )
-    {
-        printf( "Couldn't init.\n" );
-        return -1;
-    }
+    // Initialise MCP42X1.
+    /*
+        Setting the SPI flags:
+
+        +-----------------------------------------------------------------+
+        |21|20|19|18|17|16|15|14|13|12|11|10| 9| 8| 7| 6| 5| 4| 3| 2| 1| 0|
+        |-----------------+--+--+-----------+--+--+--+--+--+--+--+--+-----|
+        | word size       | R| T| num bytes | W| A|u2|u1|u0|p2|p1|p0| mode|
+        +-----------------------------------------------------------------+
+
+        MCP42x1 can only operate in 0,0 or 1,1 mode; 0,0 is default.
+        All other values can stay at default = 0.
+        Therefore SPI flags = 0.
+    */
+
+    printf( "Initialising.\n" );
+    printf( "Initialised %d.\n", mcp42x1Init( cs, 0, flags )); // Wiper 0.
+    printf( "Initialised %d.\n", mcp42x1Init( cs, 1, flags )); // Wiper 1.
+    printf( "Finished initialising.\n" );
 
     // Print properties for each device.
     printf( "Properties.\n" );
 
-    uint8_t i; // Loop counter.
-
-    for ( i = 0; i < num; i++ )
+    // Make sure MCP42x1s have been initialised OK.
+    for ( i = 0; (mcp42x1[i] != NULL); i++ )
     {
-        // Start off with BANK = 0.
-        mcp23017[i]->bank = 0;
-        mcp23017WriteByte( mcp23017[i], IOCONA, 0x00 );
-
-        // Make sure MCP23017s have been initialised OK.
         printf( "\tDevice %d:\n", i );
-        printf( "\tHandle = %d,\n", mcp23017[i]->id );
-        printf( "\tAddress = 0x%02x,\n", mcp23017[i]->addr );
-        printf( "\tBank mode = %1d.\n", mcp23017[i]->bank );
-
-        // Set direction of GPIOs and clear latches.
-        mcp23017WriteByte( mcp23017[i], IODIRA, 0xff ); // Input.
-        mcp23017WriteByte( mcp23017[i], IODIRB, 0x00 ); // Output.
-
-        // Writes to latches are the same as writes to GPIOs.
-        mcp23017WriteByte( mcp23017[i], OLATA, 0x00 ); // Clear pins.
-        mcp23017WriteByte( mcp23017[i], OLATB, 0x00 ); // Clear pins.
-
+        printf( "\tDevice handle = %d,\n", mcp42x1[i]->id  );
+        printf( "\tSPI handle    = %d,\n", mcp42x1[i]->spi );
+        printf( "\tChip select   = %d.\n", mcp42x1[i]->cs  );
+        printf( "\tWiper         = %d.\n", mcp42x1[i]->wip );
     }
     printf( "\n" );
 
-    //  Test setting BANK modes: ----------------------------------------------
+    //  Test reading status register. -----------------------------------------
 
-    printf( "Testing writes in both BANK modes.\n" );
+    int16_t status = mcp42x1ReadReg( 0, MCP42X1_REG_STATUS );
+    printf( "Status register = 0x%04x.\n", status );
 
-    uint8_t j, k;   // Loop counters.
+    //  Test setting wiper values. --------------------------------------------
 
-    for ( i = 0; i < num; i++ ) // For each MCP23017.
+    printf( "Starting test. Press a key to continue." );
+    getchar();
+
+    //  Set wiper values to max (fully dimmed).
+    mcp42x1SetResistance ( 0, MCP42X1_RMAX );
+    printf( "Set to maximum.\n" );
+
+    //  Cycle wiper values.
+    for ( i = 0; i < 10; i++ )
     {
-        printf( "MCP23017 %d:\n", i );
-
-        for ( j = 0; j < 2; j++ ) // Toggle BANK bit twice.
+        printf( "Decreasing.\n" );
+        for ( j = MCP42X1_RMAX; j > MCP42X1_RMIN; j-- )
         {
-            printf( "\tBANK %d.\n", mcp23017[i]->bank );
-
-            for ( k = 0; k < 0xff; k++ ) // Write 0x00 to 0xff.
-            {
-                mcp23017WriteByte( mcp23017[i], OLATB, k );
-                usleep( 50000 );
-            }
-
-            // Reset all LEDs.
-            mcp23017WriteByte( mcp23017[i], OLATB, 0x00 );
-
-            // Toggle BANK bit.
-            if ( mcp23017[i]->bank == 0 )
-                mcp23017WriteByte( mcp23017[i], IOCONA, 0x80 );
-            else
-                mcp23017WriteByte( mcp23017[i], IOCONA, 0x00 );
-            mcp23017[i]->bank = !mcp23017[i]->bank;
+            mcp42x1DecResistance( 0 );
+            for ( k = 0; k < 0xffff; k++ ); // Delay.
         }
-
-        // Next MCP23017.
-        printf( "\n" );
+        printf( "Increasing.\n" );
+        for ( j = MCP42X1_RMIN; j < MCP42X1_RMAX; j++ )
+        {
+            mcp42x1IncResistance( 0 );
+            for ( k = 0; k < 0xffff; k++ ); // Delay.
+        }
     }
-
-    //  Test read & check bits functions. -------------------------------------
-
-    printf( "Testing read and bit checks.\n" );
-
-    // Check value of GPIO register set as inputs (PORT A).
-    uint8_t data;
-    bool match = false;
-    for ( i = 0; i < num; i++ )
-    {
-        printf( "MCP23017 %d:\n", i );
-
-        data = mcp23017ReadByte( mcp23017[i], GPIOA );
-        mcp23017WriteByte( mcp23017[i], OLATB, data );
-        printf( "\tGPIOA = 0x%02x, checking...", data );
-        for ( j = 0; j < 0xff; j++ )
-        {
-            match = mcp23017CheckBitsByte( mcp23017[i], GPIOA, j );
-            if ( match ) printf( "matched to 0x%02x.\n", j );
-            match = false;
-        }
-        // Next MCP23017.
-        printf( "\n" );
-    }
-
-    //  Continuously loop through the next tests. -----------------------------
-
-    while ( 1 )
-    {
-
-        //  Test toggle bits function.
-
-        printf( "Testing toggle bits.\n" );
-
-        for ( i = 0; i < num; i++ )
-        {
-            printf( "MCP23017 %d:\n", i );
-
-            printf( "\tAlternating bits.\n" );
-            for ( j = 0; j < 10; j++ )
-            {
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
-                usleep( 100000 );
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x55 );
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
-                usleep( 100000 );
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xaa );
-            }
-
-            printf( "\tAlternating nibbles.\n" );
-            for ( j = 0; j < 10; j++ )
-            {
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
-                usleep( 100000 );
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0x0f );
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
-                usleep( 100000 );
-                mcp23017ToggleBitsByte( mcp23017[i], OLATB, 0xf0 );
-            }
-            // Next MCP23017.
-            printf( "\n" );
-        }
-
-        //  Test set bits function. -------------------------------------------
-
-        printf( "Testing set and clear bits.\n" );
-
-        // Set all LEDs off and light in sequence.
-        uint8_t setBits;
-        uint8_t clearBits;
-        for ( i = 0; i < num; i++ )
-        {
-            printf( "MCP23017 %d:\n", i );
-
-            printf( "Setting and clearing bits 0 - 7 in sequence.\n" );
-            for ( j = 0; j < 10; j++ ) // Sequence through LEDs 10x.
-            {
-                mcp23017WriteByte( mcp23017[i], GPIOB, 0x00 );
-                usleep( 50000 );
-                for ( k = 0; k < 8; k++ )
-                {
-                    setBits = 1 << k;
-                    mcp23017SetBitsByte( mcp23017[i], GPIOB, setBits );
-                    usleep( 50000 );
-                }
-                usleep( 50000 );
-                for ( k = 0; k < 8; k++ )
-                {
-                    clearBits = 1 << k;
-                    mcp23017ClearBitsByte( mcp23017[i], GPIOB, clearBits );
-                    usleep( 50000 );
-                }
-            }
-
-            // Next MCP23017.
-            printf( "\n" );
-        }
-
-    }
-
-    //  End of tests. ---------------------------------------------------------
 
     return 0;
 }

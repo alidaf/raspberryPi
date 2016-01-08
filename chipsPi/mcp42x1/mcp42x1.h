@@ -21,22 +21,23 @@
 */
 //  ===========================================================================
 
-#define MCP42X1_VERSION 0100 // v01.00
+#define MCP42X1_VERSION 01.00
 
 //  ===========================================================================
 /*
-    Authors:        D.Faulke    07/01/2016
+    Authors:        D.Faulke            08/01/2016
 
     Contributors:
 
     Changelog:
 
-        v1.00   Original version.
+        v01.00      Original version.
 */
 //  ===========================================================================
 
 #ifndef MCP42X1_H
 #define MCP42X1_H
+
 
 //  MCP42x1 information. ------------------------------------------------------
 /*
@@ -115,26 +116,57 @@
                    resistor network; 0 = connected, 1 = disconnected.
 
             The SHDN pin, when active, overrides the state of these bits.
+
+            The maximum SCK (serial clock) frequency is 10MHz.
+
+            The only SPI modes supported are 0,0 and 1,1.
+
+        Commands:
+
+            The MCP42x1 has 4 commands:
+
+                +-----------------------------------------------------+
+                | Command    | Size   | addr  |cmd|       data        |
+                |------------+--------+-------+---+-------------------|
+                | Read data  | 16-bit |x|x|x|x|1|1|x|x|x|x|x|x|x|x|x|x|
+                | Write data | 16-bit |x|x|x|x|0|0|x|x|x|x|x|x|x|x|x|x|
+                | Increment  |  8-bit |x|x|x|x|0|1|x|x|-|-|-|-|-|-|-|-|
+                | Decrement  |  8-bit |x|x|x|x|1|0|x|x|-|-|-|-|-|-|-|-|
+                +---------------------------------+-+-+-+-+-+-+-+-+-+-+
+                | Min resistance (x-bit) = 0x000  |0|0|0|0|0|0|0|0|0|0|
+                | Max resistance (7-bit) = 0x080  |0|0|1|0|0|0|0|0|0|0|
+                | Max resistance (8-bit) = 0x100  |0|1|0|0|0|0|0|0|0|0|
+                +-----------------------------------------------------+
 */
 
 
 //  MCP42x1 data. -------------------------------------------------------------
 
-//  Max number of MCP42X1 chips.
-#define MCP42X1_MAX 2 // SPI0 has 2 chip selects but AUX has 3.
-/*
-    Mote:   It is possible to handle the chip select independently of the SPI
-            controller and therefore have many more but that is outside the
-            scope of this driver.
-*/
+//  Max number of MCP42X1 chips, determined by No of chip selects.
+#define MCP42X1_MAX       2 // SPI0 has 2 chip selects but AUX has 3.
+#define MCP42X1_WIP       2 // Number of wipers on MCP42x1.
+#define MCP42X1_RMIN 0x0000 // Minimum wiper value.
+#define MCP42X1_RMAX 0x0100 // Maximum wiper value.
+
+//  Maximum SCK frequency = 10MHz.
+#define MCP42X1_SPI_BAUD 10000000
+
+//  Commands.
+#define MCP42X1_CMD_READ  0x0c00
+#define MCP42X1_CMD_WRITE 0x0000
+#define MCP42X1_CMD_INC   0x04
+#define MCP42X1_CMD_DEC   0x08
+
+//  SPI controller, 0 (primary), 1 (aux) or 2 (aux)
+#define MCP42X1_SPI_CONT   0
 
 //  MCP42x1 register addresses.
 enum mcp42x1_registers
 {
-     MCP42X1_REG_WIPER0 = 0x00, // Wiper for resistor network 0.
-     MCP42X1_REG_WIPER1 = 0x01, // Wiper for resistor network 1.
-     MCP42X1_REG_TCON   = 0x04, // Terminal control.
-     MCP42X1_REG_STATUS = 0x05  // Status.
+     MCP42X1_REG_WIPER0 = 0x00 << 12, // Wiper for resistor network 0.
+     MCP42X1_REG_WIPER1 = 0x01 << 12, // Wiper for resistor network 1.
+     MCP42X1_REG_TCON   = 0x04 << 12, // Terminal control.
+     MCP42X1_REG_STATUS = 0x05 << 12  // Status.
 };
 
 //  TCON register masks.
@@ -150,10 +182,22 @@ enum mcp42x1_tcon
     MCP42X1_TCON_R1HW = 0x80  // Resistor network 1, hardware configuration.
 };
 
+//  Error codes.
+enum mcp42x1_error
+{
+    MCP42X1_ERR_NOSPI   = -1, // Couldn't initialise SPI.
+    MCP42X1_ERR_NOWIPER = -2, // Wiper is invalid.
+    MCP42X1_ERR_NOINIT  = -3, // Couldn't initialise MCP42x1.
+    MCP42X1_ERR_NOMEM   = -4, // Not enough memory.
+    MCP42X1_ERR_DUPLIC  = -5, // Duplicate properties.
+};
+
 struct mcp42x1
 {
-    uint8_t id; // SPI handle.
-    uint8_t cs; // Chip Select.
+    uint8_t id;  // MCP42x1 handle.
+    uint8_t spi; // SPI handle.
+    uint8_t cs;  // Chip Select.
+    uint8_t wip; // Wiper.
 };
 
 struct mcp42x1 *mcp42x1[MCP42X1_MAX];
@@ -162,32 +206,33 @@ struct mcp42x1 *mcp42x1[MCP42X1_MAX];
 //  MCP42x1 functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Writes byte to register of MCP42x1.
+//  Writes bytes to register of MCP42x1.
 //  ---------------------------------------------------------------------------
-int8_t mcp42x1WriteByte( struct mcp42x1 *mcp42x1, uint8_t reg, uint8_t data );
+void mcp42x1WriteReg( uint8_t handle, uint16_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
-//  Reads byte from register of MCP42x1.
+//  Returns value of MCP42x1 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp42x1ReadByte( struct mcp42x1 *mcp42x1, uint8_t reg );
+int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg );
+
+//  ---------------------------------------------------------------------------
+//  Sets wiper resistance.
+//  ---------------------------------------------------------------------------
+void mcp42x1SetResistance( uint8_t handle, uint16_t resistance );
+
+//  ---------------------------------------------------------------------------
+//  Increments wiper resistance.
+//  ---------------------------------------------------------------------------
+void mcp42x1IncResistance( uint8_t handle );
+
+//  ---------------------------------------------------------------------------
+//  Decrements wiper resistance.
+//  ---------------------------------------------------------------------------
+void mcp42x1DecResistance( uint8_t handle );
 
 //  ---------------------------------------------------------------------------
 //  Initialises MCP42x1. Call for each MCP42x1.
 //  ---------------------------------------------------------------------------
-int8_t mcp42x1Init( uint8_t device, uint8_t mode, uint8_t bits, uint16_t divider );
-/*
-    device  : 0 = CS0
-              1 = CS1
-    mode    : SPI_MODE_0 : CPOL = 0, CPHA = 0.
-              SPI_MODE_1 : CPOL = 0, CPHA = 1.
-              SPI_MODE_2 : CPOL = 1, CPHA = 0.
-              SPI_MODE_3 : CPOL = 1, CPHA = 1.
-    bits    : bits per word, usually 8.
-    divider : SPI bus clock divider, multiple of 2 up to 65536.
-              SCLK = Core clock / divider.
-              Core clock = 250MHz.
-              Values of 0, 1 and 65536 are functionally equivalent.
-              The fastest speed is with a value of 2, i.e. 125MHz.
-*/
+int8_t mcp42x1Init( uint8_t cs, uint8_t wip, uint32_t flags );
 
 #endif // #ifndef MCP42X1_H

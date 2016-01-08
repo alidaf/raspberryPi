@@ -42,14 +42,14 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke    08/01/2016
+    Authors:        D.Faulke            08/01/2016
 
     Contributors:
 
 */
 //  ===========================================================================
 
-//  Libraries.
+//  Standard libraries.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -57,6 +57,8 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+
+// pigpio library needs to be installed - see http://abyz.co.uk/rpi/pigpio/
 #include <pigpio.h>
 
 //  Companion header.
@@ -66,122 +68,190 @@
 //  MCP42x1 functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Returns code version.
+//  Writes bytes to register of MCP42x1.
 //  ---------------------------------------------------------------------------
-uint8_t mcp42x1_version( void )
+void mcp42x1WriteReg( uint8_t handle, uint16_t reg, uint16_t data )
 {
-    return MCP42X1_VERSION;
+    union u_write // Need to split command into bytes.
+    {
+        uint16_t full;
+        char    *bytes;
+    } cmd;
+
+    uint8_t len = 16 / sizeof( char );
+
+    cmd.full = MCP42X1_CMD_WRITE; // MCP42x1 write command.
+    cmd.full |= reg;              // Register to write to.
+    cmd.full |= ( data & 0x1ff ); // Mask in lower 9 bits for data.
+
+    printf( "Writing 0x%04x to reg 0x%04x. Command =  0x%04x.\n",
+        data, reg, cmd.full );
+
+    // Send command via SPI bus.
+    spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
 }
 
 //  ---------------------------------------------------------------------------
-//  Writes byte to register of MCP42x1.
+//  Returns value of MCP42x1 register.
 //  ---------------------------------------------------------------------------
-int8_t mcp42x1WriteByte( struct mcp42x1 *mcp42x1,
-                         uint8_t reg, uint8_t data )
+int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg )
 {
-    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
-    uint8_t handle = mcp42x1->id;
 
-    // Get register address for BANK mode.
-    uint8_t addr = mcp42x1Register[reg][bank];
+    union u_read // Need to split command into bytes and join data into word.
+    {
+        uint16_t full;
+        char    *bytes;
+    } cmd, data;
 
-    // Write byte into register.
-    return i2c_smbus_write_byte_data( handle, addr, data );
+    uint8_t len = 16 / sizeof( char );
+
+    cmd.full = MCP42X1_CMD_READ; // MCP42x1 read command
+    cmd.full |= reg;             // MCP42X1 register to read.
+
+    printf( "Reading register 0x%04x. Command =  0x%04x.\n", reg, cmd.full );
+    // Send command via SPI bus.
+    spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
+    // Read return from SPI bus.
+    spiRead( mcp42x1[handle]->spi, data.bytes, len );
+    printf( "Read bytes from register 0x%04x = 0x%04x.\n", reg, data.full );
+
+    return data.full;
 }
 
 //  ---------------------------------------------------------------------------
-//  Reads byte from register of MCP42x1.
+//  Sets wiper resistance.
 //  ---------------------------------------------------------------------------
-int8_t mcp42x1ReadByte( struct mcp42x1 *mcp42x1, uint8_t reg )
+void mcp42x1SetResistance( uint8_t handle, uint16_t resistance )
 {
-    // Should work with IOCON.BANK = 0 or IOCON.BANK = 1 for PORT A and B.
-    uint8_t handle = mcp42x1->id;
+    union u_write // Need to split command into bytes.
+    {
+        uint16_t full;
+        char    *bytes;
+    } cmd;
 
-    // Get register address for BANK mode.
-    uint8_t addr = mcp42x1Register[reg][bank];
+    uint8_t len = 16 / sizeof( char );
 
-    // Return register value.
-    return i2c_smbus_read_byte_data( handle, addr );
+    cmd.full = MCP42X1_CMD_WRITE; // MCP42x1 write command.
+
+    cmd.full |= mcp42x1[handle]->wip;   // Set wiper to change.
+    cmd.full |= ( resistance & 0x1ff ); // Set value to write.
+
+    printf( "Setting resistance of wiper %d to 0x%03x. Command = 0x%04x.\n",
+        mcp42x1[handle]->wip, resistance, cmd.full );
+
+    // Send command via SPI bus.
+    spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
+}
+
+//  ---------------------------------------------------------------------------
+//  Increments wiper resistance.
+//  ---------------------------------------------------------------------------
+void mcp42x1IncResistance( uint8_t handle )
+{
+    union u_write // Need to split command into bytes.
+    {
+        uint8_t full;
+        char   *bytes;
+    } cmd;
+
+    uint8_t len = 8 / sizeof( char );
+
+    cmd.full = MCP42X1_CMD_INC;       // MCP42x1 increment command.
+    cmd.full |= mcp42x1[handle]->wip; // Set wiper to change.
+
+    printf( "Incrementing resistance of wiper %d. Command = 0x%04x.\n",
+        mcp42x1[handle]->wip, cmd.full );
+
+    // Send command via SPI bus.
+    spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
+}
+
+//  ---------------------------------------------------------------------------
+//  Decrements wiper resistance.
+//  ---------------------------------------------------------------------------
+void mcp42x1DecResistance( uint8_t handle )
+{
+    union u_write
+    {
+        uint8_t full;
+        char   *bytes;
+    } cmd;
+
+    uint8_t len = 8 / sizeof( char );
+
+    cmd.full = MCP42X1_CMD_DEC;       // MCP42x1 decrement command.
+    cmd.full |= mcp42x1[handle]->wip; // Set wiper to change.
+
+    printf( "Decrementing resistance of wiper %d. Command = 0x%04x.\n",
+        mcp42x1[handle]->wip, cmd.full );
+
+    // Send command via SPI bus.
+    spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
 }
 
 //  ---------------------------------------------------------------------------
 //  Initialises MCP42x1. Call for each MCP42x1.
 //  ---------------------------------------------------------------------------
-int8_t mcp42x1Init( uint8_t device, uint8_t mode, uint8_t bits, uint16_t divider );
+int8_t mcp42x1Init( uint8_t cs, uint8_t wip, uint32_t flags )
+//  SPI configuration flags - see pigpio.
 {
     struct mcp42x1 *mcp42x1this; // MCP42x1 instance.
     static bool init = false;    // 1st call.
-    static uint8_t index = 0;
+    static uint8_t index = 0;    // Index for mcp42x1 struct.
 
-    int8_t  id = -1;
-    uint8_t i;
+    int8_t spi = -1; // SPI handle.
+    int8_t id  = -1; // MCP41x1 handle.
+    uint8_t i;       // Counter.
 
-    // Set all intances of mcp23017 to NULL on first call.
-    if ( !init )
-        for ( i = 0; i < MCP42X1_MAX; i++ )
-            mcp42x1[i] = NULL;
-
-    // Chip Select must be 0 or 1.
-
-    static const char *spiDevice; // Path to SPI file system.
-    switch ( device )
+    if ( !init ) // 1st call to this function.
     {
-        case 1:
-            spiDevice = "/dev/spidev0.1";
-            break;
-        default:
-            spiDevice = "/dev/spidev0.0";
-            break;
+        for ( i = 0; i < MCP42X1_MAX * MCP42X1_WIP; i++ )
+            mcp42x1[i] = NULL;
+        gpioInitialise();
     }
 
+    // Check network is within limits.
+    if (( wip < 0 ) | ( wip > ( MCP42X1_WIP - 1 ))) return MCP42X1_ERR_NOWIPER;
 
     // Get next available ID.
-    for ( i = 0; i < MCP42X1_MAX; i++ )
-	{
-        if ( mcp42x1[i] == NULL )  // If not already init.
+    for ( i = 0; i < MCP42X1_MAX * MCP42X1_WIP; i++ )
+        if ( mcp42x1[i] == NULL ) // If not already init.
         {
-            id = i;                // Next available id.
-            i = MCP42X1_MAX;       // Break.
+            id = i; // Next available id.
+            i = MCP42X1_MAX * MCP42X1_WIP; // Break.
         }
-    }
 
-    if ( id < 0 ) return -1;        // Return if not init.
+    if ( id < 0 ) return MCP42X1_ERR_NOINIT; // Return if not init.
 
-    // Allocate memory for MCP23017 data structure.
+    // Allocate memory for MCP42x1 data structure.
     mcp42x1this = malloc( sizeof ( struct mcp42x1 ));
 
     // Return if unable to allocate memory.
-    if ( mcp42x1this == NULL ) return -1;
+    if ( mcp42x1this == NULL ) return MCP42X1_ERR_NOMEM;
 
+    // Now init the SPI.
     if (!init)
-    {
-        // I2C communication is via device file (/dev/i2c-1).
-        if (( id = open( spiDevice, O_RDWR )) < 0 )
-        {
-            printf( "Couldn't open SPI device %s.\n", spiDevice );
-            printf( "Error code = %d.\n", errno );
-            return -1;
-        }
-
-        init = true;
-    }
+        spi = spiOpen( MCP42X1_SPI_CONT, MCP42X1_SPI_BAUD, flags );
+    if ( spi < 0 ) return MCP42X1_ERR_NOSPI;
 
     // Create an instance of this device.
-    mcp42x1this->id = id; // SPI handle.
-    mcp42x1this->device = device; // Chip Select of MCP42x1.
+    mcp42x1this->id  = id;  // Handle.
+    mcp42x1this->spi = spi; // SPI handle.
+    mcp42x1this->cs  = cs;  // Chip Select of MCP42x1.
+    mcp42x1this->wip = wip; // Resistor network.
+
+    // Check this instance is unique.
+    for ( i = 0; i < index; i++ )
+        if ((( mcp42x1this->id  == mcp42x1[i]->id  ) ||
+             ( mcp42x1this->spi == mcp42x1[i]->spi ) ||
+             ( mcp42x1this->cs  == mcp42x1[i]->cs  )) &&
+             ( mcp42x1this->wip == mcp42x1[i]->wip ))
+            return MCP42X1_ERR_DUPLIC;
+
     mcp42x1[index] = mcp42x1this; // Copy into instance.
-    index++;                        // Increment index for next MCP23017.
 
-    uint8_t mode
+    index++;
+    init = true;
 
-    // Set slave address for this device.
-    if ( ioctl( mcp42x1this->id, I2C_SLAVE, mcp42x1this->addr ) < 0 )
-    {
-        printf( "Couldn't set slave address 0x%02x.\n", mcp42x1this->addr );
-        printf( "Error code = %d.\n", errno );
-        return -1;
-    }
-
-    return id;
+    return mcp42x1this->id;
 };
-
