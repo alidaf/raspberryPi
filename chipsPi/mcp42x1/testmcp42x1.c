@@ -87,6 +87,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pigpio.h>
 
 #include "mcp42x1.h"
 
@@ -112,13 +113,14 @@ int main()
         Therefore SPI flags = 0.
     */
 
-    printf( "Initialising.\n" );
+    printf( "Initialising.\n\n" );
+    gpioInitialise();
     printf( "Initialised %d.\n", mcp42x1Init( cs, 0, flags )); // Wiper 0.
     printf( "Initialised %d.\n", mcp42x1Init( cs, 1, flags )); // Wiper 1.
-    printf( "Finished initialising.\n" );
+    printf( "\n" );
 
     // Print properties for each device.
-    printf( "Properties.\n" );
+    printf( "Properties.\n\n" );
 
     // Make sure MCP42x1s have been initialised OK.
     for ( i = 0; (mcp42x1[i] != NULL); i++ )
@@ -128,8 +130,8 @@ int main()
         printf( "\tSPI handle    = %d,\n", mcp42x1[i]->spi );
         printf( "\tChip select   = %d.\n", mcp42x1[i]->cs  );
         printf( "\tWiper         = %d.\n", mcp42x1[i]->wip );
+        printf( "\n" );
     }
-    printf( "\n" );
 
     //  Test reading status register. -----------------------------------------
 

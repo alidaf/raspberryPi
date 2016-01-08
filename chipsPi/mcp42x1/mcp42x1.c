@@ -109,10 +109,8 @@ int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg )
     cmd.full |= reg;             // MCP42X1 register to read.
 
     printf( "Reading register 0x%04x. Command =  0x%04x.\n", reg, cmd.full );
-    // Send command via SPI bus.
-    spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
-    // Read return from SPI bus.
-    spiRead( mcp42x1[handle]->spi, data.bytes, len );
+    // Send command and receive data via SPI bus.
+    spiXfer( mcp42x1[handle]->spi, cmd.bytes, data.bytes, len );
     printf( "Read bytes from register 0x%04x = 0x%04x.\n", reg, data.full );
 
     return data.full;
@@ -159,7 +157,7 @@ void mcp42x1IncResistance( uint8_t handle )
     cmd.full = MCP42X1_CMD_INC;       // MCP42x1 increment command.
     cmd.full |= mcp42x1[handle]->wip; // Set wiper to change.
 
-    printf( "Incrementing resistance of wiper %d. Command = 0x%04x.\n",
+    printf( "Incrementing resistance of wiper %d. Command = 0x%02x.\n",
         mcp42x1[handle]->wip, cmd.full );
 
     // Send command via SPI bus.
@@ -182,7 +180,7 @@ void mcp42x1DecResistance( uint8_t handle )
     cmd.full = MCP42X1_CMD_DEC;       // MCP42x1 decrement command.
     cmd.full |= mcp42x1[handle]->wip; // Set wiper to change.
 
-    printf( "Decrementing resistance of wiper %d. Command = 0x%04x.\n",
+    printf( "Decrementing resistance of wiper %d. Command = 0x%02x.\n",
         mcp42x1[handle]->wip, cmd.full );
 
     // Send command via SPI bus.
@@ -207,7 +205,6 @@ int8_t mcp42x1Init( uint8_t cs, uint8_t wip, uint32_t flags )
     {
         for ( i = 0; i < MCP42X1_MAX * MCP42X1_WIP; i++ )
             mcp42x1[i] = NULL;
-        gpioInitialise();
     }
 
     // Check network is within limits.
@@ -230,8 +227,8 @@ int8_t mcp42x1Init( uint8_t cs, uint8_t wip, uint32_t flags )
     if ( mcp42x1this == NULL ) return MCP42X1_ERR_NOMEM;
 
     // Now init the SPI.
-    if (!init)
-        spi = spiOpen( MCP42X1_SPI_CONT, MCP42X1_SPI_BAUD, flags );
+//    if (!init)
+        spi = spiOpen( cs, MCP42X1_SPI_BAUD, flags );
     if ( spi < 0 ) return MCP42X1_ERR_NOSPI;
 
     // Create an instance of this device.

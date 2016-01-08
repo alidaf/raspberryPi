@@ -157,9 +157,6 @@
 #define MCP42X1_CMD_INC   0x04
 #define MCP42X1_CMD_DEC   0x08
 
-//  SPI controller, 0 (primary), 1 (aux) or 2 (aux)
-#define MCP42X1_SPI_CONT   0
-
 //  MCP42x1 register addresses.
 enum mcp42x1_registers
 {
