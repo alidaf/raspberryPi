@@ -9,6 +9,10 @@
     Based on the MCP42x1 data sheet:
         - see http://ww1.microchip.com/downloads/en/DeviceDoc/22059b.pdf.
 
+    Uses the pigpio library for SPI access.
+        - see http://abyz.co.uk/rpi/pigpio/
+          and https://github.com/joan2937/pigpio.
+
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 2 of the License, or
@@ -42,7 +46,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            08/01/2016
+    Authors:        D.Faulke            11/01/2016
 
     Contributors:
 
@@ -58,7 +62,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 
-// pigpio library needs to be installed - see http://abyz.co.uk/rpi/pigpio/
+// pigpio library needs to be installed manually.
 #include <pigpio.h>
 
 //  Companion header.
@@ -72,7 +76,7 @@
 //  ---------------------------------------------------------------------------
 void mcp42x1WriteReg( uint8_t handle, uint16_t reg, uint16_t data )
 {
-    union u_write // Need to split command into bytes.
+    union command // Need to split command into bytes.
     {
         uint16_t full;
         char    *bytes;
@@ -84,11 +88,16 @@ void mcp42x1WriteReg( uint8_t handle, uint16_t reg, uint16_t data )
     cmd.full |= reg;              // Register to write to.
     cmd.full |= ( data & 0x1ff ); // Mask in lower 9 bits for data.
 
-    printf( "Writing 0x%04x to reg 0x%04x. Command =  0x%04x.\n",
-        data, reg, cmd.full );
+    printf( "Writing 0x%04x to register 0x%04x.\n", data, reg );
+    printf( "\tSPI Handle    = %d.\n", mcp42x1[handle]->spi );
+    printf( "\tCommand bytes = %s.\n", cmd.bytes );
+    printf( "\tNum bytes     = %d.\n", len );
 
     // Send command via SPI bus.
-    spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
+    uint8_t count = 0;
+    count = spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
+    printf( "Wrote %d bytes via SPI.\n", count );
+
 }
 
 //  ---------------------------------------------------------------------------
@@ -97,7 +106,7 @@ void mcp42x1WriteReg( uint8_t handle, uint16_t reg, uint16_t data )
 int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg )
 {
 
-    union u_read // Need to split command into bytes and join data into word.
+    union data // Need to split command into bytes and join data into word.
     {
         uint16_t full;
         char    *bytes;
@@ -108,10 +117,15 @@ int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg )
     cmd.full = MCP42X1_CMD_READ; // MCP42x1 read command
     cmd.full |= reg;             // MCP42X1 register to read.
 
-    printf( "Reading register 0x%04x. Command =  0x%04x.\n", reg, cmd.full );
+    printf( "Reading register 0x%04x.\n", reg );
+    printf( "\tSPI Handle  = %d.\n", mcp42x1[handle]->spi );
+    printf( "\tCommand     = 0x%04x.\n", cmd.full );
+
     // Send command and receive data via SPI bus.
-    spiXfer( mcp42x1[handle]->spi, cmd.bytes, data.bytes, len );
-    printf( "Read bytes from register 0x%04x = 0x%04x.\n", reg, data.full );
+    uint8_t count = 0;
+    count = spiXfer( mcp42x1[handle]->spi, cmd.bytes, data.bytes, len );
+    printf( "Transferred %d bytes via SPI.\n", count );
+    printf( "Register data = 0x%04x.\n", data.full );
 
     return data.full;
 }
@@ -134,8 +148,12 @@ void mcp42x1SetResistance( uint8_t handle, uint16_t resistance )
     cmd.full |= mcp42x1[handle]->wip;   // Set wiper to change.
     cmd.full |= ( resistance & 0x1ff ); // Set value to write.
 
-    printf( "Setting resistance of wiper %d to 0x%03x. Command = 0x%04x.\n",
-        mcp42x1[handle]->wip, resistance, cmd.full );
+    printf( "Setting resistance of wiper %d to 0x%03x.\n",
+        mcp42x1[handle]->wip, resistance );
+
+    printf( "\tSPI Handle    = %d.\n", mcp42x1[handle]->spi );
+    printf( "\tCommand bytes = %s.\n", cmd.bytes );
+    printf( "\tNum bytes     = %d.\n", len );
 
     // Send command via SPI bus.
     spiWrite( mcp42x1[handle]->spi, cmd.bytes, len );
@@ -227,7 +245,6 @@ int8_t mcp42x1Init( uint8_t cs, uint8_t wip, uint32_t flags )
     if ( mcp42x1this == NULL ) return MCP42X1_ERR_NOMEM;
 
     // Now init the SPI.
-//    if (!init)
         spi = spiOpen( cs, MCP42X1_SPI_BAUD, flags );
     if ( spi < 0 ) return MCP42X1_ERR_NOSPI;
 

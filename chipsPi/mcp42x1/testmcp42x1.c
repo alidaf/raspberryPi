@@ -38,7 +38,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke            08/01/2016
+    Authors:        D.Faulke            11/01/2016
 
     Contributors:
 
@@ -115,8 +115,8 @@ int main()
 
     printf( "Initialising.\n\n" );
     gpioInitialise();
-    printf( "Initialised %d.\n", mcp42x1Init( cs, 0, flags )); // Wiper 0.
-    printf( "Initialised %d.\n", mcp42x1Init( cs, 1, flags )); // Wiper 1.
+    printf( "Wiper 0 SPI %d.\n", mcp42x1Init( cs, 0, flags )); // Wiper 0.
+    printf( "Wiper 1 SPI %d.\n", mcp42x1Init( cs, 1, flags )); // Wiper 1.
     printf( "\n" );
 
     // Print properties for each device.
