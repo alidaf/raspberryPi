@@ -59,10 +59,10 @@ Device memory map:
         |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
         +--------------------------------------------------------------+
 
-**RxHW** : Forces potentiometer x into shutdown configuration of the SHDN pin; 0 = normal, 1 = forced.
-**RxA**  : Connects/disconnects potentiometer x pin A to/from the resistor network; 0 = connected, 1 = disconnected.
-**RxW**  : Connects/disconnects potentiometer x wiper to/from the resistor network; 0 = connected, 1 = disconnected.
-**RxB**  : Connects/disconnects potentiometer x pin B to/from the resistor network; 0 = connected, 1 = disconnected.
+ **RxHW** : Forces potentiometer x into shutdown configuration of the SHDN pin; 0 = normal, 1 = forced.
+ **RxA**  : Connects/disconnects potentiometer x pin A to/from the resistor network; 0 = connected, 1 = disconnected.
+ **RxW**  : Connects/disconnects potentiometer x wiper to/from the resistor network; 0 = connected, 1 = disconnected.
+ **RxB**  : Connects/disconnects potentiometer x pin B to/from the resistor network; 0 = connected, 1 = disconnected.
 
 * The SHDN pin, when active, overrides the state of these bits.
 * The maximum SCK (serial clock) frequency is 10MHz.
@@ -104,6 +104,6 @@ For testing, LEDs were connected via a breadboard as follows:
              75R   //   +-------------------------+   \\    75R
                    LED                               LED
 
-The LEDs have a forward voltage and current of 1.8V and 20mA respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing in series with it. However, the wiper resistance is 75Ohms so only an 85Ohms resistor is needed. The closest I have is 75Ohms, which seems fine.
+The LEDs have a forward voltage and current of 1.8V and 20mA respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing in series with it. However, the wiper resistance is 75Ohms so only an 85 Ohms resistor is needed. The closest I have is 75 Ohms, which seems fine.
 
                     R = (5 - 1.8) / 20x10-3 = 160 Ohms.
