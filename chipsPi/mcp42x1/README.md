@@ -36,27 +36,27 @@ The MCP42x1 is an SPI bus operated Dual 7/8-bit digital potentiometer with non-v
 
 Device memory map:
 
-                        +--------------------------------+
-                        | Addr | Function          | Mem |
-                        |------+-------------------+-----|
-                        | 00h  | Volatile wiper 0. | RAM |
-                        | 01h  | Volatile wiper 1. | RAM |
-                        | 02h  | Reserved.         | --- |
-                        | 03h  | Reserved.         | --- |
-                        | 04h  | Volatile TCON.    | RAM |
-                        | 05h  | Status.           | RAM |
-                        | 06h+ | Reserved.         | --- |
-                        +--------------------------------+
+    +--------------------------------+
+    | Addr | Function          | Mem |
+    |------+-------------------+-----|
+    | 00h  | Volatile wiper 0. | RAM |
+    | 01h  | Volatile wiper 1. | RAM |
+    | 02h  | Reserved.         | --- |
+    | 03h  | Reserved.         | --- |
+    | 04h  | Volatile TCON.    | RAM |
+    | 05h  | Status.           | RAM |
+    | 06h+ | Reserved.         | --- |
+    +--------------------------------+
 
 * All 16 locations are 9 bits wide.
 * The status register at 05h has 5 status bits, 4 of which are reserved. Bit 1 is the shutdown status; 0 = normal, 1 = Shutdown.
 * The **TCON** register (Terminal Control) has 8 control bits, 4 for each wiper:
 
-            +--------------------------------------------------------------+
-            | bit8 | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
-            |------+------+------+------+------+------+------+------+------|
-            |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
-            +--------------------------------------------------------------+
+    +--------------------------------------------------------------+
+    | bit8 | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
+    |------+------+------+------+------+------+------+------+------|
+    |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
+    +--------------------------------------------------------------+
 
 **RxHW** : Forces potentiometer x into shutdown configuration of the SHDN pin; 0 = normal, 1 = forced.
 **RxA**  : Connects/disconnects potentiometer x pin A to/from the resistor network; 0 = connected, 1 = disconnected.
@@ -66,23 +66,24 @@ Device memory map:
 * The SHDN pin, when active, overrides the state of these bits.
 * The maximum SCK (serial clock) frequency is 10MHz.
 * The only SPI modes supported are 0,0 and 1,1.
+
 ---
 Commands:
 
 The MCP42x1 has 4 commands:
 
-                +-----------------------------------------------------+
-                | Command    | Size   | addr  |cmd|       data        |
-                |------------+--------+-------+---+-------------------|
-                | Read data  | 16-bit |x|x|x|x|1|1|x|x|x|x|x|x|x|x|x|x|
-                | Write data | 16-bit |x|x|x|x|0|0|x|x|x|x|x|x|x|x|x|x|
-                | Increment  |  8-bit |x|x|x|x|0|1|x|x|-|-|-|-|-|-|-|-|
-                | Decrement  |  8-bit |x|x|x|x|1|0|x|x|-|-|-|-|-|-|-|-|
-                +---------------------------------+-+-+-+-+-+-+-+-+-+-+
-                | Min resistance (x-bit) = 0x000  |0|0|0|0|0|0|0|0|0|0|
-                | Max resistance (7-bit) = 0x080  |0|0|1|0|0|0|0|0|0|0|
-                | Max resistance (8-bit) = 0x100  |0|1|0|0|0|0|0|0|0|0|
-                +-----------------------------------------------------+
+    +-----------------------------------------------------+
+    | Command    | Size   | addr  |cmd|       data        |
+    |------------+--------+-------+---+-------------------|
+    | Read data  | 16-bit |x|x|x|x|1|1|x|x|x|x|x|x|x|x|x|x|
+    | Write data | 16-bit |x|x|x|x|0|0|x|x|x|x|x|x|x|x|x|x|
+    | Increment  |  8-bit |x|x|x|x|0|1|x|x|-|-|-|-|-|-|-|-|
+    | Decrement  |  8-bit |x|x|x|x|1|0|x|x|-|-|-|-|-|-|-|-|
+    +---------------------------------+-+-+-+-+-+-+-+-+-+-+
+    | Min resistance (x-bit) = 0x000  |0|0|0|0|0|0|0|0|0|0|
+    | Max resistance (7-bit) = 0x080  |0|0|1|0|0|0|0|0|0|0|
+    | Max resistance (8-bit) = 0x100  |0|1|0|0|0|0|0|0|0|0|
+    +-----------------------------------------------------+
 
 ---
 Testing:
@@ -105,5 +106,3 @@ For testing, LEDs were connected via a breadboard as follows:
 The LEDs have a forward voltage and current of 1.8V and 20mA respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing in series with it. However, the wiper resistance is 75Ohms so only an 85Ohms resistor is needed. The closest I have is 75Ohms, which seems fine.
 
                     R = (5 - 1.8) / 20x10-3 = 160 Ohms.
-
-NC is not internally connected but can be externally connected to VDD or VSS to reduce noise coupling.
