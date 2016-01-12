@@ -10,7 +10,7 @@ The **MCP42x1** is an **SPI** bus operated Dual 7/8-bit digital potentiometer wi
                  | SDI  |  03 | 12  | SHDN |
                  | VSS  |  04 | 11  |   NC |
        ,----- // | P1B  |  05 | 10  |  P0B | // -----,
-    R [ ]<--- // | P1W  |  06 | 09  |  P0W | // --->[ ] R
+     R[ ]<--- // | P1W  |  06 | 09  |  P0W | // --->[ ]R
        '----- // | P1A  |  07 | 08  |  P0A | // -----'
                  +-------------------------+
 
@@ -59,13 +59,10 @@ The **MCP42x1** is an **SPI** bus operated Dual 7/8-bit digital potentiometer wi
         |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
         +--------------------------------------------------------------+
 
- **RxHW** : Forces potentiometer x into shutdown configuration of the **SHDN** pin; 0 = normal, 1 = forced.
- 
- **RxA**  : Connects/disconnects potentiometer x pin A to/from the resistor network; 0 = connected, 1 = disconnected.
- 
- **RxW**  : Connects/disconnects potentiometer x wiper to/from the resistor network; 0 = connected, 1 = disconnected.
- 
- **RxB**  : Connects/disconnects potentiometer x pin B to/from the resistor network; 0 = connected, 1 = disconnected.
+**RxHW**: Forces potentiometer x into shutdown configuration of the **SHDN** pin; 0 = normal, 1 = forced.
+**RxA**: Connects/disconnects potentiometer x pin A to/from the resistor network; 0 = connected, 1 = disconnected.
+**RxW**: Connects/disconnects potentiometer x wiper to/from the resistor network; 0 = connected, 1 = disconnected. 
+**RxB**: Connects/disconnects potentiometer x pin B to/from the resistor network; 0 = connected, 1 = disconnected.
 
 * The **SHDN** pin, when active, overrides the state of these bits.
 * The maximum **SCK** (serial clock) frequency is 10 MHz.
@@ -109,4 +106,4 @@ For testing, LEDs were connected via a breadboard as follows:
 
 The LEDs have a forward voltage and current of 1.8 V and 20 mA respectively so a 160 Ohms resistance is ideal (for 5V **VDD**) for placing in series with it. However, the wiper resistance is 75 Ohms so only an 85 Ohms resistor is needed. The closest I have is 75 Ohms, which seems fine.
 
-                    R = (5 - 1.8) / 20x10-3 = 160 Ohms.
+    R = (5 - 1.8) / 20x10-3 = 160 Ohms.
