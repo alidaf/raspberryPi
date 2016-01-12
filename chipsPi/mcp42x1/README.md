@@ -2,13 +2,13 @@
 
 The MCP42x1 is an SPI bus operated Dual 7/8-bit digital potentiometer with non-volatile memory.
 
-    +-----------( )-----------+
-    |  Fn  | pin | pin |  Fn  |
-    |------+-----+-----+------|
-    | CS   |  01 | 14  |  VDD | 1.8V -> 5.5V
-    | SCK  |  02 | 13  |  SDO |
-    | SDI  |  03 | 12  | SHDN |
-    | VSS  |  04 | 11  |   NC |
+                 +-----------( )-----------+
+                 |  Fn  | pin | pin |  Fn  |
+                 |------+-----+-----+------|
+                 | CS   |  01 | 14  |  VDD | 1.8V -> 5.5V
+                 | SCK  |  02 | 13  |  SDO |
+                 | SDI  |  03 | 12  | SHDN |
+                 | VSS  |  04 | 11  |   NC |
        ,----- // | P1B  |  05 | 10  |  P0B | // -----,
     R [ ]<--- // | P1W  |  06 | 09  |  P0W | // --->[ ] R
        '----- // | P1A  |  07 | 08  |  P0A | // -----'
@@ -49,7 +49,8 @@ Device memory map:
     +--------------------------------+
 
 * All 16 locations are 9 bits wide.
-* The status register at 05h has 5 status bits, 4 of which are reserved. Bit 1 is the shutdown status; 0 = normal, 1 = Shutdown.
+* The status register at 05h has 5 status bits, 4 of which are reserved.
+** Bit 1 is the shutdown status; 0 = normal, 1 = Shutdown.
 * The **TCON** register (Terminal Control) has 8 control bits, 4 for each wiper:
 
         +--------------------------------------------------------------+
