@@ -18,19 +18,21 @@ R = 5, 10, 50 or 100 kOhms. Wiper resistance = 75 Ohms.
 
 Key:
 
-| Fn   | Description                    |
-|------|--------------------------------|
-| CS   | SPI chip select.               |
-| SCK  | SPI clock input.               |
-| SDI  | SPI serial data in.            |
-| VSS  | GND.                           |
-| PxA  | Potentiometer pin A.           |
-| PxW  | Potentiometer wiper.           |
-| PxB  | Potentiometer pin B.           |
-| NC   | Not internally connected.      |
-| SHDN | Hardware shutdown (reset).     |
-| SDO  | Serial data out.               |
-| VDD  | Supply voltage (1.8V to 5.5V). |
+                    +---------------------------------------+
+                    | Fn   | Description                    |
+                    |------+--------------------------------|
+                    | CS   | SPI chip select.               |
+                    | SCK  | SPI clock input.               |
+                    | SDI  | SPI serial data in.            |
+                    | VSS  | GND.                           |
+                    | PxA  | Potentiometer pin A.           |
+                    | PxW  | Potentiometer wiper.           |
+                    | PxB  | Potentiometer pin B.           |
+                    | NC   | Not internally connected.      |
+                    | SHDN | Hardware shutdown (reset).     |
+                    | SDO  | Serial data out.               |
+                    | VDD  | Supply voltage (1.8V to 5.5V). |
+                    +---------------------------------------+
 
 Notes:
 
@@ -38,24 +40,29 @@ Notes:
 
 Device memory map:
 
-| Addr | Function          | Mem |
-|------|-------------------|-----|
-| 00h  | Volatile wiper 0. | RAM |
-| 01h  | Volatile wiper 1. | RAM |
-| 02h  | Reserved.         | --- |
-| 03h  | Reserved.         | --- |
-| 04h  | Volatile TCON.    | RAM |
-| 05h  | Status.           | RAM |
-| 06h+ | Reserved.         | --- |
+                        +--------------------------------+
+                        | Addr | Function          | Mem |
+                        |------+-------------------+-----|
+                        | 00h  | Volatile wiper 0. | RAM |
+                        | 01h  | Volatile wiper 1. | RAM |
+                        | 02h  | Reserved.         | --- |
+                        | 03h  | Reserved.         | --- |
+                        | 04h  | Volatile TCON.    | RAM |
+                        | 05h  | Status.           | RAM |
+                        | 06h+ | Reserved.         | --- |
+                        +--------------------------------+
+
 Notes:
 
 * All 16 locations are 9 bits wide.
 * The status register at 05h has 5 status bits, 4 of which are reserved. Bit 1 is the shutdown status; 0 = normal, 1 = Shutdown.
 * The TCON register (Terminal CONtrol) has 8 control bits, 4 for each wiper, as shown:
 
-| bit8 | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
-|------|------|------|------|------|------|------|------|------|
-|  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
+            +--------------------------------------------------------------+
+            | bit8 | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
+            |------+------+------+------+------+------+------+------+------|
+            |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
+            +--------------------------------------------------------------+
 
 Notes:
 
@@ -73,16 +80,18 @@ Commands:
 
 The MCP42x1 has 4 commands:
 
- | :Command    | :Size | addr||||cmd||:data:|||||||||
- |------------|--------|----||||--||----------||||||||||
- | Read data  | 16-bit |x|x|x|x|1|1|x|x|x|x|x|x|x|x|x|x|
- | Write data | 16-bit |x|x|x|x|0|0|x|x|x|x|x|x|x|x|x|x|
- | Increment  |  8-bit |x|x|x|x|0|1|x|x|-|-|-|-|-|-|-|-|
- | Decrement  |  8-bit |x|x|x|x|1|0|x|x|-|-|-|-|-|-|-|-|
- |--------------------------------|||||||||-|-|-|-|-|-|-|-|-|-|
- | Min resistance (x-bit) = 0x000  |0|0|0|0|0|0|0|0|0|0|
- | Max resistance (7-bit) = 0x080  |0|0|1|0|0|0|0|0|0|0|
- | Max resistance (8-bit) = 0x100  |0|1|0|0|0|0|0|0|0|0|
+                +-----------------------------------------------------+
+                | Command    | Size   | addr  |cmd|       data        |
+                |------------+--------+-------+---+-------------------|
+                | Read data  | 16-bit |x|x|x|x|1|1|x|x|x|x|x|x|x|x|x|x|
+                | Write data | 16-bit |x|x|x|x|0|0|x|x|x|x|x|x|x|x|x|x|
+                | Increment  |  8-bit |x|x|x|x|0|1|x|x|-|-|-|-|-|-|-|-|
+                | Decrement  |  8-bit |x|x|x|x|1|0|x|x|-|-|-|-|-|-|-|-|
+                +---------------------------------+-+-+-+-+-+-+-+-+-+-+
+                | Min resistance (x-bit) = 0x000  |0|0|0|0|0|0|0|0|0|0|
+                | Max resistance (7-bit) = 0x080  |0|0|1|0|0|0|0|0|0|0|
+                | Max resistance (8-bit) = 0x100  |0|1|0|0|0|0|0|0|0|0|
+                +-----------------------------------------------------+
 
 ---
 
