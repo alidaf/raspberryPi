@@ -73,16 +73,16 @@ Commands:
 
 The MCP42x1 has 4 commands:
 
-| Command    | Size   | addr  |cmd|       data        |
-|------------|--------|-------|---|-------------------|
-| Read data  | 16-bit |x|x|x|x|1|1|x|x|x|x|x|x|x|x|x|x|
-| Write data | 16-bit |x|x|x|x|0|0|x|x|x|x|x|x|x|x|x|x|
-| Increment  |  8-bit |x|x|x|x|0|1|x|x|-|-|-|-|-|-|-|-|
-| Decrement  |  8-bit |x|x|x|x|1|0|x|x|-|-|-|-|-|-|-|-|
-|------------|--------------------|-|-|-|-|-|-|-|-|-|-|
-| Min resistance (x-bit) = 0x000  |0|0|0|0|0|0|0|0|0|0|
-| Max resistance (7-bit) = 0x080  |0|0|1|0|0|0|0|0|0|0|
-| Max resistance (8-bit) = 0x100  |0|1|0|0|0|0|0|0|0|0|
+ | :Command    | :Size | addr||||cmd||:data:|||||||||
+ |------------|--------|----||||--||----------||||||||||
+ | Read data  | 16-bit |x|x|x|x|1|1|x|x|x|x|x|x|x|x|x|x|
+ | Write data | 16-bit |x|x|x|x|0|0|x|x|x|x|x|x|x|x|x|x|
+ | Increment  |  8-bit |x|x|x|x|0|1|x|x|-|-|-|-|-|-|-|-|
+ | Decrement  |  8-bit |x|x|x|x|1|0|x|x|-|-|-|-|-|-|-|-|
+ |--------------------------------|||||||||-|-|-|-|-|-|-|-|-|-|
+ | Min resistance (x-bit) = 0x000  |0|0|0|0|0|0|0|0|0|0|
+ | Max resistance (7-bit) = 0x080  |0|0|1|0|0|0|0|0|0|0|
+ | Max resistance (8-bit) = 0x100  |0|1|0|0|0|0|0|0|0|0|
 
 ---
 
