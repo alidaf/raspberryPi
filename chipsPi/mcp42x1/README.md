@@ -1,6 +1,6 @@
-###  MCP42x1 digital potentiometer driver.
+###MCP42x1 digital potentiometer driver.
 
-The MCP42x1 is an SPI bus operated Dual 7/8-bit digital potentiometer with non-volatile memory.
+The **MCP42x1** is an **SPI** bus operated Dual 7/8-bit digital potentiometer with non-volatile memory.
 
                  +-----------( )-----------+
                  |  Fn  | pin | pin |  Fn  |
@@ -32,9 +32,9 @@ The MCP42x1 is an SPI bus operated Dual 7/8-bit digital potentiometer with non-v
     | VDD  | Supply voltage (1.8V to 5.5V). |
     +---------------------------------------+
 
-**NC** is not internally connected but should be externally connected to either VSS or VDD to reduce noise coupling.
+**NC** is not internally connected but should be externally connected to either **VSS** or **VDD** to reduce noise coupling.
 
-Device memory map:
+####Device memory map:
 
     +--------------------------------+
     | Addr | Function          | Mem |
@@ -50,7 +50,7 @@ Device memory map:
 
 * All 16 locations are 9 bits wide.
 * The status register at 05h has 5 status bits, 4 of which are reserved.
-** Bit 1 is the shutdown status; 0 = normal, 1 = Shutdown.
+  * Bit 1 is the shutdown status; 0 = normal, 1 = Shutdown.
 * The **TCON** register (Terminal Control) has 8 control bits, 4 for each wiper:
 
         +--------------------------------------------------------------+
@@ -59,19 +59,22 @@ Device memory map:
         |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
         +--------------------------------------------------------------+
 
- **RxHW** : Forces potentiometer x into shutdown configuration of the SHDN pin; 0 = normal, 1 = forced.
+ **RxHW** : Forces potentiometer x into shutdown configuration of the **SHDN** pin; 0 = normal, 1 = forced.
+ 
  **RxA**  : Connects/disconnects potentiometer x pin A to/from the resistor network; 0 = connected, 1 = disconnected.
+ 
  **RxW**  : Connects/disconnects potentiometer x wiper to/from the resistor network; 0 = connected, 1 = disconnected.
+ 
  **RxB**  : Connects/disconnects potentiometer x pin B to/from the resistor network; 0 = connected, 1 = disconnected.
 
-* The SHDN pin, when active, overrides the state of these bits.
-* The maximum SCK (serial clock) frequency is 10MHz.
-* The only SPI modes supported are 0,0 and 1,1.
+* The **SHDN** pin, when active, overrides the state of these bits.
+* The maximum **SCK** (serial clock) frequency is 10 MHz.
+* The only **SPI** modes supported are 0,0 and 1,1.
 
 ---
-Commands:
+####Commands:
 
-The MCP42x1 has 4 commands:
+The **MCP42x1** has 4 commands:
 
     +-----------------------------------------------------+
     | Command    | Size   | addr  |cmd|       data        |
@@ -87,7 +90,7 @@ The MCP42x1 has 4 commands:
     +-----------------------------------------------------+
 
 ---
-Testing:
+####Testing:
 
 For testing, LEDs were connected via a breadboard as follows:
 
@@ -104,6 +107,6 @@ For testing, LEDs were connected via a breadboard as follows:
              75R   //   +-------------------------+   \\    75R
                    LED                               LED
 
-The LEDs have a forward voltage and current of 1.8V and 20mA respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing in series with it. However, the wiper resistance is 75Ohms so only an 85 Ohms resistor is needed. The closest I have is 75 Ohms, which seems fine.
+The LEDs have a forward voltage and current of 1.8 V and 20 mA respectively so a 160 Ohms resistance is ideal (for 5V **VDD**) for placing in series with it. However, the wiper resistance is 75 Ohms so only an 85 Ohms resistor is needed. The closest I have is 75 Ohms, which seems fine.
 
                     R = (5 - 1.8) / 20x10-3 = 160 Ohms.
