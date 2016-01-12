@@ -2,17 +2,17 @@
 
 The MCP42x1 is an SPI bus operated Dual 7/8-bit digital potentiometer with non-volatile memory.
 
-                        +-----------( )-----------+
-                        |  Fn  | pin | pin |  Fn  |
-                        |------+-----+-----+------|
-                        | CS   |  01 | 14  |  VDD | 1.8V -> 5.5V
-                        | SCK  |  02 | 13  |  SDO |
-                        | SDI  |  03 | 12  | SHDN |
-                        | VSS  |  04 | 11  |   NC |
-              ,----- // | P1B  |  05 | 10  |  P0B | // -----,
-           R [ ]<--- // | P1W  |  06 | 09  |  P0W | // --->[ ] R
-              '----- // | P1A  |  07 | 08  |  P0A | // -----'
-                        +-------------------------+
+    +-----------( )-----------+
+    |  Fn  | pin | pin |  Fn  |
+    |------+-----+-----+------|
+    | CS   |  01 | 14  |  VDD | 1.8V -> 5.5V
+    | SCK  |  02 | 13  |  SDO |
+    | SDI  |  03 | 12  | SHDN |
+    | VSS  |  04 | 11  |   NC |
+       ,----- // | P1B  |  05 | 10  |  P0B | // -----,
+    R [ ]<--- // | P1W  |  06 | 09  |  P0W | // --->[ ] R
+       '----- // | P1A  |  07 | 08  |  P0A | // -----'
+                 +-------------------------+
 
 **R** = 5, 10, 50 or 100 kOhms. Wiper resistance = 75 Ohms.
 
@@ -52,11 +52,11 @@ Device memory map:
 * The status register at 05h has 5 status bits, 4 of which are reserved. Bit 1 is the shutdown status; 0 = normal, 1 = Shutdown.
 * The **TCON** register (Terminal Control) has 8 control bits, 4 for each wiper:
 
-    +--------------------------------------------------------------+
-    | bit8 | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
-    |------+------+------+------+------+------+------+------+------|
-    |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
-    +--------------------------------------------------------------+
+        +--------------------------------------------------------------+
+        | bit8 | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1 | bit0 |
+        |------+------+------+------+------+------+------+------+------|
+        |  D8  | R1HW | R1A  | R1W  | R1B  | R0HW | R0A  | R0W  | R0B  |
+        +--------------------------------------------------------------+
 
 **RxHW** : Forces potentiometer x into shutdown configuration of the SHDN pin; 0 = normal, 1 = forced.
 **RxA**  : Connects/disconnects potentiometer x pin A to/from the resistor network; 0 = connected, 1 = disconnected.
