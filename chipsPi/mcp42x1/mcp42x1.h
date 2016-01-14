@@ -21,17 +21,18 @@
 */
 //  ===========================================================================
 
-#define MCP42X1_VERSION 01.00
+#define MCP42X1_VERSION 01.01
 
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            11/01/2016
+    Authors:        D.Faulke            14/01/2016
 
     Contributors:
 
     Changelog:
 
         v01.00      Original version.
+        v01.01      Rewrote init routine.
 */
 //  ===========================================================================
 
@@ -139,12 +140,11 @@
                 +-----------------------------------------------------+
 */
 
-
 //  MCP42x1 data. -------------------------------------------------------------
 
 //  Max number of MCP42X1 chips, determined by No of chip selects.
-#define MCP42X1_MAX       2 // SPI0 has 2 chip selects but AUX has 3.
-#define MCP42X1_WIP       2 // Number of wipers on MCP42x1.
+#define MCP42X1_DEVICES   2 // SPI0 has 2 chip selects but AUX has 3.
+#define MCP42X1_WIPERS    2 // Number of wipers on MCP42x1.
 #define MCP42X1_RMIN 0x0000 // Minimum wiper value.
 #define MCP42X1_RMAX 0x0100 // Maximum wiper value.
 
@@ -160,10 +160,10 @@
 //  MCP42x1 register addresses.
 enum mcp42x1_registers
 {
-     MCP42X1_REG_WIPER0 = 0x00 << 12, // Wiper for resistor network 0.
-     MCP42X1_REG_WIPER1 = 0x01 << 12, // Wiper for resistor network 1.
-     MCP42X1_REG_TCON   = 0x04 << 12, // Terminal control.
-     MCP42X1_REG_STATUS = 0x05 << 12  // Status.
+     MCP42X1_REG_WIPER0 = 0x00, // Wiper for resistor network 0.
+     MCP42X1_REG_WIPER1 = 0x10, // Wiper for resistor network 1.
+     MCP42X1_REG_TCON   = 0x40, // Terminal control.
+     MCP42X1_REG_STATUS = 0x50  // Status.
 };
 
 //  TCON register masks.
@@ -182,7 +182,6 @@ enum mcp42x1_tcon
 //  Error codes.
 enum mcp42x1_error
 {
-    MCP42X1_ERR_NOSPI   = -1, // Couldn't initialise SPI.
     MCP42X1_ERR_NOWIPER = -2, // Wiper is invalid.
     MCP42X1_ERR_NOINIT  = -3, // Couldn't initialise MCP42x1.
     MCP42X1_ERR_NOMEM   = -4, // Not enough memory.
@@ -191,13 +190,11 @@ enum mcp42x1_error
 
 struct mcp42x1
 {
-    uint8_t id;  // MCP42x1 handle.
-    uint8_t spi; // SPI handle.
-    uint8_t cs;  // Chip Select.
-    uint8_t wip; // Wiper.
+    uint8_t spi;   // SPI handle.
+    uint8_t wiper; // Wiper.
 };
 
-struct mcp42x1 *mcp42x1[MCP42X1_MAX];
+struct mcp42x1 *mcp42x1[MCP42X1_DEVICES * MCP42X1_WIPERS];
 
 
 //  MCP42x1 functions. --------------------------------------------------------
@@ -230,6 +227,6 @@ void mcp42x1DecResistance( uint8_t handle );
 //  ---------------------------------------------------------------------------
 //  Initialises MCP42x1. Call for each MCP42x1.
 //  ---------------------------------------------------------------------------
-int8_t mcp42x1Init( uint8_t cs, uint8_t wip, uint32_t flags );
+int8_t mcp42x1Init( uint8_t spi, uint8_t wiper );
 
 #endif // #ifndef MCP42X1_H

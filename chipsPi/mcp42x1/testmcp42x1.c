@@ -23,14 +23,14 @@
 //  ===========================================================================
 */
 
-#define TESTMCP42X1_VERSION 01.00
+#define TESTMCP42X1_VERSION 01.01
 
 /*
 //  ---------------------------------------------------------------------------
 
     Compile with:
 
-    gcc testmcp42x1.c mcp42x1.c -Wall -o testmcp42x1
+    gcc testmcp42x1.c mcp42x1.c -Wall -o testmcp42x1 -lpigpio lpthread
 
     Also use the following flags for Raspberry Pi optimisation:
         -march=armv6 -mtune=arm1176jzf-s -mfloat-abi=hard -mfpu=vfp
@@ -38,13 +38,14 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke            11/01/2016
+    Authors:        D.Faulke            14/01/2016
 
     Contributors:
 
     Changelog:
 
         v01.00      Original version.
+        v01.01      Modified init routine.
 
 //  Information. --------------------------------------------------------------
 
@@ -68,8 +69,8 @@
 
         The LEDs have a forward voltage and current of 1.8V and 20mA
         respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing
-        in series with it. However, the wiper resistance is 75Ohms so only an
-        85Ohms resistor is needed. The closest I have is 75Ohms, which seems
+        in series with it. However, the wiper resistance is 75 Ohms so only an
+        85 Ohms resistor is needed. The closest I have is 75 Ohms, which seems
         fine.
 
                     R = (5 - 1.8) / 20x10-3 = 160 Ohms.
@@ -94,11 +95,9 @@
 int main()
 {
 
-    uint8_t  cs    = 0; // Chip select.
-    uint8_t  flags = 0; // SPI flags.
-    uint16_t i, j, k;   // Loop counters.
+    uint8_t spi; // SPI handle.
+    uint8_t device[MCP42X1_DEVICES * MCP42X1_WIPERS]; // MCP42x1 handles.
 
-    // Initialise MCP42X1.
     /*
         Setting the SPI flags:
 
@@ -113,30 +112,40 @@ int main()
         Therefore SPI flags = 0.
     */
 
+    uint8_t  flags = 0; // SPI flags for default operation.
+    uint16_t i, j;      // Loop counters.
+
     printf( "Initialising.\n\n" );
-    gpioInitialise();
-    printf( "Wiper 0 SPI %d.\n", mcp42x1Init( cs, 0, flags )); // Wiper 0.
-    printf( "Wiper 1 SPI %d.\n", mcp42x1Init( cs, 1, flags )); // Wiper 1.
-    printf( "\n" );
+
+    gpioInitialise(); // Initialise pigpio.
+
+    spi = spiOpen( 0, MCP42X1_SPI_BAUD, flags ); // Initialise SPI for CS = 0.
+    if ( spi < 0 ) return -1;
+    printf( "SPI ok!\n" );
+
+    // Initialise MCP42X1 twice, once for each wiper.
+    mcp42x1Init( spi, 0 ); // Wiper 0.
+    mcp42x1Init( spi, 1 ); // Wiper 1.
+
+    // Check that devices have initialised.
+    for ( i = 0; mcp42x1[i] != NULL; i++ )
+        if ( device[i] < 0 ) return -1;
+    printf( "Devices ok!\n\n" );
 
     // Print properties for each device.
     printf( "Properties.\n\n" );
-
-    // Make sure MCP42x1s have been initialised OK.
     for ( i = 0; (mcp42x1[i] != NULL); i++ )
     {
         printf( "\tDevice %d:\n", i );
-        printf( "\tDevice handle = %d,\n", mcp42x1[i]->id  );
         printf( "\tSPI handle    = %d,\n", mcp42x1[i]->spi );
-        printf( "\tChip select   = %d.\n", mcp42x1[i]->cs  );
-        printf( "\tWiper         = %d.\n", mcp42x1[i]->wip );
+        printf( "\tWiper address = %x.\n", mcp42x1[i]->wiper );
         printf( "\n" );
     }
 
     //  Test reading status register. -----------------------------------------
 
-    int16_t status = mcp42x1ReadReg( 0, MCP42X1_REG_STATUS );
-    printf( "Status register = 0x%04x.\n", status );
+//    int16_t status = mcp42x1ReadReg( 0, MCP42X1_REG_STATUS );
+//    printf( "Status register = 0x%04x.\n", status );
 
     //  Test setting wiper values. --------------------------------------------
 
@@ -144,25 +153,28 @@ int main()
     getchar();
 
     //  Set wiper values to max (fully dimmed).
-    mcp42x1SetResistance ( 0, MCP42X1_RMAX );
-    printf( "Set to maximum.\n" );
+//    mcp42x1SetResistance ( 0, MCP42X1_RMAX );
+//    printf( "Set to maximum.\n" );
 
     //  Cycle wiper values.
     for ( i = 0; i < 10; i++ )
     {
-        printf( "Decreasing.\n" );
-        for ( j = MCP42X1_RMAX; j > MCP42X1_RMIN; j-- )
+        for ( j = 0; j < 254; j++ )
         {
+            printf( "Decreasing.\n" );
             mcp42x1DecResistance( 0 );
-            for ( k = 0; k < 0xffff; k++ ); // Delay.
+            mcp42x1DecResistance( 1 );
+            gpioDelay( 1000000000 );
         }
-        printf( "Increasing.\n" );
-        for ( j = MCP42X1_RMIN; j < MCP42X1_RMAX; j++ )
+        for ( j = 0; j < 254; j++ )
         {
+            printf( "Increasing.\n" );
             mcp42x1IncResistance( 0 );
-            for ( k = 0; k < 0xffff; k++ ); // Delay.
+            mcp42x1IncResistance( 1 );
+            gpioDelay( 1000000000 );
         }
     }
 
+    printf( "Finished.\n" );
     return 0;
 }
