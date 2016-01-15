@@ -97,22 +97,14 @@ int16_t mcp42x1ReadReg( uint8_t spi, uint8_t reg )
     char data[2];
     char bytes[2];
 
-    printf( "Reading Register:\n" );
-    printf( "Register = 0x%01x.\n", reg );
-    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_READ );
-
     cmd  = ( reg << 4 ) & 0xf0;              // Register address.
     cmd |= ( MCP42X1_CMD_READ << 2 ) & 0x0c; // Command.
-    printf( "Command byte = 0x%02x.\n", cmd );
 
     bytes[0] = cmd;
-    printf( "Byte 0 = 0x%02x.\n", bytes[0] );
     bytes[1] = 0x00;
-    printf( "Byte 1 = 0x%02x.\n", bytes[1] );
 
     // Send command and receive data via SPI bus.
     spiXfer( spi, bytes, data, 2 );
-    printf( "Reg Data = 0x%04x.\n", data );
 
     // Convert chars back into a 16-bit word.
     ret = ( data[0] << 8 ) | data[1];
@@ -152,13 +144,6 @@ void mcp42x1WriteReg( uint8_t spi, uint8_t reg, uint16_t value )
 
     bytes[0] = cmd;
     bytes[1] = data;
-
-    printf( "Writing Register:\n" );
-    printf( "Register = 0x%01x.\n", reg );
-    printf( "Data     = 0x%04x.\n", value );
-    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_WRITE );
-    printf( "Cmd byte = 0x%02x.\n", bytes[0] );
-    printf( "Dat byte = 0x%02x.\n", bytes[1] );
 
     // Send command via SPI bus.
     spiWrite( spi, bytes,  2 );
@@ -227,11 +212,6 @@ void mcp42x1IncResistance( uint8_t spi, uint8_t wiper )
     cmd |= ( MCP42X1_CMD_INC << 2 ) & 0x0c; // Command;
     bytes[0] = cmd;
 
-    printf( "Incrementing Resistance:\n" );
-    printf( "Register = 0x%01x.\n", wiper );
-    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_INC );
-    printf( "Cmd byte = 0x%02x.\n", bytes[0] );
-
     // Send command via SPI bus.
     spiWrite( spi, bytes, 1 );
 
@@ -266,11 +246,6 @@ void mcp42x1DecResistance( uint8_t spi, uint8_t wiper )
     }
     cmd |= ( MCP42X1_CMD_DEC << 2 ) & 0x0c; // Command;
     bytes[0] = cmd;
-
-    printf( "Incrementing Resistance:\n" );
-    printf( "Register = 0x%01x.\n", wiper );
-    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_DEC );
-    printf( "Cmd byte = 0x%02x.\n", bytes[0] );
 
     // Send command via SPI bus.
     spiWrite( spi, bytes, 1 );

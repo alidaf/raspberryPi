@@ -61,8 +61,8 @@
                CE0 <----| CS   |  01 | 14  |  VDD |-----------> +5V
              SCKL1 <----| SCK  |  02 | 13  |  SDO |----> MISO
               MOSI <----| SDI  |  03 | 12  | SHDN |
-   GND <-;------------;-| VSS  |  04 | 11  |   NC |-;------------;-> GND
-         |         R  '-| P1B  |  05 | 10  |  P0B |-'  R         |
+   GND <-;--------------| VSS  |  04 | 11  |   NC |--------------;-> GND
+         |         R    | P1B  |  05 | 10  |  P0B |    R         |
          '--|<|--/\/\/--| P1W  |  06 | 09  |  P0W |--/\/\/--|>|--'
             //        ,-| P1A  |  07 | 08  |  P0A |-,        \\
             LED       | +-------------------------+ |       LED
@@ -117,16 +117,17 @@ int main()
     */
 
     uint8_t  flags = 0; // SPI flags for default operation.
-    uint16_t i, j;      // Loop counters.
+    uint16_t i;         // Loop counter.
+    uint16_t data;      // Register data.
 
     printf( "Initialising.\n\n" );
 
     gpioInitialise(); // Initialise pigpio.
-    printf( "Pigpio ok!\n" );
+    printf( "GPIO initialised ok!\n" );
 
     spi = spiOpen( 0, MCP42X1_SPI_BAUD, flags ); // Initialise SPI for CS = 0.
     if ( spi < 0 ) return -1;
-    printf( "SPI ok!\n" );
+    printf( "SPI initialised ok!\n" );
     printf( "SPI handle = %d.\n", spi );
 
     // Initialise MCP42X1 twice, once for each wiper.
@@ -136,55 +137,70 @@ int main()
     // Check that devices have initialised.
     for ( i = 0; mcp42x1[i] != NULL; i++ )
         if ( device[i] < 0 ) return -1;
-    printf( "Devices ok!\n\n" );
+    printf( "Devices initialised ok!\n\n" );
 
     // Print properties for each device.
-    printf( "Properties.\n\n" );
+    printf( "Properties:\n\n" );
     for ( i = 0; (mcp42x1[i] != NULL); i++ )
     {
-        printf( "\tDevice %d:\n", i );
-        printf( "\tSPI handle    = %d,\n",   mcp42x1[i]->spi );
-        printf( "\tWiper address = 0x%x.\n", mcp42x1[i]->wiper );
+        printf( "Device %d.\n", i );
+        printf( "SPI handle = %d,\n",   mcp42x1[i]->spi );
+        printf( "Wiper      = 0d.\n", mcp42x1[i]->wiper );
         printf( "\n" );
     }
 
     //  Test reading status register. -----------------------------------------
 
     printf( "Reading Registers:\n\n" );
-    int16_t data;
     data = mcp42x1ReadReg( 0, MCP42X1_REG_TCON );
-    printf( "TCON register = 0x%04x.\n", data );
+    printf( "TCON register   = 0x%04x,\n", data );
     data = mcp42x1ReadReg( 0, MCP42X1_REG_STATUS );
-    printf( "Status register = 0x%04x.\n", data );
+    printf( "Status register = 0x%04x,\n", data );
     data = mcp42x1ReadReg( 0, MCP42X1_REG_WIPER0 );
-    printf( "Wiper0 register = 0x%04x.\n", data );
+    printf( "Wiper0 register = 0x%04x,\n", data );
     data = mcp42x1ReadReg( 0, MCP42X1_REG_WIPER1 );
     printf( "Wiper1 register = 0x%04x.\n", data );
+    printf( "\n" );
 
     //  Test setting wiper values. --------------------------------------------
-
-    printf( "Starting cycle.\n" );
 
     //  Set wiper values.
     mcp42x1SetResistance ( mcp42x1[0]->spi, mcp42x1[0]->wiper, MCP42X1_RMAX );
     mcp42x1SetResistance ( mcp42x1[1]->spi, mcp42x1[1]->wiper, MCP42X1_RMIN );
-    printf( "Set starting values.\n" );
+    printf( "Set starting values.\n\n" );
 
-    //  Cycle wiper values.
-    for ( i = 0; i < 10; i++ )
+    //  Make sure values have stuck.
+    data = mcp42x1ReadReg( 0, MCP42X1_REG_WIPER0 );
+    printf( "Wiper0 register = 0x%04x,\n", data );
+    data = mcp42x1ReadReg( 0, MCP42X1_REG_WIPER1 );
+    printf( "Wiper1 register = 0x%04x.\n", data );
+    printf( "\n" );
+
+
+    //  Test increment and decrement. -----------------------------------------
+
+    printf( "Cycling wiper resistances.\n" );
+    for ( ; ; ) // Continual loop.
     {
-        printf( "Cycle %d.\n", i );
-        for ( j = 0; j < 254; j++ )
+        for ( i = MCP42X1_RMIN; i < MCP42X1_RMAX; i++ )
         {
-            mcp42x1DecResistance( mcp42x1[0]->spi, mcp42x1[0]->wiper );
-            mcp42x1IncResistance( mcp42x1[1]->spi, mcp42x1[1]->wiper );
-            gpioDelay( 1000 );
+//            mcp42x1DecResistance( mcp42x1[0]->spi, mcp42x1[0]->wiper );
+//            mcp42x1IncResistance( mcp42x1[1]->spi, mcp42x1[1]->wiper );
+            mcp42x1SetResistance ( mcp42x1[0]->spi,
+                                   mcp42x1[0]->wiper, i );
+            mcp42x1SetResistance ( mcp42x1[1]->spi,
+                                   mcp42x1[1]->wiper, MCP42X1_RMAX - i );
+            gpioDelay( 10000 );
         }
-        for ( j = 0; j < 254; j++ )
+        for ( i = MCP42X1_RMIN; i < MCP42X1_RMAX; i++ )
         {
-            mcp42x1IncResistance( mcp42x1[0]->spi, mcp42x1[0]->wiper );
-            mcp42x1DecResistance( mcp42x1[1]->spi, mcp42x1[1]->wiper );
-            gpioDelay( 1000 );
+//            mcp42x1IncResistance( mcp42x1[0]->spi, mcp42x1[0]->wiper );
+//            mcp42x1DecResistance( mcp42x1[1]->spi, mcp42x1[1]->wiper );
+            mcp42x1SetResistance ( mcp42x1[0]->spi,
+                                   mcp42x1[0]->wiper, MCP42X1_RMAX - i );
+            mcp42x1SetResistance ( mcp42x1[1]->spi,
+                                   mcp42x1[1]->wiper, i );
+            gpioDelay( 10000 );
         }
     }
 
