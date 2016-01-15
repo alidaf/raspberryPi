@@ -69,8 +69,8 @@
                       |                             |
                       '-----------------------------'---------> +5V
 
-        The LEDs have a forward voltage of 1.8V and a max current of 20mA,
-        therefore a 160 Ohm resistance is ideal (for 5V VDD) for placing
+        The LEDs have a forward voltage of 1.8 V and a max current of 20 mA,
+        therefore a 160 Ohm resistance is ideal (for 5 V VDD) for placing
         in series with it:
 
                     R = V / I.
