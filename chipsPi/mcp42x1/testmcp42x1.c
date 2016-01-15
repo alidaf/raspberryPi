@@ -122,10 +122,12 @@ int main()
     printf( "Initialising.\n\n" );
 
     gpioInitialise(); // Initialise pigpio.
+    printf( "Pigpio ok!\n" );
 
     spi = spiOpen( 0, MCP42X1_SPI_BAUD, flags ); // Initialise SPI for CS = 0.
     if ( spi < 0 ) return -1;
     printf( "SPI ok!\n" );
+    printf( "SPI handle = %d.\n", spi );
 
     // Initialise MCP42X1 twice, once for each wiper.
     mcp42x1Init( spi, 0 ); // Wiper 0.
@@ -148,33 +150,41 @@ int main()
 
     //  Test reading status register. -----------------------------------------
 
-//    int16_t status = mcp42x1ReadReg( 0, MCP42X1_REG_STATUS );
-//    printf( "Status register = 0x%04x.\n", status );
+    printf( "Reading Registers:\n\n" );
+    int16_t data;
+    data = mcp42x1ReadReg( 0, MCP42X1_REG_TCON );
+    printf( "TCON register = 0x%04x.\n", data );
+    data = mcp42x1ReadReg( 0, MCP42X1_REG_STATUS );
+    printf( "Status register = 0x%04x.\n", data );
+    data = mcp42x1ReadReg( 0, MCP42X1_REG_WIPER0 );
+    printf( "Wiper0 register = 0x%04x.\n", data );
+    data = mcp42x1ReadReg( 0, MCP42X1_REG_WIPER1 );
+    printf( "Wiper1 register = 0x%04x.\n", data );
 
     //  Test setting wiper values. --------------------------------------------
 
     printf( "Starting cycle.\n" );
 
-    //  Set wiper values to max (fully dimmed).
-//    mcp42x1SetResistance ( 0, MCP42X1_RMAX );
-//    printf( "Set to maximum.\n" );
+    //  Set wiper values.
+    mcp42x1SetResistance ( mcp42x1[0]->spi, mcp42x1[0]->wiper, MCP42X1_RMAX );
+    mcp42x1SetResistance ( mcp42x1[1]->spi, mcp42x1[1]->wiper, MCP42X1_RMIN );
+    printf( "Set starting values.\n" );
 
     //  Cycle wiper values.
     for ( i = 0; i < 10; i++ )
     {
-        printf( "Decreasing.\n" );
+        printf( "Cycle %d.\n", i );
         for ( j = 0; j < 254; j++ )
         {
-            mcp42x1DecResistance( 0 );
-            mcp42x1DecResistance( 1 );
-            gpioDelay( 10000 );
+            mcp42x1DecResistance( mcp42x1[0]->spi, mcp42x1[0]->wiper );
+            mcp42x1IncResistance( mcp42x1[1]->spi, mcp42x1[1]->wiper );
+            gpioDelay( 1000 );
         }
-        printf( "Increasing.\n" );
         for ( j = 0; j < 254; j++ )
         {
-            mcp42x1IncResistance( 0 );
-            mcp42x1IncResistance( 1 );
-            gpioDelay( 10000 );
+            mcp42x1IncResistance( mcp42x1[0]->spi, mcp42x1[0]->wiper );
+            mcp42x1DecResistance( mcp42x1[1]->spi, mcp42x1[1]->wiper );
+            gpioDelay( 1000 );
         }
     }
 

@@ -146,24 +146,24 @@
 #define MCP42X1_DEVICES   2 // SPI0 has 2 chip selects but AUX has 3.
 #define MCP42X1_WIPERS    2 // Number of wipers on MCP42x1.
 #define MCP42X1_RMIN 0x0000 // Minimum wiper value.
-#define MCP42X1_RMAX 0x0100 // Maximum wiper value.
+#define MCP42X1_RMAX 0x0101 // Maximum wiper value.
 
 //  Maximum SCK frequency = 10MHz.
 #define MCP42X1_SPI_BAUD 10000000
 
 //  Commands.
-#define MCP42X1_CMD_READ  0x0c00
-#define MCP42X1_CMD_WRITE 0x0000
-#define MCP42X1_CMD_INC   0x04
-#define MCP42X1_CMD_DEC   0x08
+#define MCP42X1_CMD_WRITE 0x0
+#define MCP42X1_CMD_INC   0x1
+#define MCP42X1_CMD_DEC   0x2
+#define MCP42X1_CMD_READ  0x3
 
 //  MCP42x1 register addresses.
 enum mcp42x1_registers
 {
-     MCP42X1_REG_WIPER0 = 0x00, // Wiper for resistor network 0.
-     MCP42X1_REG_WIPER1 = 0x10, // Wiper for resistor network 1.
-     MCP42X1_REG_TCON   = 0x40, // Terminal control.
-     MCP42X1_REG_STATUS = 0x50  // Status.
+     MCP42X1_REG_WIPER0 = 0x0, // Wiper for resistor network 0.
+     MCP42X1_REG_WIPER1 = 0x1, // Wiper for resistor network 1.
+     MCP42X1_REG_TCON   = 0x4, // Terminal control.
+     MCP42X1_REG_STATUS = 0x5  // Status.
 };
 
 //  TCON register masks.
@@ -182,10 +182,10 @@ enum mcp42x1_tcon
 //  Error codes.
 enum mcp42x1_error
 {
+    MCP42X1_ERR_NOINIT  = -1, // Couldn't initialise MCP42x1.
     MCP42X1_ERR_NOWIPER = -2, // Wiper is invalid.
-    MCP42X1_ERR_NOINIT  = -3, // Couldn't initialise MCP42x1.
-    MCP42X1_ERR_NOMEM   = -4, // Not enough memory.
-    MCP42X1_ERR_DUPLIC  = -5, // Duplicate properties.
+    MCP42X1_ERR_NOMEM   = -3, // Not enough memory.
+    MCP42X1_ERR_DUPLIC  = -4, // Duplicate properties.
 };
 
 struct mcp42x1
@@ -200,29 +200,29 @@ struct mcp42x1 *mcp42x1[MCP42X1_DEVICES * MCP42X1_WIPERS];
 //  MCP42x1 functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Writes bytes to register of MCP42x1.
-//  ---------------------------------------------------------------------------
-void mcp42x1WriteReg( uint8_t handle, uint16_t reg, uint16_t data );
-
-//  ---------------------------------------------------------------------------
 //  Returns value of MCP42x1 register.
 //  ---------------------------------------------------------------------------
-int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg );
+int16_t mcp42x1ReadReg( uint8_t spi, uint8_t reg );
+
+//  ---------------------------------------------------------------------------
+//  Writes bytes to register of MCP42x1.
+//  ---------------------------------------------------------------------------
+void mcp42x1WriteReg( uint8_t spi, uint8_t reg, uint16_t data );
 
 //  ---------------------------------------------------------------------------
 //  Sets wiper resistance.
 //  ---------------------------------------------------------------------------
-void mcp42x1SetResistance( uint8_t handle, uint16_t resistance );
+void mcp42x1SetResistance( uint8_t spi, uint8_t wiper, uint16_t value );
 
 //  ---------------------------------------------------------------------------
 //  Increments wiper resistance.
 //  ---------------------------------------------------------------------------
-void mcp42x1IncResistance( uint8_t handle );
+void mcp42x1IncResistance( uint8_t spi, uint8_t wiper );
 
 //  ---------------------------------------------------------------------------
 //  Decrements wiper resistance.
 //  ---------------------------------------------------------------------------
-void mcp42x1DecResistance( uint8_t handle );
+void mcp42x1DecResistance( uint8_t spi, uint8_t wiper );
 
 //  ---------------------------------------------------------------------------
 //  Initialises MCP42x1. Call for each MCP42x1.

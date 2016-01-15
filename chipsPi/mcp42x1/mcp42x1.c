@@ -72,46 +72,9 @@
 //  MCP42x1 functions. --------------------------------------------------------
 
 //  ---------------------------------------------------------------------------
-//  Writes bytes to register of MCP42x1.
-//  ---------------------------------------------------------------------------
-void mcp42x1WriteReg( uint8_t handle, uint16_t reg, uint16_t data )
-/*
-    This is a 16-bit command in 2 8-bit parts:
-
-    +----------------------------------------------------------------+
-    |  reg address  |  cmd  | data  ||             data              |
-    |---------------+-------+-------||-------------------------------|
-    | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 || 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
-    |---+---+---+---+---+---+---+---++---+---+---+---+---+---+---+---|
-    | 0 | 0 | 0 | 0 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  Wiper 0
-    | 0 | 0 | 0 | 1 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  Wiper 1
-    | 0 | 1 | 0 | 0 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  TCON
-    | 0 | 1 | 0 | 1 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  Status
-    +----------------------------------------------------------------+
-
-    All other addresses are reserved.
-*/
-{
-    union command
-    {
-        uint16_t word;
-        char    *bytes;
-    } cmd;
-
-    cmd.word =  MCP42X1_CMD_WRITE;  // Command.
-    cmd.word |= reg << 8;           // Register address.
-    cmd.word |= ( data & 0x1ff );   // Data.
-
-    // Send command via SPI bus.
-    spiWrite( mcp42x1[handle]->spi, cmd.bytes,  2 );
-
-    return;
-}
-
-//  ---------------------------------------------------------------------------
 //  Returns value of MCP42x1 register.
 //  ---------------------------------------------------------------------------
-int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg )
+int16_t mcp42x1ReadReg( uint8_t spi, uint8_t reg )
 /*
     This is a 16-bit command in 2 8-bit parts:
 
@@ -129,26 +92,84 @@ int16_t mcp42x1ReadReg( uint8_t handle, uint16_t reg )
     All other addresses are reserved.
 */
 {
-    union command
-    {
-        uint16_t word;
-        char    *bytes;
-    } cmd, data;
+    uint8_t  cmd;
+    uint16_t ret;
+    char data[2];
+    char bytes[2];
 
-    cmd.word =  MCP42X1_CMD_READ; // Command.
-    cmd.word |= reg << 8;         // Register address.
+    printf( "Reading Register:\n" );
+    printf( "Register = 0x%01x.\n", reg );
+    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_READ );
+
+    cmd  = ( reg << 4 ) & 0xf0;              // Register address.
+    cmd |= ( MCP42X1_CMD_READ << 2 ) & 0x0c; // Command.
+    printf( "Command byte = 0x%02x.\n", cmd );
+
+    bytes[0] = cmd;
+    printf( "Byte 0 = 0x%02x.\n", bytes[0] );
+    bytes[1] = 0x00;
+    printf( "Byte 1 = 0x%02x.\n", bytes[1] );
 
     // Send command and receive data via SPI bus.
-    spiXfer( mcp42x1[handle]->spi, cmd.bytes, data.bytes, 2 );
-    printf( "Register data = 0x%04x.\n", data.word );
+    spiXfer( spi, bytes, data, 2 );
+    printf( "Reg Data = 0x%04x.\n", data );
 
-    return data.word;
+    // Convert chars back into a 16-bit word.
+    ret = ( data[0] << 8 ) | data[1];
+    return ret;
+}
+
+//  ---------------------------------------------------------------------------
+//  Writes bytes to register of MCP42x1.
+//  ---------------------------------------------------------------------------
+void mcp42x1WriteReg( uint8_t spi, uint8_t reg, uint16_t value )
+/*
+    This is a 16-bit command in 2 8-bit parts:
+
+    +----------------------------------------------------------------+
+    |  reg address  |  cmd  | data  ||             data              |
+    |---------------+-------+-------||-------------------------------|
+    | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 || 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    |---+---+---+---+---+---+---+---++---+---+---+---+---+---+---+---|
+    | 0 | 0 | 0 | 0 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  Wiper 0
+    | 0 | 0 | 0 | 1 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  Wiper 1
+    | 0 | 1 | 0 | 0 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  TCON
+    | 0 | 1 | 0 | 1 | 0 | 0 | x | x || x | x | x | x | x | x | x | x |  Status
+    +----------------------------------------------------------------+
+
+    All other addresses are reserved.
+    Data is 10 bits.
+*/
+{
+    uint8_t cmd;
+    uint8_t data;
+    char bytes[2];
+
+    cmd  = ( reg << 4 ) & 0xf0;               // Register address.
+    cmd |= ( MCP42X1_CMD_WRITE << 2 ) & 0x0c; // Command.
+    cmd |= (( value >> 8 ) & 0x03 );          // Data bits 8 - 9.
+    data = ( value & 0xff );                  // Data bits 0 - 7.
+
+    bytes[0] = cmd;
+    bytes[1] = data;
+
+    printf( "Writing Register:\n" );
+    printf( "Register = 0x%01x.\n", reg );
+    printf( "Data     = 0x%04x.\n", value );
+    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_WRITE );
+    printf( "Cmd byte = 0x%02x.\n", bytes[0] );
+    printf( "Dat byte = 0x%02x.\n", bytes[1] );
+
+    // Send command via SPI bus.
+    spiWrite( spi, bytes,  2 );
+
+    return;
 }
 
 //  ---------------------------------------------------------------------------
 //  Sets wiper resistance.
 //  ---------------------------------------------------------------------------
-void mcp42x1SetResistance( uint8_t handle, uint16_t resistance )
+void mcp42x1SetResistance( uint8_t spi, uint8_t wiper, uint16_t value )
 /*
     This is a 16-bit command in 2 8-bit parts:
 
@@ -168,26 +189,19 @@ void mcp42x1SetResistance( uint8_t handle, uint16_t resistance )
         0x000 to 0x101 for 8-bit mode.
 */
 {
-    union command
+    switch ( wiper )
     {
-        uint16_t word;
-        char    *bytes;
-    } cmd;
-
-    cmd.word =  MCP42X1_CMD_WRITE;           // Command.
-    cmd.word |= mcp42x1[handle]->wiper << 8; // Register address.
-    cmd.word |= ( resistance & 0x1ff );      // Resistance.
-
-    // Send command via SPI bus.
-    spiWrite( mcp42x1[handle]->spi, cmd.bytes,  2 );
-
+        case 0  : mcp42x1WriteReg( spi, MCP42X1_REG_WIPER0, value ); break;
+        case 1  : mcp42x1WriteReg( spi, MCP42X1_REG_WIPER1, value ); break;
+        default : return;
+    }
     return;
 }
 
 //  ---------------------------------------------------------------------------
 //  Increments wiper resistance.
 //  ---------------------------------------------------------------------------
-void mcp42x1IncResistance( uint8_t handle )
+void mcp42x1IncResistance( uint8_t spi, uint8_t wiper )
 /*
     This is an 8-bit command:
 
@@ -201,17 +215,25 @@ void mcp42x1IncResistance( uint8_t handle )
         +-------------------------------+
 */
 {
-    union command
-    {
-        uint8_t full;
-        char    *bytes;
-    } cmd;
+    uint8_t cmd;
+    char    bytes[1];
 
-    cmd.full =  MCP42X1_CMD_INC;                   // Command.
-    cmd.full |= ( mcp42x1[handle]->wiper & 0xf0 ); // Wiper address.
+    switch ( wiper ) // Register address.
+    {
+        case 0 : cmd = ( MCP42X1_REG_WIPER0 << 4 ) & 0xf0; break;
+        case 1 : cmd = ( MCP42X1_REG_WIPER1 << 4 ) & 0xf0; break;
+        default : return;
+    }
+    cmd |= ( MCP42X1_CMD_INC << 2 ) & 0x0c; // Command;
+    bytes[0] = cmd;
+
+    printf( "Incrementing Resistance:\n" );
+    printf( "Register = 0x%01x.\n", wiper );
+    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_INC );
+    printf( "Cmd byte = 0x%02x.\n", bytes[0] );
 
     // Send command via SPI bus.
-    spiWrite( mcp42x1[handle]->spi, cmd.bytes, 1 );
+    spiWrite( spi, bytes, 1 );
 
     return;
 }
@@ -231,19 +253,27 @@ void mcp42x1IncResistance( uint8_t handle )
         | 0 | 0 | 0 | 1 | 1 | 0 | - | - | Wiper 1
         +-------------------------------+
 */
-void mcp42x1DecResistance( uint8_t handle )
+void mcp42x1DecResistance( uint8_t spi, uint8_t wiper )
 {
-    union command
-    {
-        uint8_t full;
-        char    *bytes;
-    } cmd;
+    uint8_t cmd;
+    char    bytes[1];
 
-    cmd.full =  MCP42X1_CMD_DEC;                   // Command.
-    cmd.full |= ( mcp42x1[handle]->wiper & 0xf0 ); // Wiper address.
+    switch ( wiper ) // Register address.
+    {
+        case 0 : cmd = ( MCP42X1_REG_WIPER0 << 4 ) & 0xf0; break;
+        case 1 : cmd = ( MCP42X1_REG_WIPER1 << 4 ) & 0xf0; break;
+        default : return;
+    }
+    cmd |= ( MCP42X1_CMD_DEC << 2 ) & 0x0c; // Command;
+    bytes[0] = cmd;
+
+    printf( "Incrementing Resistance:\n" );
+    printf( "Register = 0x%01x.\n", wiper );
+    printf( "Command  = 0x%01x.\n", MCP42X1_CMD_DEC );
+    printf( "Cmd byte = 0x%02x.\n", bytes[0] );
 
     // Send command via SPI bus.
-    spiWrite( mcp42x1[handle]->spi, cmd.bytes, 1 );
+    spiWrite( spi, bytes, 1 );
 
     return;
 }
@@ -255,11 +285,10 @@ int8_t mcp42x1Init( uint8_t spi, uint8_t wiper )
 //  SPI configuration flags - see pigpio.
 {
     struct mcp42x1 *mcp42x1this; // MCP42x1 instance.
-    static bool    init = false; // 1st call.
-    static uint8_t index = 0;    // Index for mcp42x1 struct.
+    static bool init = false;    // 1st call.
 
-    int8_t  handle  = -1; // MCP41x1 handle.
-    uint8_t i;            // Counter.
+    uint8_t handle = -1; // MCP42x1 handle.
+    uint8_t i;           // Counter.
 
     if ( !init ) // 1st call to this function.
     {
@@ -267,7 +296,7 @@ int8_t mcp42x1Init( uint8_t spi, uint8_t wiper )
             mcp42x1[i] = NULL;
     }
 
-    // Get next available ID.
+    // Get next available handle.
     for ( i = 0; i < MCP42X1_DEVICES * MCP42X1_WIPERS; i++ )
         if ( mcp42x1[i] == NULL ) // If not already init.
         {
@@ -277,32 +306,27 @@ int8_t mcp42x1Init( uint8_t spi, uint8_t wiper )
 
     if ( handle < 0 ) return MCP42X1_ERR_NOINIT; // Return if not init.
 
+    // Return if wiper is not valid.
+    if (( wiper < 0 ) | ( wiper > 1 )) return MCP42X1_ERR_NOWIPER;
+
     // Allocate memory for MCP42x1 data structure.
     mcp42x1this = malloc( sizeof ( struct mcp42x1 ));
 
     // Return if unable to allocate memory.
     if ( mcp42x1this == NULL ) return MCP42X1_ERR_NOMEM;
 
-    // Set wiper address. Return if wiper is not valid.
-    switch ( wiper )
-    {
-        case 0  : mcp42x1this->wiper = MCP42X1_REG_WIPER0; break;
-        case 1  : mcp42x1this->wiper = MCP42X1_REG_WIPER1; break;
-        default : return MCP42X1_ERR_NOWIPER; break;
-    }
-
     // Create an instance of this device.
-    mcp42x1this->spi = spi; // SPI handle.
+    mcp42x1this->spi = spi;     // SPI handle.
+    mcp42x1this->wiper = wiper; // Wiper.
 
     // Check this instance is unique.
-    for ( i = 0; i < index; i++ )
+    for ( i = 0; i < handle; i++ )
         if (( mcp42x1this->spi   == mcp42x1[i]->spi ) &&
             ( mcp42x1this->wiper == mcp42x1[i]->wiper ))
              return MCP42X1_ERR_DUPLIC;
 
-    mcp42x1[index] = mcp42x1this; // Copy into instance.
+    mcp42x1[handle] = mcp42x1this; // Copy into instance.
 
-    index++;
     init = true;
 
     return handle;
