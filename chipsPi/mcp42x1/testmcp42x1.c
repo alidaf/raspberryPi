@@ -23,7 +23,7 @@
 //  ===========================================================================
 */
 
-#define TESTMCP42X1_VERSION 01.01
+#define TESTMCP42X1_VERSION 01.02
 
 /*
 //  ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@
 
 //  ---------------------------------------------------------------------------
 
-    Authors:        D.Faulke            14/01/2016
+    Authors:        D.Faulke            15/01/2016
 
     Contributors:
 
@@ -46,6 +46,7 @@
 
         v01.00      Original version.
         v01.01      Modified init routine.
+        v01.02      Modified test circuit.
 
 //  Information. --------------------------------------------------------------
 
@@ -57,23 +58,26 @@
                         +-----------( )-----------+
                         |  Fn  | pin | pin |  Fn  |
                         |------+-----+-----+------|
-               CE0 <----| CS   |  01 | 14  |  VDD |---> +5V
+               CE0 <----| CS   |  01 | 14  |  VDD |-----------> +5V
              SCKL1 <----| SCK  |  02 | 13  |  SDO |----> MISO
               MOSI <----| SDI  |  03 | 12  | SHDN |
-               GND <----| VSS  |  04 | 11  |   NC |----> GND
-                        | P1B  |  05 | 10  |  P0B |
-     +5V <--------------| P1W  |  06 | 09  |  P0W |--------------> +5V
-     GND <--/\/\/--|<|--| P1A  |  07 | 08  |  P0A |--|>|--/\/\/--> GND
-             75R   //   +-------------------------+   \\    75R
-                   LED                               LED
+   GND <-;------------;-| VSS  |  04 | 11  |   NC |-;------------;-> GND
+         |         R  '-| P1B  |  05 | 10  |  P0B |-'  R         |
+         '--|<|--/\/\/--| P1W  |  06 | 09  |  P0W |--/\/\/--|>|--'
+            //        ,-| P1A  |  07 | 08  |  P0A |-,        \\
+            LED       | +-------------------------+ |       LED
+                      |                             |
+                      '-----------------------------'---------> +5V
 
-        The LEDs have a forward voltage and current of 1.8V and 20mA
-        respectively so a 160Ohms resistance is ideal (for 5V VDD) for placing
-        in series with it. However, the wiper resistance is 75 Ohms so only an
-        85 Ohms resistor is needed. The closest I have is 75 Ohms, which seems
-        fine.
+        The LEDs have a forward voltage of 1.8V and a max current of 20mA,
+        therefore a 160 Ohm resistance is ideal (for 5V VDD) for placing
+        in series with it:
 
+                    R = V / I.
                     R = (5 - 1.8) / 20x10-3 = 160 Ohms.
+
+        However, the wiper resistance is already 75 Ohms so only an 85 Ohm
+        resistor is needed. The closest I have is 75 Ohms, which seems fine.
 
         NC is not internally connected but can be externally connected to VDD
         or VSS to reduce noise coupling.
@@ -137,8 +141,8 @@ int main()
     for ( i = 0; (mcp42x1[i] != NULL); i++ )
     {
         printf( "\tDevice %d:\n", i );
-        printf( "\tSPI handle    = %d,\n", mcp42x1[i]->spi );
-        printf( "\tWiper address = %x.\n", mcp42x1[i]->wiper );
+        printf( "\tSPI handle    = %d,\n",   mcp42x1[i]->spi );
+        printf( "\tWiper address = 0x%x.\n", mcp42x1[i]->wiper );
         printf( "\n" );
     }
 
@@ -149,8 +153,7 @@ int main()
 
     //  Test setting wiper values. --------------------------------------------
 
-    printf( "Starting test. Press a key to continue." );
-    getchar();
+    printf( "Starting cycle.\n" );
 
     //  Set wiper values to max (fully dimmed).
 //    mcp42x1SetResistance ( 0, MCP42X1_RMAX );
@@ -159,19 +162,19 @@ int main()
     //  Cycle wiper values.
     for ( i = 0; i < 10; i++ )
     {
+        printf( "Decreasing.\n" );
         for ( j = 0; j < 254; j++ )
         {
-            printf( "Decreasing.\n" );
             mcp42x1DecResistance( 0 );
             mcp42x1DecResistance( 1 );
-            gpioDelay( 1000000000 );
+            gpioDelay( 10000 );
         }
+        printf( "Increasing.\n" );
         for ( j = 0; j < 254; j++ )
         {
-            printf( "Increasing.\n" );
             mcp42x1IncResistance( 0 );
             mcp42x1IncResistance( 1 );
-            gpioDelay( 1000000000 );
+            gpioDelay( 10000 );
         }
     }
 
