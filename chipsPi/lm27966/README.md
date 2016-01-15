@@ -55,13 +55,13 @@ The **LM27966** is only available in a WQFN package, so not easy to prototype wi
  * The **I2C** address is fixed at 0x36.
  * There are three registers:
 
-    +--------------------------------------------------+
-    | Register                                  | Addr |
-    |-------------------------------------------+------|
-    | General purpose register                  | 0x10 |
-    | Main display brightness control register  | 0xa0 |
-    | Auxiliary LED brightness control register | 0xc0 |
-    +--------------------------------------------------+
+     +--------------------------------------------------+
+     | Register                                  | Addr |
+     |-------------------------------------------+------|
+     | General purpose register                  | 0x10 |
+     | Main display brightness control register  | 0xa0 |
+     | Auxiliary LED brightness control register | 0xc0 |
+     +--------------------------------------------------+
 
 #####General purpose register:
 
