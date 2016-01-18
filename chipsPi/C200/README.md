@@ -12,7 +12,6 @@ See http://hardwarebug.org/2015/02/26/popcorn-hour-revisited/
 
 There are two connectors to the front panel that provide access to the display and USBs:
 
-
     J1 - Front Panel.                               J8 - Front USBs.
     +-------------------------------------------+   +----------------+
     | Pin | Function    | Description           |   | Pin | Function | 
@@ -36,7 +35,79 @@ There are two connectors to the front panel that provide access to the display a
  * Front panel button presses are encoded by a separate microcontroller and sent via the RC_OUT pin using NEC encoded codes.
  * The RC_IN receives NEC encoded controls and duplicates them on the RC_OUT pin.
  * the STB_LED pin activates an amber LED and also resets the **MAX7325** and **LM27966**.
+---
+####AMG19264 display.
 
+Pin layout:
+
+        +-----------------------------------------------------+
+        | Pin | Label | Description                           |
+        |-----+-------+---------------------------------------|
+        |   1 |  Vss  | Ground (0V) for logic.                |
+        |   2 |  Vdd  | 5V supply for logic.                  |
+        |   3 |  Vo   | Variable V for contrast.              |
+        |   4 |  Vee  | Voltage output.                       |
+        |   5 |  RS   | Register Select. 0: command, 1: data. |
+        |   6 |  RW   | R/W. 0: write, 1: read.               |
+        |   7 |  E    | Enable bit.                           |
+        |   8 |  DB0  | Data bit 0.                           |
+        |   9 |  DB1  | Data bit 1.                           |
+        |  10 |  DB2  | Data bit 2.                           |
+        |  11 |  DB3  | Data bit 3.                           |
+        |  12 |  DB4  | Data bit 4.                           |
+        |  13 |  DB5  | Data bit 5.                           |
+        |  14 |  DB6  | Data bit 6.                           |
+        |  15 |  DB7  | Data bit 7.                           |
+        |  16 |  CS3  | Chip select (left).                   |
+        |  17 |  CS2  | Chip select (middle).                 |
+        |  18 |  CS1  | Chip select (right).                  |
+        |  19 |  RST  | Reset signal.                         |
+        |  20 |  BLA  | Voltage for backlight (max 5V).       |
+        |  21 |  BLK  | Ground (0V) for backlight.            |
+        +-----------------------------------------------------+
+
+ * Most displays are combinations of up to 3 64x64 modules, each controlled via the CSx (chip select) registers.
+
+**AMG19264** register bits:
+        +-------+ +-------------------------------+
+        |RS |RW | |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|
+        |---+---| |---+---+---+---+---+---+---+---|
+        | 0 | 0 | | 0 | 0 | 1 | 1 | 1 | 1 | 1 | D |
+        | 0 | 0 | | 0 | 1 | Y | Y | Y | Y | Y | Y |
+        | 0 | 0 | | 1 | 0 | 1 | 1 | 1 | P | P | P |
+        | 0 | 0 | | 1 | 1 | X | X | X | X | X | X |
+        | 0 | 1 | | B | 1 | S | R | 0 | 0 | 0 | 0 |
+        | 1 | 0 | |   :   : Write Data:   :   :   |
+        | 1 | 1 | |   :   : Read Data :   :   :   |
+        +-------+ +-------------------------------+
+
+Key:
+       +-------------------------+
+       | Key | Effect            |
+       +-----+-------------------+
+       |  D  | Display on/off.   |
+       |  B  | Busy status.      |
+       |  S  | Display status.   |
+       |  R  | Reset status.     |
+       |  X  | X address (0-63). |
+       |  Y  | Y address (0-63). |
+       |  P  | Page (0-7).       |
+       +-------------------------+
+
+Some **AMG19264** commands:
+
+    +-------+ +---------------------+
+    |RS |RW | | Cmd  | Function.    |
+    |---+---| |------+--------------|
+    | 0 | 0 | | 0x3e | Display off. |
+    | 0 | 0 | | 0x3f | Display on.  |
+    | 0 | 0 | | 0x40 | Y position.  |
+    | 0 | 0 | | 0xc0 | X position.  |
+    | 0 | 0 | | 0xb8 | Page.        |
+    | 0 | 1 | | 0x40 | Read status. |
+    +-------+ +---------------------+
+
+---
 ####MAX7325 I2C port expander:
 
 The **MAX7325** is an **I2C** interface port expander that features 16 I/O ports, divided into 8 push-pull outputs and 8 I/Os with selectable internal pull-ups and transition detection.
@@ -54,16 +125,16 @@ The addresses used in the **C200** are 0x5d and 0x6d. From Tables 2 and 3 of the
 
 The 8th bit of the slave address is the R/W bit, low for write, high for read.
 
-Reading.
+Reading:
  * A single-byte read from the I/O ports (P0-P7) returns the status of the ports and clears the transition flags and interrupt output.
  * A two-byte read from the I/O ports (P0-P7) returns the status of the ports followed by the transition flags as the 2nd byte.
  * A multi-byte read from the I/O ports repeatedly returns the port status followed by the transition flags.
  * Single-byte and multi-byte reads from the output ports (O8-O15) return the status either singly or continuously. 
-Writing.
+Writing:
  * A single byte write to either port group sets the logic state of all 8 ports.
  * A multibyte write repeatedly sets the logic state of all 8 ports.
 
-####LM27966 LED driver with I2C interface:
+####LM27966 LED driver.
 
 The **LM27966** is a charge-pump based display LED driver with an **I2C** compatible interface that can drive up to 6 LEDs in 2 banks. The main bank of 4 or 5 LEDs is intended as a backlight to a display and the secondary bank of 1 LED as a general purpose indicator. The brightness of each bank can be controlled independently via the **I2C** interface.
 
