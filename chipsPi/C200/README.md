@@ -32,9 +32,10 @@ There are two connectors to the front panel that provide access to the display a
     |  14 | TEST        | Test.                 |
     +-------------------------------------------+
 
- * Front panel button presses are encoded by a separate microcontroller and sent via the RC_OUT pin using NEC encoded codes.
- * The RC_IN receives NEC encoded controls and duplicates them on the RC_OUT pin.
- * the STB_LED pin activates an amber LED and also resets the **MAX7325** and **LM27966**.
+ * Front panel button presses are encoded by a separate microcontroller and sent via the **RC_OUT** pin using NEC encoded codes.
+ * The **RC_IN** receives NEC encoded controls and duplicates them on the **RC_OUT** pin.
+ * the **STB_LED** pin activates an amber LED and also resets the **MAX7325** and **LM27966**.
+
 ---
 ####AMG19264 display.
 
@@ -69,6 +70,7 @@ Pin layout:
  * Most displays are combinations of up to 3 64x64 modules, each controlled via the CSx (chip select) registers.
 
 **AMG19264** register bits:
+
         +-------+ +-------------------------------+
         |RS |RW | |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|
         |---+---| |---+---+---+---+---+---+---+---|
@@ -82,6 +84,7 @@ Pin layout:
         +-------+ +-------------------------------+
 
 Key:
+
        +-------------------------+
        | Key | Effect            |
        +-----+-------------------+
