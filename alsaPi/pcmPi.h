@@ -22,7 +22,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            02/02/2016
+    Authors:        D.Faulke            05/02/2016
 
     Contributors:
 
@@ -38,47 +38,130 @@
 //  Info. ---------------------------------------------------------------------
 /*
     I have searched high and low for details on how to capture ALSA PCM data to
-    be able to code some audio meters but most examples rely on creating a ring
-    buffer, creating a .asoundrc file and opening a local audio file. This
-    isn't suitable for tapping into existing streams or viable for most users.
+    be able to code some audio meters but the API is difficult to understand
+    and most examples rely on creating a recording ring buffer, creating or
+    modifying a .asoundrc file and opening a local audio file rather than a
+    stream.
     The primary aim is to use Squeezelite as a player on the Tiny Core Linux
     platform, streaming from a Logitech Media Server. Squeezelite has a
     companion control and visualisation app (Jivelite) that requires a
     graphical desktop but taps into a shared memory buffer. There is little in
-    the way of an API so this code represents an effort to convert as little
-    of the Jivelite code as possible to provide a more generic feed of PCM
-    stream data to allow visualisations to be coded for small LCD or OLED
-    displays.
+    the way of an API so this code represents an effort to figure out the
+    shared buffer and use it allow visualisations to be coded for small LCD or
+    OLED displays.
+*/
+
+/*
+    Peak Level Meter:
+
+    The IEC60268-18 (1995) specification defines minimum scale markings per dB.
+
+            +-------------------------------------------------+
+            |     Range      |    Numbers     |     Ticks     |
+            |----------------+----------------+---------------|
+            |   0dB -> -20dB | 5dB  intervals | 1dB intervals |
+            | -20dB -> -40dB | 10dB intervals | none          |
+            | -40dB -> -60dB | 10dB intervals | at 45dB       |
+            +-------------------------------------------------+
+
+    A typical LED panel display can extend down to -96dB for 16-bit audio or
+    -144dB for 24-bit audio. However, there are limitations due to The intended
+    use here for an LCD with 16 columns
+
+    A hardware peak meter with level hold using LEDs can be made with two
+    multiplexed circuits; a bar graph mode circuit for the integrated signal
+    and a dot mode circuit for the peak hold. These are multiplexed together
+    to form the PPM display.
+
+    The display levels will be encoded as two binary strings; one for the
+    current level as contiguous bits (bar graph), and one for the peak hold as
+    an individual bit (dot mode). These can then be OR'ed together to form a
+    composite string that can be used to construct the meter.
+
+            Typical panel       LCD 16x2 (transposed)
+
+           dBfs  L   R
+              0 [ ] [ ]
+             -2 [ ] [ ]         col  dBfs  cell   bit
+             -4 [ ] [ ]         16      0 [ ] [ ] 15
+             -6 [ ] [ ]         15     -2 [ ] [ ] 14
+             -8 [ ] [ ]         14     -4 [ ] [ ] 13
+            -10 [ ] [ ]         13     -6 [ ] [ ] 12
+            -12 [ ] [ ]         12     -8 [ ] [ ] 11
+            -14 [ ] [ ]         11    -10 [ ] [ ] 10
+            -16 [ ] [ ]         10    -12 [ ] [ ]  9
+            -18 [ ] [ ]          9    -14 [ ] [ ]  8
+            -20 [ ] [ ]          8    -16 [ ] [ ]  7
+            -30 [ ] [ ]          7    -18 [ ] [ ]  6
+            -40 [ ] [ ]          6    -20 [ ] [ ]  5
+            -50 [ ] [ ]          5    -30 [ ] [ ]  4
+                [ ] [ ]          4    -40 [ ] [ ]  3
+            -70 [ ] [ ]          3    -50 [ ] [ ]  2
+                [ ] [ ]          2    -60 [ ] [ ]  1
+            -96 [ ] [ ]          1    -80 [L] [R]  0
+                [ ] [ ]
+           -inf [ ] [ ]
+
 */
 
 //  Types. --------------------------------------------------------------------
 
-#define VIS_BUF_SIZE 16384
-//#define VUMETER_DEFAULT_SAMPLE_WINDOW 1024 * 2
+#define VIS_BUF_SIZE 16384 // Predefined in Squeezelite.
 
+/*
+    This is the structure of the shared memory object defined in Squeezelite.
+    See https://github.com/ralph-irving/squeezelite/blob/master/output_vis.c.
+    It looks like the samples in this buffer are fixed to 16-bit.
+    Audio samples > 16-bit are right shifted so that only the higher 16-bits
+    are used.
+*/
 static struct vis_t
 {
     pthread_rwlock_t rwlock;
     uint32_t buf_size;
     uint32_t buf_index;
-    bool running;
+    bool     running;
     uint32_t rate;
-    time_t updated;
-    int16_t buffer[VIS_BUF_SIZE];
+    time_t   updated;
+    int16_t  buffer[VIS_BUF_SIZE];
 }  *vis_mmap = NULL;
 
-/*
-static struct pcm_data
+#define PEAK_METER_INTERVALS 16 // Number of peak meter intervals / LEDs.
+
+static struct peak_meter_t
 {
-    uint32_t num_samples;
-    uint32_t value_L;
-    uint32_t value_R;
-    uint32_t max_L;
-    uint32_t max_R;
-    uint8_t  db_L;
-    uint8_t  db_R;
-} pcm_data;
-*/
+    uint8_t  int_time;      // Integration time (ms).
+    int8_t   dBfs[2];       // dBfs values.
+    uint8_t  dBfs_index[4]; // indices for looking up bar and dot codes.
+    int8_t   floor;         // Noise floor for meter (dB);
+    uint16_t reference;     // Reference level.
+    int16_t  intervals[PEAK_METER_INTERVALS]; // Scale intervals and bit maps.
+    uint16_t leds_bar [PEAK_METER_INTERVALS]; // Bar mode binary strings.
+    uint16_t leds_dot [PEAK_METER_INTERVALS]; // Dot mode binary strings.
+}
+    peak_meter =
+{
+    .int_time       = 1,
+    .dBfs           = { 0, 0 },
+    .dBfs_index     = { 0, 0, 0, 0 },
+    .floor          = -80,
+    .reference      = 32768,
+    .intervals      =
+        // dBfs scale intervals.
+        {    -80,    -60,    -50,    -40,    -30,    -20,    -18,    -16,
+             -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  },
+    .leds_bar       =
+        // dBfs bar graph (peak level).
+        { 0x8000, 0xc000, 0xe000, 0xf000, 0xf800, 0xfc00, 0xfe00, 0xff00,
+          0xff80, 0xffc0, 0xffe0, 0xfff0, 0xfff8, 0xfffc, 0xfffe, 0xffff  },
+        // dBfs dot mode (peak hold).
+    .leds_dot       =
+        { 0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100,
+          0x0080, 0x0040, 0x0020, 0x0010, 0x0008, 0x0004, 0x0002, 0x0001   }
+};
+
+// String representations for LCD display.
+char lcd16x2_peak_meter[2][PEAK_METER_INTERVALS + 1] = { "L" , "R" };
 
 static bool running = false;
 static int  vis_fd = -1;

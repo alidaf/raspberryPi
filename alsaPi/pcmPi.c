@@ -6,10 +6,10 @@
     via squeezelite to feed small LCD displays.
     References:
         https://github.com/ralph-irving/jivelite.
-        Code copyrighted Logitech.
 
     Copyright 2016 Darren Faulke <darren@alidaf.co.uk>
-    Portions copyright 2010 Logitech.
+    Portions copyright: 2012-2015 Adrian Smith,
+                        2015-2016 Ralph Irving.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 /*
     For a shared library, compile with:
 
-        gcc -c -Wall -fpic pcmPi.c -lasound -lm -lpthread -lrt
+        gcc -c -Wall -fpic pcmPi.c -lm -lpthread -lrt -lasound
         gcc -shared -o libpcmPi.so pcmPi.o
 
     For Raspberry Pi v1 optimisation use the following flags:
@@ -43,7 +43,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            02/02/2016
+    Authors:        D.Faulke            04/02/2016
 
     Contributors:
 */
@@ -51,30 +51,26 @@
 
 //  Installed libraries -------------------------------------------------------
 
-//#include <alsa/asoundlib.h>
-//#include <math.h>
 #include <stdbool.h>
 
 #include <pthread.h>
 #include <stdio.h>
-#include <sys/mman.h>   // mmap.
-#include <stdint.h>     // Standard integer types.
+#include <sys/mman.h>
+#include <stdint.h>
 #include <math.h>
 
-//  For get_mac_address function:
-#include <stdlib.h>     // malloc.
-#include <fcntl.h>      // open.
-#include <string.h>     // string functions.
-#include <sys/socket.h> // socket.
-#include <sys/ioctl.h>  // ioctl.
-#include <net/if.h>     // ifreq.
-#include <unistd.h>     // close.
+#include <stdlib.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <unistd.h>
 
 //  Local libraries -----------------------------------------------------------
 
 #include "pcmPi.h"
 
-//  Types. --------------------------------------------------------------------
 
 //  Functions. ----------------------------------------------------------------
 
@@ -83,8 +79,8 @@
 //  ---------------------------------------------------------------------------
 /*
     There are many, much simpler examples available but the Jivelite code
-    has been largely used as it isn't clear why Jivelite has a storage array
-    for 4 ifreq structs just yet.
+    has been largely used as it is based on the Squeezelite code and therefore
+    has some synergy!
 */
 static char *get_mac_address()
 {
@@ -114,7 +110,6 @@ static char *get_mac_address()
     {
         // Get last interface.
         ifend = ifs + ( ifc.ifc_len / sizeof( struct ifreq ));
-//        printf( "Num interfaces = %d.\n", ifc.ifc_len / sizeof ( struct ifreq ));
 
         // Loop through interfaces.
         for ( ifr = ifc.ifc_req; ifr < ifend; ifr++ )
@@ -122,12 +117,9 @@ static char *get_mac_address()
             if ( ifr->ifr_addr.sa_family == AF_INET )
             {
                 strncpy( ifreq.ifr_name, ifr->ifr_name, sizeof( ifreq.ifr_name ));
-//                printf( "Found interface \"%s\".\n", ifr->ifr_name );
                 if ( ioctl( sd, SIOCGIFHWADDR, &ifreq ) == 0 )
                 {
                     memcpy( mac, ifreq.ifr_hwaddr.sa_data, 6 );
-//                    printf( "MAC address = %02x:%02x:%02x:%02x:%02x:%02x.\n",
-//                             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5] );
                     // Leave on first valid address.
                     if ( mac[0]+mac[1]+mac[2] != 0 ) ifr = ifend;
                 }
@@ -152,7 +144,7 @@ static char *get_mac_address()
 //  ---------------------------------------------------------------------------
 static void _reopen( void )
 /*
-    Jivelite code. Not fully understood yet.
+    Jivelite code.
 */
 {
 	char shm_path[40];
@@ -178,27 +170,23 @@ static void _reopen( void )
 	}
 
     /*
-        It appears that memory is mapped in a manner similar to a file system
-        with a path that is determined by the MAC address of the Squeezelite
-        player.
+        The shared memory object is defined by Squeezelite and is identified
+        by a name made from the MAC address.
+        see output_vis.c of Squeezelite source code.
     */
 	sprintf( shm_path, "/squeezelite-%s", mac_address ? mac_address : "" );
-//    printf( "Memory path = %s.\n", shm_path );
 
     // Open shared memory.
 	vis_fd = shm_open( shm_path, O_RDWR, 0666 );
-//    printf( "Open shared memory result = %d.\n", vis_fd );
 	if ( vis_fd > 0 )
 	{
         // Map memory.
-//        printf( "Mapping memory.\n" );
         vis_mmap = mmap( NULL, sizeof( struct vis_t ),
                          PROT_READ | PROT_WRITE,
                          MAP_SHARED, vis_fd, 0 );
 
         if ( vis_mmap == MAP_FAILED )
         {
-//            printf( "Failed to map memory.\n" );
             close( vis_fd );
             vis_fd = -1;
             vis_mmap = NULL;
@@ -212,6 +200,11 @@ static void _reopen( void )
 static void vis_check( void )
 /*
     Jivelite code.
+    This function maps the shared memory object if it has not already done so
+    within the last 5 seconds.
+    The buffer can contain 16384 samples, which at the highest sample rate of
+    384kHz, is enough for around 42ms. This increases to 371ms for 44.1kHz.
+    Shouldn't the shared memory object be mapped more frequently?
 */
 {
     static time_t lastopen = 0;
@@ -242,42 +235,64 @@ static void vis_check( void )
     }
 }
 
+
+//  ---------------------------------------------------------------------------
+//  Locks the memory mapping thread.
+//  ---------------------------------------------------------------------------
 static void vis_lock( void )
 {
     if ( !vis_mmap ) return;
     pthread_rwlock_rdlock( &vis_mmap->rwlock );
 }
 
+//  ---------------------------------------------------------------------------
+//  Unlocks the memory mapping thread.
+//  ---------------------------------------------------------------------------
 static void vis_unlock( void )
 {
     if ( !vis_mmap ) return;
     pthread_rwlock_unlock( &vis_mmap->rwlock );
 }
 
+//  ---------------------------------------------------------------------------
+//  Returns the stream status.
+//  ---------------------------------------------------------------------------
 static bool vis_get_playing( void )
 {
     if ( !vis_mmap ) return false;
     return running;
 }
 
+//  ---------------------------------------------------------------------------
+//  Returns the stream bit rate.
+//  ---------------------------------------------------------------------------
 static uint32_t vis_get_rate( void )
 {
     if ( !vis_mmap ) return 0;
     return vis_mmap->rate;
 }
 
+//  ---------------------------------------------------------------------------
+//  Returns the shared audio buffer.
+//  ---------------------------------------------------------------------------
 static int16_t *vis_get_buffer( void )
 {
     if ( !vis_mmap ) return NULL;
     return vis_mmap->buffer;
 }
 
+//  ---------------------------------------------------------------------------
+//  Returns the length of the shared audio buffer.
+//  ---------------------------------------------------------------------------
 static uint32_t vis_get_buffer_len( void )
 {
     if ( !vis_mmap ) return 0;
     return vis_mmap->buf_size;
 }
 
+//  ---------------------------------------------------------------------------
+//  Returns the index into the shared audio buffer.
+//  ---------------------------------------------------------------------------
 static uint32_t vis_get_buffer_idx( void )
 {
     if ( !vis_mmap ) return 0;
@@ -285,80 +300,50 @@ static uint32_t vis_get_buffer_idx( void )
 }
 
 //  ---------------------------------------------------------------------------
-//  Returns mean square values (L & R) of a number of samples.
+//  Returns peak dBfs values (L & R) of a number of stream samples.
 //  ---------------------------------------------------------------------------
-int get_pcm_data()
+/*
+    According to IEC 60268-18 (1995), peak level meters should have the
+    following characteristics:
+
+        Delay time < 150ms.
+        Integration time < 5ms.
+        Return time < 1.7s +/- 0.3s.
+        Hold time = 1.0s +/- 0.5s.
+*/
+int get_dBfs( uint16_t num_samples )
 {
-	long long sample_accumulator[2];
-	int16_t *ptr;
-	int16_t sample;
-	int32_t sample_sq;
-	size_t i, num_samples, samples_until_wrap;
+	int16_t  *ptr;
+	int16_t  sample;
+	uint64_t sample_squared[2];
+	uint16_t sample_rms[2];
+	size_t   i, samples_until_wrap;
 	int offs;
 
-    uint16_t maxL, maxR;
-    double  dBL, dBR;
-    int8_t dBFSL, dBFSR;
-    uint16_t fullscale = 32768;
-
-    maxL = maxR = 0;
-    dBL = dBR = 0;
-    dBFSL = dBFSR = 0;
-
-    /*
-        Standard VU meters have a 300ms response time.
-        Peak Program Meters have a 5ms integration time.
-        Need to check stream info somehow. For now assume stream is
-        16-bit @ 44.1kHz, i.e.
-        VU samples  = 0.3 x 44100 = 13230.
-        PPM samples = 0.005 x 44100 = 221.
-    */
-	num_samples = 2;
-
-	sample_accumulator[0] = 0;
-	sample_accumulator[1] = 0;
-
 	vis_check();
+
+    sample_squared[0] = 0;
+    sample_squared[1] = 0;
 
 	if ( vis_get_playing() )
 	{
 		vis_lock();
 
 		offs = vis_get_buffer_idx() - ( num_samples * 2 );
-//        printf( "Offset = %d.\n", offs );
 		while ( offs < 0 ) offs += vis_get_buffer_len();
 
 		ptr = vis_get_buffer() + offs;
 		samples_until_wrap = vis_get_buffer_len() - offs;
-//        printf( "Samples until wrap = %d.\n", samples_until_wrap );
 
-        /*
-            This approach is a simple averaging of the buffer over time, which
-            is essentially integrating the signal to give the signal energy.
-        */
 		for ( i = 0; i < num_samples; i++ )
 		{
-//			sample = ( *ptr++ ) >> 8;
-			sample = abs( *ptr++ );
-//			sample_sq = sample * sample;
-//			sample_accumulator[0] += sample_sq;
-			sample_accumulator[0] += sample;
-//            printf( "L sample: %06d, ", sample );
-            if ( sample > maxL ) maxL = sample;
-            dBL = 20 * log10( (float) maxL / (float) fullscale );
+            // Channel 0 (L).
+			sample = *ptr++;
+            sample_squared[0] += sample * sample;
 
-            if ( dBL < -88 ) dBFSL = -88; else dBFSL = round( dBL );
-
-//			sample = ( *ptr++ ) >> 8;
-			sample = abs( *ptr++ );
-//			sample_sq = sample * sample;
-//			sample_accumulator[1] += sample_sq;
-			sample_accumulator[1] += sample;
-//            printf( "R sample: %06d\n", sample );
-            if ( sample > maxR ) maxR = sample;
-            dBR = 20 * log10( (float) maxR / (float) fullscale );
-
-            if ( dBR < -88 ) dBFSR = -88; else dBFSR = round( dBL );
+            // Channel 1 (R).
+			sample = *ptr++;
+            sample_squared[1] += sample * sample;
 
 			samples_until_wrap -= 2;
 			if ( samples_until_wrap <= 0 )
@@ -370,63 +355,163 @@ int get_pcm_data()
 		vis_unlock();
 	}
 
-    // Calculate the mean of the accumulated square values.
-	sample_accumulator[0] /= num_samples;
-	sample_accumulator[1] /= num_samples;
-    char *string_L, *string_R;
+    sample_rms[0] = round( sqrt( sample_squared[0] ));
+    sample_rms[1] = round( sqrt( sample_squared[1] ));
 
-    if ( dBFSL >  -2 ) string_L = "################"; else
-    if ( dBFSL >  -4 ) string_L = " ###############"; else
-    if ( dBFSL >  -6 ) string_L = "  ##############"; else
-    if ( dBFSL >  -8 ) string_L = "   #############"; else
-    if ( dBFSL > -10 ) string_L = "    ############"; else
-    if ( dBFSL > -12 ) string_L = "     ###########"; else
-    if ( dBFSL > -14 ) string_L = "      ##########"; else
-    if ( dBFSL > -16 ) string_L = "       #########"; else
-    if ( dBFSL > -18 ) string_L = "        ########"; else
-    if ( dBFSL > -20 ) string_L = "         #######"; else
-    if ( dBFSL > -22 ) string_L = "          ######"; else
-    if ( dBFSL > -24 ) string_L = "           #####"; else
-    if ( dBFSL > -26 ) string_L = "            ####"; else
-    if ( dBFSL > -52 ) string_L = "             ###"; else
-    if ( dBFSL > -76 ) string_L = "              ##"; else
-                       string_L = "               #";
+    peak_meter.dBfs[0] = 20 * log10( (float) sample_rms[0] /
+                                     (float) peak_meter.reference );
+    if ( peak_meter.dBfs[0] < peak_meter.floor )
+         peak_meter.dBfs[0] = peak_meter.floor;
 
-    if ( dBFSR >  -2 ) string_R = "################"; else
-    if ( dBFSR >  -4 ) string_R = "############### "; else
-    if ( dBFSR >  -6 ) string_R = "##############  "; else
-    if ( dBFSR >  -8 ) string_R = "#############   "; else
-    if ( dBFSR > -10 ) string_R = "############    "; else
-    if ( dBFSR > -12 ) string_R = "###########     "; else
-    if ( dBFSR > -14 ) string_R = "##########      "; else
-    if ( dBFSR > -16 ) string_R = "#########       "; else
-    if ( dBFSR > -18 ) string_R = "########        "; else
-    if ( dBFSR > -20 ) string_R = "#######         "; else
-    if ( dBFSR > -22 ) string_R = "######          "; else
-    if ( dBFSR > -24 ) string_R = "#####           "; else
-    if ( dBFSR > -26 ) string_R = "####            "; else
-    if ( dBFSR > -52 ) string_R = "###             "; else
-    if ( dBFSR > -76 ) string_R = "##              "; else
-                       string_R = "#               ";
-
-    printf( "\r%s :L|R: %s",
-                string_L,
-                string_R );
-    fflush( stdout );
+    peak_meter.dBfs[1] = 20 * log10( (float) sample_rms[1] /
+                                     (float) peak_meter.reference );
+    if ( peak_meter.dBfs[1] < peak_meter.floor )
+         peak_meter.dBfs[1] = peak_meter.floor;
 
 	return 1;
 }
 
-int main()
+
+//  ---------------------------------------------------------------------------
+//  Returns a binary string representations of the peak levels.
+//  ---------------------------------------------------------------------------
+void get_dB_indices( void )
 {
     uint8_t i;
+    static  uint8_t count[2] = { 0, 0 };
 
-    for ( ; ; )
+    // Channel 0.
+    for ( i = 0; i < PEAK_METER_INTERVALS; i++ )
     {
-        get_pcm_data();
+        if ( peak_meter.dBfs[0] <= peak_meter.intervals[i] )
+        {
+            peak_meter.dBfs_index[0] = i;
+            if ( i > peak_meter.dBfs_index[2] )
+            {
+                peak_meter.dBfs_index[2] = i;
+                count[0] = 0;
+            }
+            break;
+        }
+    }
+    // Channel 1.
+    for ( i = 0; i < PEAK_METER_INTERVALS; i++ )
+    {
+        if ( peak_meter.dBfs[1] <= peak_meter.intervals[i] )
+        {
+            peak_meter.dBfs_index[1] = i;
+            if ( i > peak_meter.dBfs_index[3] )
+            {
+                peak_meter.dBfs_index[3] = i;
+                count[1] = 0;
+            }
+            break;
+        }
+    }
+
+    count[0]++;
+    count[1]++;
+
+    if ( count[0] >= 5 )
+    {
+        count[0] = 0;
+        if ( peak_meter.dBfs_index[2] > 0 ) peak_meter.dBfs_index[2]--;
+    }
+
+    if ( count[1] >= 5 )
+    {
+        count[1] = 0;
+        if ( peak_meter.dBfs_index[3] > 0 ) peak_meter.dBfs_index[3]--;
+    }
+
+}
+
+
+//  ---------------------------------------------------------------------------
+//  Returns a string representation of the peak meter for a single channel.
+//  ---------------------------------------------------------------------------
+/*
+    This is intended for a small LCD (16x2 or similar) or terminal output.
+*/
+void get_peak_strings( uint8_t index[4],
+                       char    dB_string[2][PEAK_METER_INTERVALS + 1] )
+{
+    uint8_t i;
+    uint16_t muxed[2];
+
+    // Combine bar and dot codes.
+    muxed[0] = ( peak_meter.leds_bar[index[0]] |
+                 peak_meter.leds_dot[index[2]] );
+    muxed[1] = ( peak_meter.leds_bar[index[1]] |
+                 peak_meter.leds_dot[index[3]] );
+//    printf( "Bar = 0x%04x, 0x%04x\n", peak_meter.leds_bar[index[0]],
+//                                      peak_meter.leds_bar[index[1]] );
+//    printf( "Dot = 0x%04x, 0x%04x\n", peak_meter.leds_dot[index[2]],
+//                                      peak_meter.leds_dot[index[3]] );
+//    printf( "Mux = 0x%04x, 0x%04x\n", muxed[0], muxed[1] );
+    /*
+        Ignore first bit since that slot will have channel id ( L or R ).
+        Need to work backwards and shift right otherwise size of var increases.
+    */
+    for ( i = 1; i < PEAK_METER_INTERVALS; i++ )
+    {
+        if (( muxed[0] & 0x1 ) == 0x1 )
+            dB_string[0][PEAK_METER_INTERVALS - i] = '#';
+        else
+            dB_string[0][PEAK_METER_INTERVALS - i] = ' ';
+
+        if (( muxed[1] & 0x1 ) == 0x1 )
+            dB_string[1][PEAK_METER_INTERVALS - i] = '#';
+        else
+            dB_string[1][PEAK_METER_INTERVALS - i] = ' ';
+
+        muxed[0] >>= 1;
+        muxed[1] >>= 1;
+    }
+
+    dB_string[0][i] = '\0';
+    dB_string[1][i] = '\0';
+}
+
+//  ---------------------------------------------------------------------------
+//  Main (functional test).
+//  ---------------------------------------------------------------------------
+int main( void )
+{
+    uint8_t  i;
+    uint16_t samples;
+//    char *string_L, *string_R;
+
+    vis_check();
+
+	samples = vis_get_rate() * peak_meter.int_time / 1000;
+    samples = 2;
+
+    printf( "Samples for %dms = %d\n", peak_meter.int_time, samples );
+
+    while ( 1 )
+    {
+        get_dBfs( samples );
+        get_dB_indices();
+        get_peak_strings( peak_meter.dBfs_index, lcd16x2_peak_meter );
+
+        // Test string function.
+//        get_dB_string( peak_meter.leds_bar[0], lcd16x2_peak_meter[0] );
+//        get_dB_string( peak_meter.leds_bar[1], lcd16x2_peak_meter[1] );
+
+        printf( "\r%04d (0x%05x,0x%05x) %04d (0x%05x,0x%05x) %s  %s",
+            peak_meter.dBfs[0],
+            peak_meter.leds_bar[peak_meter.dBfs_index[0]],
+            peak_meter.leds_dot[peak_meter.dBfs_index[1]],
+            peak_meter.dBfs[1],
+            peak_meter.leds_bar[peak_meter.dBfs_index[2]],
+            peak_meter.leds_dot[peak_meter.dBfs_index[3]],
+            lcd16x2_peak_meter[0],
+            lcd16x2_peak_meter[1] );
+
+        fflush( stdout );
         usleep( 50000 );
     }
 
     return 0;
-
 }
