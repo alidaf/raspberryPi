@@ -29,6 +29,7 @@
     Changelog:
 
         v01.00      Original version.
+        v01.01      Added ncurses demo window.
 */
 //  ===========================================================================
 
@@ -53,6 +54,14 @@
 
 /*
     Peak Level Meter:
+
+    According to IEC 60268-18 (1995), peak level meters should have the
+    following characteristics:
+
+        Delay time < 150ms.
+        Integration time < 5ms.
+        Return time < 1.7s +/- 0.3s.
+        Hold time = 1.0s +/- 0.5s.
 
     The IEC60268-18 (1995) specification defines minimum scale markings per dB.
 
@@ -102,6 +111,34 @@
                 [ ] [ ]
            -inf [ ] [ ]
 
+    Even though 0dBfs is full scale, it is still possible to get an overload
+    with DAC overshoot. There are no specifications for detecting this in the
+    IEC spec but Sony (?) emply a rule that an overload is defined by three
+    consecutive 0dBFS readings. There are other variations but this one is
+    fairly straightforward to understand...
+
+    e.g.
+
+     DAC overshoot -------> , '      } Overload
+                          .     '    }
+     dbFS -------------- [ ] [ ] ['] --------------------------------------
+                         [ ] [ ] [ ].
+                        '[ ] [ ] [ ] [']
+                     ['] [ ] [ ] [ ] [ ]'
+                    .[ ] [ ] [ ] [ ] [ ] [']
+                 ['] [ ] [ ] [ ] [ ] [ ] [ ]'[.]
+             [.]'[ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ].
+           . [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [.]
+    Mean  + - + - + - + - + - + - + - + - + - + - + - + - + - + - + - + -
+                                                     [ ] [ ] [ ] [ ] [ ]
+                                                     ['],[ ] [ ] [ ] [ ]
+                                                         [,] [ ] [ ] [ ]
+                                                            '[,] [ ] [ ]
+                                                                ,[ ] [ ]
+                                                                 [ ] [ ]
+                                                                 [,] [ ]
+    dBFS ---------------------------------------------------------- '[,] ----
+
 */
 
 //  Types. --------------------------------------------------------------------
@@ -127,6 +164,7 @@ static struct vis_t
 }  *vis_mmap = NULL;
 
 #define PEAK_METER_INTERVALS 16 // Number of peak meter intervals / LEDs.
+#define HOLD_DELAY 4
 
 static struct peak_meter_t
 {

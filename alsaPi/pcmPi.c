@@ -28,7 +28,7 @@
 /*
     For a shared library, compile with:
 
-        gcc -c -Wall -fpic pcmPi.c -lm -lpthread -lrt -lasound
+        gcc -c -Wall -fpic pcmPi.c -lm -lpthread -lrt -lasound -lncurses
         gcc -shared -o libpcmPi.so pcmPi.o
 
     For Raspberry Pi v1 optimisation use the following flags:
@@ -43,7 +43,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            04/02/2016
+    Authors:        D.Faulke            05/02/2016
 
     Contributors:
 */
@@ -58,6 +58,8 @@
 #include <sys/mman.h>
 #include <stdint.h>
 #include <math.h>
+
+#include <ncurses.h>
 
 #include <stdlib.h>
 #include <fcntl.h>
@@ -88,13 +90,13 @@ static char *get_mac_address()
     struct  ifreq  *ifr, *ifend;
     struct  ifreq  ifreq;
     struct  ifreq  ifs[3];
-/*
-    Squeezelite only searches first 4 interfaces but Pi will probably only ever
-    have 3 interfaces at most:
-        1) lo (loopback, not used),
-        2) eth0 (ethernet),
-        3) wlan0 (wireless adapter).
-*/
+    /*
+        Squeezelite only searches first 4 interfaces but the Raspberry Pi
+        will probably only ever have 3 interfaces at most:
+            1) lo (loopback, not used),
+            2) eth0 (ethernet),
+            3) wlan0 (wireless adapter).
+    */
     uint8_t mac[6] = { 0, 0, 0, 0, 0, 0 };
 
     // Create a socket for ioctl function.
@@ -171,8 +173,7 @@ static void _reopen( void )
 
     /*
         The shared memory object is defined by Squeezelite and is identified
-        by a name made from the MAC address.
-        see output_vis.c of Squeezelite source code.
+        by a name made up from the MAC address.
     */
 	sprintf( shm_path, "/squeezelite-%s", mac_address ? mac_address : "" );
 
@@ -300,16 +301,11 @@ static uint32_t vis_get_buffer_idx( void )
 }
 
 //  ---------------------------------------------------------------------------
-//  Returns peak dBfs values (L & R) of a number of stream samples.
+//  Calculates peak dBfs values (L & R) of a number of stream samples.
 //  ---------------------------------------------------------------------------
 /*
-    According to IEC 60268-18 (1995), peak level meters should have the
-    following characteristics:
-
-        Delay time < 150ms.
-        Integration time < 5ms.
-        Return time < 1.7s +/- 0.3s.
-        Hold time = 1.0s +/- 0.5s.
+    The dBfs values are currently stored in a global struct variable but this
+    will probably change.
 */
 int get_dBfs( uint16_t num_samples )
 {
@@ -373,8 +369,12 @@ int get_dBfs( uint16_t num_samples )
 
 
 //  ---------------------------------------------------------------------------
-//  Returns a binary string representations of the peak levels.
+//  Calculates the indices for string representations of the peak levels.
 //  ---------------------------------------------------------------------------
+/*
+    The indices are currently stored in a global struct variable but this will
+    probably change.
+*/
 void get_dB_indices( void )
 {
     uint8_t i;
@@ -391,7 +391,7 @@ void get_dB_indices( void )
                 peak_meter.dBfs_index[2] = i;
                 count[0] = 0;
             }
-            break;
+            break; // Need to figure out a better algorithm to remove breaks.
         }
     }
     // Channel 1.
@@ -405,30 +405,30 @@ void get_dB_indices( void )
                 peak_meter.dBfs_index[3] = i;
                 count[1] = 0;
             }
-            break;
+            break; // Need to figure out a better algorithm to remove breaks.
         }
     }
 
     count[0]++;
     count[1]++;
 
-    if ( count[0] >= 5 )
+    // Rudimentary peak hold routine until proper timing is introduced.
+    if ( count[0] >= HOLD_DELAY )
     {
         count[0] = 0;
         if ( peak_meter.dBfs_index[2] > 0 ) peak_meter.dBfs_index[2]--;
     }
 
-    if ( count[1] >= 5 )
+    if ( count[1] >= HOLD_DELAY )
     {
         count[1] = 0;
         if ( peak_meter.dBfs_index[3] > 0 ) peak_meter.dBfs_index[3]--;
     }
-
 }
 
 
 //  ---------------------------------------------------------------------------
-//  Returns a string representation of the peak meter for a single channel.
+//  Produces string representations of the peak meters.
 //  ---------------------------------------------------------------------------
 /*
     This is intended for a small LCD (16x2 or similar) or terminal output.
@@ -439,29 +439,28 @@ void get_peak_strings( uint8_t index[4],
     uint8_t i;
     uint16_t muxed[2];
 
-    // Combine bar and dot codes.
+    // Mux the bar and dot codes by OR'ing together.
     muxed[0] = ( peak_meter.leds_bar[index[0]] |
                  peak_meter.leds_dot[index[2]] );
     muxed[1] = ( peak_meter.leds_bar[index[1]] |
                  peak_meter.leds_dot[index[3]] );
-//    printf( "Bar = 0x%04x, 0x%04x\n", peak_meter.leds_bar[index[0]],
-//                                      peak_meter.leds_bar[index[1]] );
-//    printf( "Dot = 0x%04x, 0x%04x\n", peak_meter.leds_dot[index[2]],
-//                                      peak_meter.leds_dot[index[3]] );
-//    printf( "Mux = 0x%04x, 0x%04x\n", muxed[0], muxed[1] );
+
     /*
         Ignore first bit since that slot will have channel id ( L or R ).
-        Need to work backwards and shift right otherwise size of var increases.
+        This loops throught the bit-code and inserts an appropriate
+        character to fill or space the cell depending on the bit setting.
+        Need to work backwards and shift right otherwise size of muxed
+        can increase and breaks the OR.
     */
     for ( i = 1; i < PEAK_METER_INTERVALS; i++ )
     {
         if (( muxed[0] & 0x1 ) == 0x1 )
-            dB_string[0][PEAK_METER_INTERVALS - i] = '#';
+            dB_string[0][PEAK_METER_INTERVALS - i] = '*';
         else
             dB_string[0][PEAK_METER_INTERVALS - i] = ' ';
 
         if (( muxed[1] & 0x1 ) == 0x1 )
-            dB_string[1][PEAK_METER_INTERVALS - i] = '#';
+            dB_string[1][PEAK_METER_INTERVALS - i] = '*';
         else
             dB_string[1][PEAK_METER_INTERVALS - i] = ' ';
 
@@ -473,6 +472,27 @@ void get_peak_strings( uint8_t index[4],
     dB_string[1][i] = '\0';
 }
 
+
+//  ---------------------------------------------------------------------------
+//  Reverses a string passed as *buffer between start and end.
+//  ---------------------------------------------------------------------------
+static void reverse_string( char *buffer, size_t start, size_t end )
+{
+    char temp;
+    while ( start < end )
+    {
+        end--;
+        temp = buffer[start];
+        buffer[start] = buffer[end];
+        buffer[end] = temp;
+        start++;
+    }
+
+    return;
+};
+
+
+
 //  ---------------------------------------------------------------------------
 //  Main (functional test).
 //  ---------------------------------------------------------------------------
@@ -482,36 +502,80 @@ int main( void )
     uint16_t samples;
 //    char *string_L, *string_R;
 
+    // ncurses stuff.
+    WINDOW *meter_win;
+    initscr();      // Init ncurses.
+    cbreak();       // Disable line buffering.
+    noecho();       // No screen echo of key presses.
+    meter_win = newwin( 7, 30, 10, 30 );
+    box( meter_win, 0, 0 );
+    wrefresh( meter_win );
+    curs_set( 0 );  // Turn cursor off.
+
     vis_check();
 
-	samples = vis_get_rate() * peak_meter.int_time / 1000;
-    samples = 2;
+//	samples = vis_get_rate() * peak_meter.int_time / 1000;
+    samples = 2; // Minimum samples for fastest response but may miss peaks.
 
-    printf( "Samples for %dms = %d\n", peak_meter.int_time, samples );
+//    printf( "Samples for %dms = %d\n", peak_meter.int_time, samples );
+
+    mvwprintw( meter_win, 2, 2, " |....|....|....|" );
+    mvwprintw( meter_win, 3, 2, "-80  -20  -10   0 dBFS" );
+    mvwprintw( meter_win, 4, 2, " |''''|''''|''''|" );
+
+    // Create foreground/background colour pairs for meters.
+    start_color();
+    init_pair( 1, COLOR_GREEN, COLOR_BLACK );
+    init_pair( 2, COLOR_YELLOW, COLOR_BLACK );
+    init_pair( 3, COLOR_RED, COLOR_BLACK );
 
     while ( 1 )
     {
         get_dBfs( samples );
         get_dB_indices();
         get_peak_strings( peak_meter.dBfs_index, lcd16x2_peak_meter );
+//        reverse_string( lcd16x2_peak_meter[0], 0, strlen( lcd16x2_peak_meter[0] ));
 
-        // Test string function.
-//        get_dB_string( peak_meter.leds_bar[0], lcd16x2_peak_meter[0] );
-//        get_dB_string( peak_meter.leds_bar[1], lcd16x2_peak_meter[1] );
+//        printf( "\r%04d (0x%05x,0x%05x) %04d (0x%05x,0x%05x) %s:%s",
+//            peak_meter.dBfs[0],
+//            peak_meter.leds_bar[peak_meter.dBfs_index[0]],
+//            peak_meter.leds_dot[peak_meter.dBfs_index[1]],
+//            peak_meter.dBfs[1],
+//            peak_meter.leds_bar[peak_meter.dBfs_index[2]],
+//            peak_meter.leds_dot[peak_meter.dBfs_index[3]],
+//            lcd16x2_peak_meter[0],
+//            lcd16x2_peak_meter[1] );
 
-        printf( "\r%04d (0x%05x,0x%05x) %04d (0x%05x,0x%05x) %s  %s",
-            peak_meter.dBfs[0],
-            peak_meter.leds_bar[peak_meter.dBfs_index[0]],
-            peak_meter.leds_dot[peak_meter.dBfs_index[1]],
-            peak_meter.dBfs[1],
-            peak_meter.leds_bar[peak_meter.dBfs_index[2]],
-            peak_meter.leds_dot[peak_meter.dBfs_index[3]],
-            lcd16x2_peak_meter[0],
-            lcd16x2_peak_meter[1] );
+//        fflush( stdout ); // Flush buffer for line overwrite.
 
-        fflush( stdout );
-        usleep( 50000 );
+        // Print ncurses data.
+        mvwprintw( meter_win, 1, 3, "%s", lcd16x2_peak_meter[0] );
+        mvwprintw( meter_win, 5, 3, "%s", lcd16x2_peak_meter[1] );
+
+        mvwchgat( meter_win, 1,  4, 9, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 1, 13, 3, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 1, 16, 3, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 5,  4, 9, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 5, 13, 3, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 5, 16, 3, A_NORMAL, 3, NULL );
+
+        // Refresh ncurses window to display.
+        wrefresh( meter_win );
+
+        // Reversal has moved the L to the wrong end. Put it back!
+//        lcd16x2_peak_meter[0][0] = 'L';
+
+        /*
+            A delay to adjust the LCD or screen for eye sensitivity.
+            This delay should only really be applied to the screen updating
+            otherwise dynamics could be missed.
+        */
+        usleep( 100000 );
     }
+
+    // Close ncurses.
+    delwin( meter_win );
+    endwin();
 
     return 0;
 }
