@@ -377,52 +377,33 @@ int get_dBfs( uint16_t num_samples )
 */
 void get_dB_indices( void )
 {
+    uint8_t channel;
     uint8_t i;
-    static  uint8_t count[2] = { 0, 0 };
+    static  uint8_t count[METER_CHANNELS_MAX] = { 0, 0 };
 
-    // Channel 0.
-    for ( i = 0; i < PEAK_METER_INTERVALS; i++ )
+    for ( channel = 0; channel < METER_CHANNELS_MAX; channel++ )
     {
-        if ( peak_meter.dBfs[0] <= peak_meter.intervals[i] )
+        for ( i = 0; i < peak_meter.num_levels; i++ )
         {
-            peak_meter.dBfs_index[0] = i;
-            if ( i > peak_meter.dBfs_index[2] )
+            if ( peak_meter.dBfs[channel] <= peak_meter.intervals[i] )
             {
-                peak_meter.dBfs_index[2] = i;
-                count[0] = 0;
+                peak_meter.bar_index[channel] = i;
+                if ( i > peak_meter.dot_index[channel] )
+                {
+                    peak_meter.dot_index[channel] = i;
+                    count[channel] = 0;
+                }
+                break;
             }
-            break; // Need to figure out a better algorithm to remove breaks.
         }
-    }
-    // Channel 1.
-    for ( i = 0; i < PEAK_METER_INTERVALS; i++ )
-    {
-        if ( peak_meter.dBfs[1] <= peak_meter.intervals[i] )
+        // Rudimentary peak hold routine until proper timing is introduced.
+        count[channel]++;
+        if ( count[channel] >= HOLD_DELAY )
         {
-            peak_meter.dBfs_index[1] = i;
-            if ( i > peak_meter.dBfs_index[3] )
-            {
-                peak_meter.dBfs_index[3] = i;
-                count[1] = 0;
-            }
-            break; // Need to figure out a better algorithm to remove breaks.
+            count[channel] = 0;
+            if ( peak_meter.dot_index[channel] > 0 )
+                 peak_meter.dot_index[channel]--;
         }
-    }
-
-    count[0]++;
-    count[1]++;
-
-    // Rudimentary peak hold routine until proper timing is introduced.
-    if ( count[0] >= HOLD_DELAY )
-    {
-        count[0] = 0;
-        if ( peak_meter.dBfs_index[2] > 0 ) peak_meter.dBfs_index[2]--;
-    }
-
-    if ( count[1] >= HOLD_DELAY )
-    {
-        count[1] = 0;
-        if ( peak_meter.dBfs_index[3] > 0 ) peak_meter.dBfs_index[3]--;
     }
 }
 
@@ -433,43 +414,23 @@ void get_dB_indices( void )
 /*
     This is intended for a small LCD (16x2 or similar) or terminal output.
 */
-void get_peak_strings( uint8_t index[4],
-                       char    dB_string[2][PEAK_METER_INTERVALS + 1] )
+void get_peak_strings( char dB_string[METER_CHANNELS_MAX][PEAK_METER_MAX_LEVELS + 1] )
 {
+    uint8_t channel;
     uint8_t i;
-    uint16_t muxed[2];
 
-    // Mux the bar and dot codes by OR'ing together.
-    muxed[0] = ( peak_meter.leds_bar[index[0]] |
-                 peak_meter.leds_dot[index[2]] );
-    muxed[1] = ( peak_meter.leds_bar[index[1]] |
-                 peak_meter.leds_dot[index[3]] );
-
-    /*
-        Ignore first bit since that slot will have channel id ( L or R ).
-        This loops throught the bit-code and inserts an appropriate
-        character to fill or space the cell depending on the bit setting.
-        Need to work backwards and shift right otherwise size of muxed
-        can increase and breaks the OR.
-    */
-    for ( i = 1; i < PEAK_METER_INTERVALS; i++ )
+    for ( channel = 0; channel < METER_CHANNELS_MAX; channel++ )
     {
-        if (( muxed[0] & 0x1 ) == 0x1 )
-            dB_string[0][PEAK_METER_INTERVALS - i] = '*';
-        else
-            dB_string[0][PEAK_METER_INTERVALS - i] = ' ';
-
-        if (( muxed[1] & 0x1 ) == 0x1 )
-            dB_string[1][PEAK_METER_INTERVALS - i] = '*';
-        else
-            dB_string[1][PEAK_METER_INTERVALS - i] = ' ';
-
-        muxed[0] >>= 1;
-        muxed[1] >>= 1;
+        for ( i = 1; i < peak_meter.num_levels; i++ )
+        {
+            if (( i <= peak_meter.bar_index[channel] ) ||
+                ( i == peak_meter.dot_index[channel] ))
+                dB_string[channel][i] = '|';
+            else
+                dB_string[channel][i] = ' ';
+        }
+        dB_string[channel][i] = '\0';
     }
-
-    dB_string[0][i] = '\0';
-    dB_string[1][i] = '\0';
 }
 
 
@@ -520,7 +481,7 @@ int main( void )
 //    printf( "Samples for %dms = %d\n", peak_meter.int_time, samples );
 
     mvwprintw( meter_win, 2, 2, " |....|....|....|" );
-    mvwprintw( meter_win, 3, 2, "-80  -20  -10   0 dBFS" );
+    mvwprintw( meter_win, 3, 2, "-48  -20  -10   0 dBFS" );
     mvwprintw( meter_win, 4, 2, " |''''|''''|''''|" );
 
     // Create foreground/background colour pairs for meters.
@@ -533,7 +494,7 @@ int main( void )
     {
         get_dBfs( samples );
         get_dB_indices();
-        get_peak_strings( peak_meter.dBfs_index, lcd16x2_peak_meter );
+        get_peak_strings( lcd16x2_peak_meter );
 //        reverse_string( lcd16x2_peak_meter[0], 0, strlen( lcd16x2_peak_meter[0] ));
 
 //        printf( "\r%04d (0x%05x,0x%05x) %04d (0x%05x,0x%05x) %s:%s",

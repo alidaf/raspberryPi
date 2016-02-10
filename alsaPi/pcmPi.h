@@ -22,7 +22,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            05/02/2016
+    Authors:        D.Faulke            10/02/2016
 
     Contributors:
 
@@ -82,32 +82,27 @@
     and a dot mode circuit for the peak hold. These are multiplexed together
     to form the PPM display.
 
-    The display levels will be encoded as two binary strings; one for the
-    current level as contiguous bits (bar graph), and one for the peak hold as
-    an individual bit (dot mode). These can then be OR'ed together to form a
-    composite string that can be used to construct the meter.
-
             Typical panel       LCD 16x2 (transposed)
 
            dBfs  L   R
               0 [ ] [ ]
-             -2 [ ] [ ]         col  dBfs  cell   bit
-             -4 [ ] [ ]         16      0 [ ] [ ] 15
-             -6 [ ] [ ]         15     -2 [ ] [ ] 14
-             -8 [ ] [ ]         14     -4 [ ] [ ] 13
-            -10 [ ] [ ]         13     -6 [ ] [ ] 12
-            -12 [ ] [ ]         12     -8 [ ] [ ] 11
-            -14 [ ] [ ]         11    -10 [ ] [ ] 10
-            -16 [ ] [ ]         10    -12 [ ] [ ]  9
-            -18 [ ] [ ]          9    -14 [ ] [ ]  8
-            -20 [ ] [ ]          8    -16 [ ] [ ]  7
-            -30 [ ] [ ]          7    -18 [ ] [ ]  6
-            -40 [ ] [ ]          6    -20 [ ] [ ]  5
-            -50 [ ] [ ]          5    -30 [ ] [ ]  4
-                [ ] [ ]          4    -40 [ ] [ ]  3
-            -70 [ ] [ ]          3    -50 [ ] [ ]  2
-                [ ] [ ]          2    -60 [ ] [ ]  1
-            -96 [ ] [ ]          1    -80 [L] [R]  0
+             -2 [ ] [ ]         col  dBfs  cell
+             -4 [ ] [ ]         16      0 [ ] [ ]
+             -6 [ ] [ ]         15     -2 [ ] [ ]
+             -8 [ ] [ ]         14     -4 [ ] [ ]
+            -10 [ ] [ ]         13     -6 [ ] [ ]
+            -12 [ ] [ ]         12     -8 [ ] [ ]
+            -14 [ ] [ ]         11    -10 [ ] [ ]
+            -16 [ ] [ ]         10    -12 [ ] [ ]
+            -18 [ ] [ ]          9    -14 [ ] [ ]
+            -20 [ ] [ ]          8    -16 [ ] [ ]
+            -30 [ ] [ ]          7    -18 [ ] [ ]
+            -40 [ ] [ ]          6    -20 [ ] [ ]
+            -50 [ ] [ ]          5    -30 [ ] [ ]
+                [ ] [ ]          4    -40 [ ] [ ]
+            -70 [ ] [ ]          3    -50 [ ] [ ]
+                [ ] [ ]          2    -60 [ ] [ ]
+            -96 [ ] [ ]          1    -80 [L] [R]
                 [ ] [ ]
            -inf [ ] [ ]
 
@@ -119,7 +114,7 @@
 
     e.g.
 
-     DAC overshoot -------> , '      } Overload
+     DAC overshoot -------> . '      } Overload
                           .     '    }
      dbFS -------------- [ ] [ ] ['] --------------------------------------
                          [ ] [ ] [ ].
@@ -131,13 +126,13 @@
            . [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [.]
     Mean  + - + - + - + - + - + - + - + - + - + - + - + - + - + - + - + -
                                                      [ ] [ ] [ ] [ ] [ ]
-                                                     ['],[ ] [ ] [ ] [ ]
-                                                         [,] [ ] [ ] [ ]
-                                                            '[,] [ ] [ ]
-                                                                ,[ ] [ ]
+                                                     ['].[ ] [ ] [ ] [ ]
+                                                         [.] [ ] [ ] [ ]
+                                                            '[.] [ ] [ ]
+                                                                .[ ] [ ]
                                                                  [ ] [ ]
-                                                                 [,] [ ]
-    dBFS ---------------------------------------------------------- '[,] ----
+                                                                 [.] [ ]
+    dBFS ---------------------------------------------------------- '[.] ----
 
 */
 
@@ -163,43 +158,40 @@ static struct vis_t
     int16_t  buffer[VIS_BUF_SIZE];
 }  *vis_mmap = NULL;
 
-#define PEAK_METER_INTERVALS 16 // Number of peak meter intervals / LEDs.
+#define PEAK_METER_MAX_LEVELS 16 // Number of peak meter intervals / LEDs.
+#define METER_CHANNELS_MAX 2
 #define HOLD_DELAY 4
 
 static struct peak_meter_t
 {
     uint8_t  int_time;      // Integration time (ms).
     int8_t   dBfs[2];       // dBfs values.
-    uint8_t  dBfs_index[4]; // indices for looking up bar and dot codes.
+    uint8_t  bar_index[2];  // Index for bar display.
+    uint8_t  dot_index[2];  // Index for dot display (peak hold).
+    uint8_t  num_levels;    // Number of display levels
     int8_t   floor;         // Noise floor for meter (dB);
     uint16_t reference;     // Reference level.
-    int16_t  intervals[PEAK_METER_INTERVALS]; // Scale intervals and bit maps.
-    uint16_t leds_bar [PEAK_METER_INTERVALS]; // Bar mode binary strings.
-    uint16_t leds_dot [PEAK_METER_INTERVALS]; // Dot mode binary strings.
+    int16_t  intervals[PEAK_METER_MAX_LEVELS]; // Scale intervals and bit maps.
 }
     peak_meter =
 {
     .int_time       = 1,
     .dBfs           = { 0, 0 },
-    .dBfs_index     = { 0, 0, 0, 0 },
+    .bar_index      = { 0, 0 },
+    .dot_index      = { 0, 0 },
+    .num_levels     = 16,
     .floor          = -80,
     .reference      = 32768,
     .intervals      =
-        // dBfs scale intervals.
-        {    -80,    -60,    -50,    -40,    -30,    -20,    -18,    -16,
-             -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  },
-    .leds_bar       =
-        // dBfs bar graph (peak level).
-        { 0x8000, 0xc000, 0xe000, 0xf000, 0xf800, 0xfc00, 0xfe00, 0xff00,
-          0xff80, 0xffc0, 0xffe0, 0xfff0, 0xfff8, 0xfffc, 0xfffe, 0xffff  },
-        // dBfs dot mode (peak hold).
-    .leds_dot       =
-        { 0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100,
-          0x0080, 0x0040, 0x0020, 0x0010, 0x0008, 0x0004, 0x0002, 0x0001   }
+        // dBfs scale intervals - need to make this user controlled.
+//        {    -80,    -60,    -50,    -40,    -30,    -20,    -18,    -16,
+//             -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  },
+        {    -48,    -42,    -36,    -30,    -24,    -20,    -18,    -16,
+             -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  }
 };
 
 // String representations for LCD display.
-char lcd16x2_peak_meter[2][PEAK_METER_INTERVALS + 1] = { "L" , "R" };
+char lcd16x2_peak_meter[METER_CHANNELS_MAX][PEAK_METER_MAX_LEVELS + 1] = { "L" , "R" };
 
 static bool running = false;
 static int  vis_fd = -1;
