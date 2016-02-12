@@ -1,8 +1,8 @@
 //  ===========================================================================
 /*
-    pcmPi:
+    meterPi:
 
-    Library to provide PCM stream info. Intended for use with LMS streams
+    Library to provide audio metering. Intended for use with LMS streams
     via squeezelite to feed small LCD displays.
 
     Copyright 2016 Darren Faulke <darren@alidaf.co.uk>
@@ -22,19 +22,19 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            10/02/2016
+    Authors:        D.Faulke            12/02/2016
 
     Contributors:
 
     Changelog:
 
         v01.00      Original version.
-        v01.01      Added ncurses demo window.
+        v01.01      Renamed and converted to library.
 */
 //  ===========================================================================
 
-#ifndef PCMPI_H
-#define PCMPI_H
+#ifndef METERPI_H
+#define METERPI_H
 
 //  Info. ---------------------------------------------------------------------
 /*
@@ -82,7 +82,7 @@
     and a dot mode circuit for the peak hold. These are multiplexed together
     to form the PPM display.
 
-            Typical panel       LCD 16x2 (transposed)
+            Typical panel       LCD 16x2 example (transposed)
 
            dBfs  L   R
               0 [ ] [ ]
@@ -136,68 +136,50 @@
 
 */
 
+#define VIS_BUF_SIZE 16384 // Predefined in Squeezelite.
+#define PEAK_METER_LEVELS_MAX 16 // Number of peak meter intervals / LEDs.
+#define METER_CHANNELS 2
+#define TEST_LOOPS 10
+
 //  Types. --------------------------------------------------------------------
 
-#define VIS_BUF_SIZE 16384 // Predefined in Squeezelite.
-
-/*
-    This is the structure of the shared memory object defined in Squeezelite.
-    See https://github.com/ralph-irving/squeezelite/blob/master/output_vis.c.
-    It looks like the samples in this buffer are fixed to 16-bit.
-    Audio samples > 16-bit are right shifted so that only the higher 16-bits
-    are used.
-*/
-static struct vis_t
+struct peak_meter_t
 {
-    pthread_rwlock_t rwlock;
-    uint32_t buf_size;
-    uint32_t buf_index;
-    bool     running;
-    uint32_t rate;
-    time_t   updated;
-    int16_t  buffer[VIS_BUF_SIZE];
-}  *vis_mmap = NULL;
-
-#define PEAK_METER_MAX_LEVELS 16 // Number of peak meter intervals / LEDs.
-#define METER_CHANNELS_MAX 2
-#define HOLD_DELAY 4
-
-static struct peak_meter_t
-{
-    uint8_t  int_time;      // Integration time (ms).
-    int8_t   dBfs[2];       // dBfs values.
-    uint8_t  bar_index[2];  // Index for bar display.
-    uint8_t  dot_index[2];  // Index for dot display (peak hold).
-    uint8_t  num_levels;    // Number of display levels
-    int8_t   floor;         // Noise floor for meter (dB);
-    uint16_t reference;     // Reference level.
-    int16_t  intervals[PEAK_METER_MAX_LEVELS]; // Scale intervals and bit maps.
-}
-    peak_meter =
-{
-    .int_time       = 1,
-    .dBfs           = { 0, 0 },
-    .bar_index      = { 0, 0 },
-    .dot_index      = { 0, 0 },
-    .num_levels     = 16,
-    .floor          = -80,
-    .reference      = 32768,
-    .intervals      =
-        // dBfs scale intervals - need to make this user controlled.
-//        {    -80,    -60,    -50,    -40,    -30,    -20,    -18,    -16,
-//             -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  },
-        {    -48,    -42,    -36,    -30,    -24,    -20,    -18,    -16,
-             -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  }
+    uint8_t  int_time;   // Integration time (ms).
+    uint16_t samples;    // Samples for integration time.
+    uint16_t hold_time;  // Peak hold time (ms).
+    uint8_t  hold_count; // Hold time counter.
+    uint8_t  num_levels; // Number of display levels
+    int8_t   floor;      // Noise floor for meter (dB).
+    uint16_t reference;  // Reference level.
+    int8_t   dBfs      [METER_CHANNELS]; // dBfs values.
+    uint8_t  bar_index [METER_CHANNELS]; // Index for bar display.
+    uint8_t  dot_index [METER_CHANNELS]; // Index for dot display (peak hold).
+    uint32_t elapsed   [METER_CHANNELS]; // Elapsed time (us).
+    int16_t  scale     [PEAK_METER_LEVELS_MAX]; // Scale intervals.
 };
 
-// String representations for LCD display.
-char lcd16x2_peak_meter[METER_CHANNELS_MAX][PEAK_METER_MAX_LEVELS + 1] = { "L" , "R" };
-
-static bool running = false;
-static int  vis_fd = -1;
-static char *mac_address = NULL;
 
 //  Functions. ----------------------------------------------------------------
 
+//  ---------------------------------------------------------------------------
+//  Checks status of mmap and attempt to open/reopen if not updated recently.
+//  ---------------------------------------------------------------------------
+void vis_check( void );
 
-#endif // #ifndef PCMPI_H
+//  ---------------------------------------------------------------------------
+//  Returns the stream bit rate.
+//  ---------------------------------------------------------------------------
+uint32_t vis_get_rate( void );
+
+//  ---------------------------------------------------------------------------
+//  Calculates peak dBfs values (L & R) of a number of stream samples.
+//  ---------------------------------------------------------------------------
+void get_dBfs( struct peak_meter_t *peak_meter );
+
+//  ---------------------------------------------------------------------------
+//  Calculates the indices for string representations of the peak levels.
+//  ---------------------------------------------------------------------------
+void get_dB_indices( struct peak_meter_t *peak_meter );
+
+#endif // #ifndef METERPI_H

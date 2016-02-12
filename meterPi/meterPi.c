@@ -1,8 +1,8 @@
 //  ===========================================================================
 /*
-    pcmPi:
+    meterPi:
 
-    Library to provide PCM stream info. Intended for use with LMS streams
+    Library to provide audio metering. Intended for use with LMS streams
     via squeezelite to feed small LCD displays.
     References:
         https://github.com/ralph-irving/jivelite.
@@ -28,8 +28,8 @@
 /*
     For a shared library, compile with:
 
-        gcc -c -Wall -fpic pcmPi.c -lm -lpthread -lrt -lasound -lncurses
-        gcc -shared -o libpcmPi.so pcmPi.o
+        gcc -c -Wall -fpic meterPi.c -lm -lpthread -lrt -lasound -lncurses
+        gcc -shared -o libmeterPi.so meterPi.o
 
     For Raspberry Pi v1 optimisation use the following flags:
 
@@ -43,7 +43,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            05/02/2016
+    Authors:        D.Faulke            12/02/2016
 
     Contributors:
 */
@@ -58,8 +58,8 @@
 #include <sys/mman.h>
 #include <stdint.h>
 #include <math.h>
-
-#include <ncurses.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #include <stdlib.h>
 #include <fcntl.h>
@@ -67,12 +67,36 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
-#include <unistd.h>
 
 //  Local libraries -----------------------------------------------------------
 
-#include "pcmPi.h"
+#include "meterPi.h"
 
+//  Types. --------------------------------------------------------------------
+
+/*
+    This is the structure of the shared memory object defined in Squeezelite.
+    See https://github.com/ralph-irving/squeezelite/blob/master/output_vis.c.
+    It looks like the samples in this buffer are fixed to 16-bit.
+    Audio samples > 16-bit are right shifted so that only the higher 16-bits
+    are used.
+*/
+static struct vis_t
+{
+    pthread_rwlock_t rwlock;
+    uint32_t buf_size;
+    uint32_t buf_index;
+    bool     running;
+    uint32_t rate;
+    time_t   updated;
+    int16_t  buffer[VIS_BUF_SIZE];
+}  *vis_mmap = NULL;
+
+
+volatile uint16_t hold_elapsed[METER_CHANNELS];
+static bool running = false;
+static int  vis_fd = -1;
+static char *mac_address = NULL;
 
 //  Functions. ----------------------------------------------------------------
 
@@ -142,9 +166,9 @@ static char *get_mac_address()
 }
 
 //  ---------------------------------------------------------------------------
-//  Reopens squeezelite if already running and maps to different memory block.
+//  Reopens squeezelite shared memory and maps memory block.
 //  ---------------------------------------------------------------------------
-static void _reopen( void )
+static void reopen( void )
 /*
     Jivelite code.
 */
@@ -198,7 +222,7 @@ static void _reopen( void )
 //  ---------------------------------------------------------------------------
 //  Checks status of mmap and attempt to open/reopen if not updated recently.
 //  ---------------------------------------------------------------------------
-static void vis_check( void )
+void vis_check( void )
 /*
     Jivelite code.
     This function maps the shared memory object if it has not already done so
@@ -215,7 +239,7 @@ static void vis_check( void )
     {
         if ( now - lastopen > 5 )
         {
-            _reopen();
+            reopen();
             lastopen = now;
         }
         if ( !vis_mmap ) return;
@@ -228,7 +252,7 @@ static void vis_check( void )
     if ( running && now - vis_mmap->updated > 5 )
     {
         pthread_rwlock_unlock(&vis_mmap->rwlock );
-        _reopen();
+        reopen();
         lastopen = now;
     } else
     {
@@ -267,7 +291,7 @@ static bool vis_get_playing( void )
 //  ---------------------------------------------------------------------------
 //  Returns the stream bit rate.
 //  ---------------------------------------------------------------------------
-static uint32_t vis_get_rate( void )
+uint32_t vis_get_rate( void )
 {
     if ( !vis_mmap ) return 0;
     return vis_mmap->rate;
@@ -303,240 +327,95 @@ static uint32_t vis_get_buffer_idx( void )
 //  ---------------------------------------------------------------------------
 //  Calculates peak dBfs values (L & R) of a number of stream samples.
 //  ---------------------------------------------------------------------------
-/*
-    The dBfs values are currently stored in a global struct variable but this
-    will probably change.
-*/
-int get_dBfs( uint16_t num_samples )
+void get_dBfs( struct peak_meter_t *peak_meter )
 {
 	int16_t  *ptr;
 	int16_t  sample;
-	uint64_t sample_squared[2];
-	uint16_t sample_rms[2];
-	size_t   i, samples_until_wrap;
-	int offs;
+	uint64_t sample_squared[METER_CHANNELS];
+	uint16_t sample_rms[METER_CHANNELS];
+    uint8_t  channel;
+	size_t   i, wrap;
+	int      offs;
 
 	vis_check();
 
-    sample_squared[0] = 0;
-    sample_squared[1] = 0;
+    for ( channel = 0; channel < METER_CHANNELS; channel++ )
+        sample_squared[channel] = 0;
 
 	if ( vis_get_playing() )
 	{
 		vis_lock();
 
-		offs = vis_get_buffer_idx() - ( num_samples * 2 );
+		offs = vis_get_buffer_idx() - ( peak_meter->samples * METER_CHANNELS );
 		while ( offs < 0 ) offs += vis_get_buffer_len();
 
 		ptr = vis_get_buffer() + offs;
-		samples_until_wrap = vis_get_buffer_len() - offs;
+		wrap = vis_get_buffer_len() - offs;
 
-		for ( i = 0; i < num_samples; i++ )
+		for ( i = 0; i < peak_meter->samples; i++ )
 		{
-            // Channel 0 (L).
-			sample = *ptr++;
-            sample_squared[0] += sample * sample;
-
-            // Channel 1 (R).
-			sample = *ptr++;
-            sample_squared[1] += sample * sample;
-
-			samples_until_wrap -= 2;
-			if ( samples_until_wrap <= 0 )
+            for ( channel = 0; channel < METER_CHANNELS; channel++ )
+            {
+			    sample = *ptr++;
+                sample_squared[channel] += sample * sample;
+            }
+            // Check for buffer wrap and refresh if necessary.
+			wrap -= 2;
+			if ( wrap <= 0 )
 			{
 				ptr = vis_get_buffer();
-				samples_until_wrap = vis_get_buffer_len();
+				wrap = vis_get_buffer_len();
 			}
 		}
 		vis_unlock();
 	}
 
-    sample_rms[0] = round( sqrt( sample_squared[0] ));
-    sample_rms[1] = round( sqrt( sample_squared[1] ));
-
-    peak_meter.dBfs[0] = 20 * log10( (float) sample_rms[0] /
-                                     (float) peak_meter.reference );
-    if ( peak_meter.dBfs[0] < peak_meter.floor )
-         peak_meter.dBfs[0] = peak_meter.floor;
-
-    peak_meter.dBfs[1] = 20 * log10( (float) sample_rms[1] /
-                                     (float) peak_meter.reference );
-    if ( peak_meter.dBfs[1] < peak_meter.floor )
-         peak_meter.dBfs[1] = peak_meter.floor;
-
-	return 1;
+    for ( channel = 0; channel < METER_CHANNELS; channel++ )
+    {
+        sample_rms[channel] = round( sqrt( sample_squared[channel] ));
+        peak_meter->dBfs[channel] = 20 * log10( (float) sample_rms[channel] /
+                                                (float) peak_meter->reference );
+        if ( peak_meter->dBfs[channel] < peak_meter->floor )
+        {
+             peak_meter->dBfs[channel] = peak_meter->floor;
+        }
+    }
 }
 
 
 //  ---------------------------------------------------------------------------
 //  Calculates the indices for string representations of the peak levels.
 //  ---------------------------------------------------------------------------
-/*
-    The indices are currently stored in a global struct variable but this will
-    probably change.
-*/
-void get_dB_indices( void )
+void get_dB_indices( struct peak_meter_t *peak_meter )
 {
     uint8_t channel;
     uint8_t i;
-    static  uint8_t count[METER_CHANNELS_MAX] = { 0, 0 };
+    static uint8_t  count[METER_CHANNELS] = { 0, 0 };
 
-    for ( channel = 0; channel < METER_CHANNELS_MAX; channel++ )
+    for ( channel = 0; channel < METER_CHANNELS; channel++ )
     {
-        for ( i = 0; i < peak_meter.num_levels; i++ )
+        for ( i = 0; i < peak_meter->num_levels; i++ )
         {
-            if ( peak_meter.dBfs[channel] <= peak_meter.intervals[i] )
+            if ( peak_meter->dBfs[channel] <= peak_meter->scale[i] )
             {
-                peak_meter.bar_index[channel] = i;
-                if ( i > peak_meter.dot_index[channel] )
+                peak_meter->bar_index[channel] = i;
+                if ( i > peak_meter->dot_index[channel] )
                 {
-                    peak_meter.dot_index[channel] = i;
+                    peak_meter->dot_index[channel] = i;
+                    peak_meter->elapsed[channel] = 0;
                     count[channel] = 0;
                 }
-                break;
+                i = peak_meter->num_levels;
             }
         }
+
         // Rudimentary peak hold routine until proper timing is introduced.
         count[channel]++;
-        if ( count[channel] >= HOLD_DELAY )
+        if ( count[channel] >= peak_meter->hold_count )
         {
             count[channel] = 0;
-            if ( peak_meter.dot_index[channel] > 0 )
-                 peak_meter.dot_index[channel]--;
+            if ( peak_meter->dot_index[channel] > 0 )
+                 peak_meter->dot_index[channel]--;
         }
     }
-}
-
-
-//  ---------------------------------------------------------------------------
-//  Produces string representations of the peak meters.
-//  ---------------------------------------------------------------------------
-/*
-    This is intended for a small LCD (16x2 or similar) or terminal output.
-*/
-void get_peak_strings( char dB_string[METER_CHANNELS_MAX][PEAK_METER_MAX_LEVELS + 1] )
-{
-    uint8_t channel;
-    uint8_t i;
-
-    for ( channel = 0; channel < METER_CHANNELS_MAX; channel++ )
-    {
-        for ( i = 1; i < peak_meter.num_levels; i++ )
-        {
-            if (( i <= peak_meter.bar_index[channel] ) ||
-                ( i == peak_meter.dot_index[channel] ))
-                dB_string[channel][i] = '|';
-            else
-                dB_string[channel][i] = ' ';
-        }
-        dB_string[channel][i] = '\0';
-    }
-}
-
-
-//  ---------------------------------------------------------------------------
-//  Reverses a string passed as *buffer between start and end.
-//  ---------------------------------------------------------------------------
-static void reverse_string( char *buffer, size_t start, size_t end )
-{
-    char temp;
-    while ( start < end )
-    {
-        end--;
-        temp = buffer[start];
-        buffer[start] = buffer[end];
-        buffer[end] = temp;
-        start++;
-    }
-
-    return;
-};
-
-
-
-//  ---------------------------------------------------------------------------
-//  Main (functional test).
-//  ---------------------------------------------------------------------------
-int main( void )
-{
-    uint8_t  i;
-    uint16_t samples;
-//    char *string_L, *string_R;
-
-    // ncurses stuff.
-    WINDOW *meter_win;
-    initscr();      // Init ncurses.
-    cbreak();       // Disable line buffering.
-    noecho();       // No screen echo of key presses.
-    meter_win = newwin( 7, 30, 10, 30 );
-    box( meter_win, 0, 0 );
-    wrefresh( meter_win );
-    curs_set( 0 );  // Turn cursor off.
-
-    vis_check();
-
-//	samples = vis_get_rate() * peak_meter.int_time / 1000;
-    samples = 2; // Minimum samples for fastest response but may miss peaks.
-
-//    printf( "Samples for %dms = %d\n", peak_meter.int_time, samples );
-
-    mvwprintw( meter_win, 2, 2, " |....|....|....|" );
-    mvwprintw( meter_win, 3, 2, "-48  -20  -10   0 dBFS" );
-    mvwprintw( meter_win, 4, 2, " |''''|''''|''''|" );
-
-    // Create foreground/background colour pairs for meters.
-    start_color();
-    init_pair( 1, COLOR_GREEN, COLOR_BLACK );
-    init_pair( 2, COLOR_YELLOW, COLOR_BLACK );
-    init_pair( 3, COLOR_RED, COLOR_BLACK );
-
-    while ( 1 )
-    {
-        get_dBfs( samples );
-        get_dB_indices();
-        get_peak_strings( lcd16x2_peak_meter );
-//        reverse_string( lcd16x2_peak_meter[0], 0, strlen( lcd16x2_peak_meter[0] ));
-
-//        printf( "\r%04d (0x%05x,0x%05x) %04d (0x%05x,0x%05x) %s:%s",
-//            peak_meter.dBfs[0],
-//            peak_meter.leds_bar[peak_meter.dBfs_index[0]],
-//            peak_meter.leds_dot[peak_meter.dBfs_index[1]],
-//            peak_meter.dBfs[1],
-//            peak_meter.leds_bar[peak_meter.dBfs_index[2]],
-//            peak_meter.leds_dot[peak_meter.dBfs_index[3]],
-//            lcd16x2_peak_meter[0],
-//            lcd16x2_peak_meter[1] );
-
-//        fflush( stdout ); // Flush buffer for line overwrite.
-
-        // Print ncurses data.
-        mvwprintw( meter_win, 1, 3, "%s", lcd16x2_peak_meter[0] );
-        mvwprintw( meter_win, 5, 3, "%s", lcd16x2_peak_meter[1] );
-
-        mvwchgat( meter_win, 1,  4, 9, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 1, 13, 3, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 1, 16, 3, A_NORMAL, 3, NULL );
-        mvwchgat( meter_win, 5,  4, 9, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 5, 13, 3, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 5, 16, 3, A_NORMAL, 3, NULL );
-
-        // Refresh ncurses window to display.
-        wrefresh( meter_win );
-
-        // Reversal has moved the L to the wrong end. Put it back!
-//        lcd16x2_peak_meter[0][0] = 'L';
-
-        /*
-            A delay to adjust the LCD or screen for eye sensitivity.
-            This delay should only really be applied to the screen updating
-            otherwise dynamics could be missed.
-        */
-        usleep( 100000 );
-    }
-
-    // Close ncurses.
-    delwin( meter_win );
-    endwin();
-
-    return 0;
 }
