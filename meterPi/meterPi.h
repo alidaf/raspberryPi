@@ -22,7 +22,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            12/02/2016
+    Authors:        D.Faulke            13/02/2016
 
     Contributors:
 
@@ -137,7 +137,7 @@
 */
 
 #define VIS_BUF_SIZE 16384 // Predefined in Squeezelite.
-#define PEAK_METER_LEVELS_MAX 16 // Number of peak meter intervals / LEDs.
+#define PEAK_METER_LEVELS_MAX 48 // Number of peak meter intervals / LEDs.
 #define METER_CHANNELS 2
 #define TEST_LOOPS 10
 
@@ -145,10 +145,10 @@
 
 struct peak_meter_t
 {
-    uint8_t  int_time;   // Integration time (ms).
+    uint16_t int_time;   // Integration time (ms).
     uint16_t samples;    // Samples for integration time.
     uint16_t hold_time;  // Peak hold time (ms).
-    uint8_t  hold_count; // Hold time counter.
+    uint16_t hold_count; // Hold time counter.
     uint8_t  num_levels; // Number of display levels
     int8_t   floor;      // Noise floor for meter (dB).
     uint16_t reference;  // Reference level.

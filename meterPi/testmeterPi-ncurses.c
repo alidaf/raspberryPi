@@ -38,7 +38,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            12/02/2016
+    Authors:        D.Faulke            13/02/2016
 
     Contributors:
 */
@@ -64,6 +64,9 @@
 
 //  Functions. ----------------------------------------------------------------
 
+#define METER_LEVELS 41
+#define METER_DELAY  2270
+
 //  ---------------------------------------------------------------------------
 //  Produces string representations of the peak meters.
 //  ---------------------------------------------------------------------------
@@ -71,19 +74,18 @@
     This is intended for a small LCD (16x2 or similar) or terminal output.
 */
 void get_peak_strings( struct peak_meter_t peak_meter,
-                       char dB_string[METER_CHANNELS]
-                                     [PEAK_METER_LEVELS_MAX + 1] )
+                       char dB_string[METER_CHANNELS][METER_LEVELS + 1] )
 {
     uint8_t channel;
     uint8_t i;
 
     for ( channel = 0; channel < METER_CHANNELS; channel++ )
     {
-        for ( i = 1; i < peak_meter.num_levels; i++ )
+        for ( i = 0; i < peak_meter.num_levels; i++ )
         {
             if (( i <= peak_meter.bar_index[channel] ) ||
                 ( i == peak_meter.dot_index[channel] ))
-                dB_string[channel][i] = '|';
+                dB_string[channel][i] = '#';
             else
                 dB_string[channel][i] = ' ';
         }
@@ -106,7 +108,6 @@ static void reverse_string( char *buffer, size_t start, size_t end )
         buffer[end] = temp;
         start++;
     }
-
     return;
 };
 
@@ -126,31 +127,31 @@ int main( void )
         .samples        = 2,
         .hold_time      = 500,
         .hold_count     = 3,
-        .num_levels     = 16,
-        .floor          = -80,
+        .num_levels     = 41,
+        .floor          = -96,
         .reference      = 32768,
         .dBfs           = { 0, 0 },
         .bar_index      = { 0, 0 },
         .dot_index      = { 0, 0 },
         .elapsed        = { 0, 0 },
         .scale          =
-        // dBfs scale intervals - need to make this user controlled.
-    //        {    -80,    -60,    -50,    -40,    -30,    -20,    -18,    -16,
-    //             -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  },
-            {    -48,    -42,    -36,    -30,    -24,    -20,    -18,    -16,
-                 -14,    -12,    -10,     -8,     -6,     -4,     -2,      0  }
+            { -40, -39, -38, -37, -36, -35, -34, -33, -32, -31
+              -30, -29, -28, -27, -26, -25, -24, -23, -22, -21,
+              -20, -19, -18, -17, -16, -15, -14, -13, -12, -11,
+              -10,  -9,  -8,  -7,  -6,  -5,  -4,  -3,  -2,  -1,   0  }
     };
 
-
     // String representations for LCD display.
-    char lcd16x2_peak_meter[METER_CHANNELS][PEAK_METER_LEVELS_MAX + 1] = { "L" , "R" };
+    char window_peak_meter[METER_CHANNELS][METER_LEVELS + 1];
 
     vis_check();
 
     // Calculate number of samples for integration time.
 	peak_meter.samples = vis_get_rate() * peak_meter.int_time / 1000;
     if ( peak_meter.samples < 1 ) peak_meter.samples = 1;
-//    samples = 2; // Minimum samples for fastest response but may miss peaks.
+    if ( peak_meter.samples > VIS_BUF_SIZE / METER_CHANNELS )
+         peak_meter.samples = VIS_BUF_SIZE / METER_CHANNELS;
+//    peak_meter.samples = 2; // Minimum samples for fastest response but may miss peaks.
     printf( "Samples for %dms = %d.\n", peak_meter.int_time, peak_meter.samples );
 
     // ncurses stuff.
@@ -158,14 +159,18 @@ int main( void )
     initscr();      // Init ncurses.
     cbreak();       // Disable line buffering.
     noecho();       // No screen echo of key presses.
-    meter_win = newwin( 7, 30, 10, 30 );
+    meter_win = newwin( 7, 52, 10, 10 );
     box( meter_win, 0, 0 );
     wrefresh( meter_win );
+    nodelay( meter_win, TRUE );
+    scrollok( meter_win, TRUE );
     curs_set( 0 );  // Turn cursor off.
 
-    mvwprintw( meter_win, 2, 2, " |....|....|....|" );
-    mvwprintw( meter_win, 3, 2, "-48  -20  -10   0 dBFS" );
-    mvwprintw( meter_win, 4, 2, " |''''|''''|''''|" );
+    mvwprintw( meter_win, 1, 2, "L" );
+    mvwprintw( meter_win, 2, 2, " |....|....|....|....|....|....|....|....|" );
+    mvwprintw( meter_win, 3, 2, "-40  -35  -30  -25  -20  -15  -10  -5    0 dBFS" );
+    mvwprintw( meter_win, 4, 2, " |''''|''''|''''|''''|''''|''''|''''|''''|" );
+    mvwprintw( meter_win, 5, 2, "R" );
 
     // Create foreground/background colour pairs for meters.
     start_color();
@@ -173,28 +178,27 @@ int main( void )
     init_pair( 2, COLOR_YELLOW, COLOR_BLACK );
     init_pair( 3, COLOR_RED, COLOR_BLACK );
 
-
     // Do some loops to test response time.
     gettimeofday( &start, NULL );
     for ( i = 0; i < TEST_LOOPS; i++ )
     {
         get_dBfs( &peak_meter );
         get_dB_indices( &peak_meter );
-        get_peak_strings( peak_meter, lcd16x2_peak_meter );
+        get_peak_strings( peak_meter, window_peak_meter );
 
-        mvwprintw( meter_win, 1, 3, "%s", lcd16x2_peak_meter[0] );
-        mvwprintw( meter_win, 5, 3, "%s", lcd16x2_peak_meter[1] );
+        mvwprintw( meter_win, 1, 3, "%s", window_peak_meter[0] );
+        mvwprintw( meter_win, 5, 3, "%s", window_peak_meter[1] );
 
-        mvwchgat( meter_win, 1,  4, 9, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 1, 13, 3, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 1, 16, 3, A_NORMAL, 3, NULL );
-        mvwchgat( meter_win, 5,  4, 9, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 5, 13, 3, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 5, 16, 3, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 1,  3, 30, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 1, 33,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 1, 38,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 5,  3, 30, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 5, 33,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 5, 38,  5, A_NORMAL, 3, NULL );
 
         // Refresh ncurses window to display.
         wrefresh( meter_win );
-        usleep( 100000 );
+        usleep( METER_DELAY );
 
     }
     gettimeofday( &end, NULL );
@@ -205,49 +209,31 @@ int main( void )
     if ( elapsed < peak_meter.hold_time )
         peak_meter.hold_count = peak_meter.hold_time / elapsed;
 
-    while ( 1 )
+//    printf( "Hold count = %d.\n", peak_meter.hold_count );
+
+    int ch = ERR;
+    while ( ch == ERR )
     {
+
         get_dBfs( &peak_meter );
         get_dB_indices( &peak_meter );
-        get_peak_strings( peak_meter, lcd16x2_peak_meter );
-
-//        reverse_string( lcd16x2_peak_meter[0], 0, strlen( lcd16x2_peak_meter[0] ));
-
-//        printf( "\r%04d (0x%05x,0x%05x) %04d (0x%05x,0x%05x) %s:%s",
-//            peak_meter.dBfs[0],
-//            peak_meter.leds_bar[peak_meter.dBfs_index[0]],
-//            peak_meter.leds_dot[peak_meter.dBfs_index[1]],
-//            peak_meter.dBfs[1],
-//            peak_meter.leds_bar[peak_meter.dBfs_index[2]],
-//            peak_meter.leds_dot[peak_meter.dBfs_index[3]],
-//            lcd16x2_peak_meter[0],
-//            lcd16x2_peak_meter[1] );
-
-//        fflush( stdout ); // Flush buffer for line overwrite.
+        get_peak_strings( peak_meter, window_peak_meter );
 
         // Print ncurses data.
-        mvwprintw( meter_win, 1, 3, "%s", lcd16x2_peak_meter[0] );
-        mvwprintw( meter_win, 5, 3, "%s", lcd16x2_peak_meter[1] );
+        mvwprintw( meter_win, 1, 3, "%s", window_peak_meter[0] );
+        mvwprintw( meter_win, 5, 3, "%s", window_peak_meter[1] );
 
-        mvwchgat( meter_win, 1,  4, 9, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 1, 13, 3, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 1, 16, 3, A_NORMAL, 3, NULL );
-        mvwchgat( meter_win, 5,  4, 9, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 5, 13, 3, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 5, 16, 3, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 1,  3, 30, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 1, 33,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 1, 38,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 5,  3, 30, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 5, 33,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 5, 38,  5, A_NORMAL, 3, NULL );
 
         // Refresh ncurses window to display.
         wrefresh( meter_win );
-
-        // Reversal has moved the L to the wrong end. Put it back!
-//        lcd16x2_peak_meter[0][0] = 'L';
-
-        /*
-            A delay to adjust the LCD or screen for eye sensitivity.
-            This delay should only really be applied to the screen updating
-            otherwise dynamics could be missed.
-        */
-        usleep( 100000 );
+        ch = wgetch( meter_win );
+        usleep( METER_DELAY );
     }
 
     // Close ncurses.
