@@ -30,6 +30,8 @@
 
         v01.00      Original version.
         v01.01      Renamed and converted to library.
+        v01.02      Added hold and fall timing.
+        v01.03      Added overload detection.
 */
 //  ===========================================================================
 
@@ -108,7 +110,7 @@
 
     Even though 0dBfs is full scale, it is still possible to get an overload
     with DAC overshoot. There are no specifications for detecting this in the
-    IEC spec but Sony (?) emply a rule that an overload is defined by three
+    IEC spec but Sony (?) apply a rule that an overload is defined by three
     consecutive 0dBFS readings. There are other variations but this one is
     fairly straightforward to understand...
 
@@ -138,7 +140,8 @@
 
 #define VIS_BUF_SIZE 16384 // Predefined in Squeezelite.
 #define PEAK_METER_LEVELS_MAX 48 // Number of peak meter intervals / LEDs.
-#define METER_CHANNELS 2
+#define METER_CHANNELS 2 // Number of metered channels.
+#define OVERLOAD_PEAKS 3 // Number of consecutive 0dBFS peaks for overload.
 
 //  Types. --------------------------------------------------------------------
 
@@ -147,12 +150,16 @@ struct peak_meter_t
     uint16_t int_time;   // Integration time (ms).
     uint16_t samples;    // Samples for integration time.
     uint16_t hold_time;  // Peak hold time (ms).
-    uint16_t hold_count; // Hold time counter.
+    uint16_t hold_incs;  // Hold time counter.
     uint16_t fall_time;  // Fall time (ms).
-    uint16_t fall_count; // Fall time counter.
+    uint16_t fall_incs;  // Fall time counter.
+    uint8_t  over_peaks; // Number of consecutive 0dBFS samples for overload.
+    uint16_t over_time;  // Overload indicator time (ms).
+    uint16_t over_incs;  // Overload indicator count.
     uint8_t  num_levels; // Number of display levels
     int8_t   floor;      // Noise floor for meter (dB).
     uint16_t reference;  // Reference level.
+    bool     overload  [METER_CHANNELS]; // Overload flags.
     int8_t   dBfs      [METER_CHANNELS]; // dBfs values.
     uint8_t  bar_index [METER_CHANNELS]; // Index for bar display.
     uint8_t  dot_index [METER_CHANNELS]; // Index for dot display (peak hold).

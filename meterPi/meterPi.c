@@ -43,7 +43,7 @@
 */
 //  ===========================================================================
 /*
-    Authors:        D.Faulke            12/02/2016
+    Authors:        D.Faulke            13/02/2016
 
     Contributors:
 */
@@ -335,7 +335,6 @@ void get_dBfs( struct peak_meter_t *peak_meter )
     uint8_t  channel;
 	size_t   i, wrap;
 	int      offs;
-
 	vis_check();
 
     for ( channel = 0; channel < METER_CHANNELS; channel++ )
@@ -390,11 +389,36 @@ void get_dB_indices( struct peak_meter_t *peak_meter )
     uint8_t         channel;
     uint8_t         i;
     static bool     falling = false;
-    static uint16_t hold_count[METER_CHANNELS] = { 0, 0 };
-    static uint16_t fall_count[METER_CHANNELS] = { 0, 0 };
+    static uint16_t hold_inc[METER_CHANNELS] = { 0, 0 };
+    static uint16_t fall_inc[METER_CHANNELS] = { 0, 0 };
+    static uint16_t over_inc[METER_CHANNELS] = { 0, 0 };
+    static uint8_t  over_cnt[METER_CHANNELS] = { 0, 0 };
 
     for ( channel = 0; channel < METER_CHANNELS; channel++ )
     {
+        // Overload check;
+        if ( peak_meter->dBfs[channel] == 0 )
+        {
+            over_cnt[channel]++;
+            if ( over_cnt[channel] > peak_meter->over_peaks )
+            {
+                peak_meter->overload[channel] = true;
+                over_inc[channel] = 0;
+            }
+        }
+        else over_cnt[channel] = 0;
+
+        // Countdown for overload reset.
+        if ( peak_meter->overload[channel] )
+        {
+            if ( over_inc[channel] > peak_meter->over_incs )
+            {
+                peak_meter->overload[channel] = false;
+                over_inc[channel] = 0;
+            }
+            else over_inc[channel]++;
+        }
+        // Concatenate output meter string.
         for ( i = 0; i < peak_meter->num_levels; i++ )
         {
             if ( peak_meter->dBfs[channel] <= peak_meter->scale[i] )
@@ -405,8 +429,8 @@ void get_dB_indices( struct peak_meter_t *peak_meter )
                     peak_meter->dot_index[channel] = i;
                     peak_meter->elapsed[channel] = 0;
                     falling = false;
-                    hold_count[channel] = 0;
-                    fall_count[channel] = 0;
+                    hold_inc[channel] = 0;
+                    fall_inc[channel] = 0;
                 }
                 else
                 {
@@ -418,20 +442,20 @@ void get_dB_indices( struct peak_meter_t *peak_meter )
         // Rudimentary peak hold routine until proper timing is introduced.
         if ( falling )
         {
-            fall_count[channel]++;
-            if ( fall_count[channel] >= peak_meter->fall_count )
+            fall_inc[channel]++;
+            if ( fall_inc[channel] >= peak_meter->fall_incs )
             {
-                fall_count[channel] = 0;
+                fall_inc[channel] = 0;
                 if ( peak_meter->dot_index[channel] > 0 )
                      peak_meter->dot_index[channel]--;
             }
         }
         else
         {
-            hold_count[channel]++;
-            if ( hold_count[channel] >= peak_meter->hold_count )
+            hold_inc[channel]++;
+            if ( hold_inc[channel] >= peak_meter->hold_incs )
             {
-                hold_count[channel] = 0;
+                hold_inc[channel] = 0;
                 falling = true;
                 if ( peak_meter->dot_index[channel] > 0 )
                      peak_meter->dot_index[channel]--;

@@ -125,20 +125,24 @@ int main( void )
 
     struct peak_meter_t peak_meter =
     {
-        .int_time       = 5,
-        .samples        = 2,
-        .hold_time      = 1000,
-        .hold_count     = 6,
-        .fall_time      = 100,
-        .fall_count     = 4,
-        .num_levels     = 41,
-        .floor          = -96,
-        .reference      = 32768,
-        .dBfs           = { 0, 0 },
-        .bar_index      = { 0, 0 },
-        .dot_index      = { 0, 0 },
-        .elapsed        = { 0, 0 },
-        .scale          =
+        .int_time   = 5,
+        .samples    = 2,
+        .hold_time  = 1000,
+        .hold_incs  = 50,
+        .fall_time  = 100,
+        .fall_incs  = 5,
+        .over_peaks = 2,
+        .over_time  = 3000,
+        .over_incs  = 150,
+        .num_levels = 41,
+        .floor      = -96,
+        .reference  = 32768,
+        .overload   = { false, false },
+        .dBfs       = { 0, 0 },
+        .bar_index  = { 0, 0 },
+        .dot_index  = { 0, 0 },
+        .elapsed    = { 0, 0 },
+        .scale      =
             { -40, -39, -38, -37, -36, -35, -34, -33, -32, -31
               -30, -29, -28, -27, -26, -25, -24, -23, -22, -21,
               -20, -19, -18, -17, -16, -15, -14, -13, -12, -11,
@@ -193,12 +197,21 @@ int main( void )
         mvwprintw( meter_win, 1, 3, "%s", window_peak_meter[0] );
         mvwprintw( meter_win, 5, 3, "%s", window_peak_meter[1] );
 
+        if ( peak_meter.overload[0] == true )
+            mvwprintw( meter_win, 1, 45, "OVER" );
+        else
+            mvwprintw( meter_win, 1, 45, "    " );
+        if ( peak_meter.overload[1] == true )
+            mvwprintw( meter_win, 5, 45, "OVER" );
+        else
+            mvwprintw( meter_win, 5, 45, "    " );
+
         mvwchgat( meter_win, 1,  3, 31, A_NORMAL, 1, NULL );
         mvwchgat( meter_win, 1, 34,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 1, 39,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 1, 39, 10, A_NORMAL, 3, NULL );
         mvwchgat( meter_win, 5,  3, 31, A_NORMAL, 1, NULL );
         mvwchgat( meter_win, 5, 34,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 5, 39,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 5, 39, 10, A_NORMAL, 3, NULL );
 
         // Refresh ncurses window to display.
         wrefresh( meter_win );
@@ -211,10 +224,13 @@ int main( void )
                ( end.tv_usec - start.tv_usec ) / 1000 ) / CALIBRATION_LOOPS;
 
     if ( elapsed < peak_meter.hold_time )
-        peak_meter.hold_count = peak_meter.hold_time / elapsed;
+        peak_meter.hold_incs = peak_meter.hold_time / elapsed;
 
     if ( elapsed < peak_meter.fall_time )
-        peak_meter.fall_count = peak_meter.fall_time / elapsed;
+        peak_meter.fall_incs = peak_meter.fall_time / elapsed;
+
+    if ( elapsed < peak_meter.over_time )
+        peak_meter.over_incs = peak_meter.over_time / elapsed;
 
     mvwprintw( meter_win, 3, 2, "-40  -35  -30  -25  -20  -15  -10  -5    0 dBFS" );
 
@@ -230,12 +246,21 @@ int main( void )
         mvwprintw( meter_win, 1, 3, "%s", window_peak_meter[0] );
         mvwprintw( meter_win, 5, 3, "%s", window_peak_meter[1] );
 
+        if ( peak_meter.overload[0] == true )
+            mvwprintw( meter_win, 1, 45, "OVER" );
+        else
+            mvwprintw( meter_win, 1, 45, "    " );
+        if ( peak_meter.overload[1] == true )
+            mvwprintw( meter_win, 5, 45, "OVER" );
+        else
+            mvwprintw( meter_win, 5, 45, "    " );
+
         mvwchgat( meter_win, 1,  3, 31, A_NORMAL, 1, NULL );
         mvwchgat( meter_win, 1, 34,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 1, 39,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 1, 39, 10, A_NORMAL, 3, NULL );
         mvwchgat( meter_win, 5,  3, 31, A_NORMAL, 1, NULL );
         mvwchgat( meter_win, 5, 34,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 5, 39,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 5, 39, 10, A_NORMAL, 3, NULL );
 
         // Refresh ncurses window to display.
         wrefresh( meter_win );
