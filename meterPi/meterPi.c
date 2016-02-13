@@ -93,7 +93,6 @@ static struct vis_t
 }  *vis_mmap = NULL;
 
 
-volatile uint16_t hold_elapsed[METER_CHANNELS];
 static bool running = false;
 static int  vis_fd = -1;
 static char *mac_address = NULL;
@@ -388,9 +387,11 @@ void get_dBfs( struct peak_meter_t *peak_meter )
 //  ---------------------------------------------------------------------------
 void get_dB_indices( struct peak_meter_t *peak_meter )
 {
-    uint8_t channel;
-    uint8_t i;
-    static uint8_t  count[METER_CHANNELS] = { 0, 0 };
+    uint8_t         channel;
+    uint8_t         i;
+    static bool     falling = false;
+    static uint16_t hold_count[METER_CHANNELS] = { 0, 0 };
+    static uint16_t fall_count[METER_CHANNELS] = { 0, 0 };
 
     for ( channel = 0; channel < METER_CHANNELS; channel++ )
     {
@@ -403,19 +404,38 @@ void get_dB_indices( struct peak_meter_t *peak_meter )
                 {
                     peak_meter->dot_index[channel] = i;
                     peak_meter->elapsed[channel] = 0;
-                    count[channel] = 0;
+                    falling = false;
+                    hold_count[channel] = 0;
+                    fall_count[channel] = 0;
                 }
-                i = peak_meter->num_levels;
+                else
+                {
+                    i = peak_meter->num_levels;
+                }
             }
         }
 
         // Rudimentary peak hold routine until proper timing is introduced.
-        count[channel]++;
-        if ( count[channel] >= peak_meter->hold_count )
+        if ( falling )
         {
-            count[channel] = 0;
-            if ( peak_meter->dot_index[channel] > 0 )
-                 peak_meter->dot_index[channel]--;
+            fall_count[channel]++;
+            if ( fall_count[channel] >= peak_meter->fall_count )
+            {
+                fall_count[channel] = 0;
+                if ( peak_meter->dot_index[channel] > 0 )
+                     peak_meter->dot_index[channel]--;
+            }
+        }
+        else
+        {
+            hold_count[channel]++;
+            if ( hold_count[channel] >= peak_meter->hold_count )
+            {
+                hold_count[channel] = 0;
+                falling = true;
+                if ( peak_meter->dot_index[channel] > 0 )
+                     peak_meter->dot_index[channel]--;
+            }
         }
     }
 }

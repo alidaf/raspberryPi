@@ -65,7 +65,9 @@
 //  Functions. ----------------------------------------------------------------
 
 #define METER_LEVELS 41
-#define METER_DELAY  2270
+#define METER_DELAY  22700
+
+#define CALIBRATION_LOOPS 100
 
 //  ---------------------------------------------------------------------------
 //  Produces string representations of the peak meters.
@@ -125,8 +127,10 @@ int main( void )
     {
         .int_time       = 5,
         .samples        = 2,
-        .hold_time      = 500,
-        .hold_count     = 3,
+        .hold_time      = 1000,
+        .hold_count     = 6,
+        .fall_time      = 100,
+        .fall_count     = 4,
         .num_levels     = 41,
         .floor          = -96,
         .reference      = 32768,
@@ -168,7 +172,7 @@ int main( void )
 
     mvwprintw( meter_win, 1, 2, "L" );
     mvwprintw( meter_win, 2, 2, " |....|....|....|....|....|....|....|....|" );
-    mvwprintw( meter_win, 3, 2, "-40  -35  -30  -25  -20  -15  -10  -5    0 dBFS" );
+    mvwprintw( meter_win, 3, 2, "      Calibrating hold and fall times    " );
     mvwprintw( meter_win, 4, 2, " |''''|''''|''''|''''|''''|''''|''''|''''|" );
     mvwprintw( meter_win, 5, 2, "R" );
 
@@ -180,7 +184,7 @@ int main( void )
 
     // Do some loops to test response time.
     gettimeofday( &start, NULL );
-    for ( i = 0; i < TEST_LOOPS; i++ )
+    for ( i = 0; i < CALIBRATION_LOOPS; i++ )
     {
         get_dBfs( &peak_meter );
         get_dB_indices( &peak_meter );
@@ -189,12 +193,12 @@ int main( void )
         mvwprintw( meter_win, 1, 3, "%s", window_peak_meter[0] );
         mvwprintw( meter_win, 5, 3, "%s", window_peak_meter[1] );
 
-        mvwchgat( meter_win, 1,  3, 30, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 1, 33,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 1, 38,  5, A_NORMAL, 3, NULL );
-        mvwchgat( meter_win, 5,  3, 30, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 5, 33,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 5, 38,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 1,  3, 31, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 1, 34,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 1, 39,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 5,  3, 31, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 5, 34,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 5, 39,  5, A_NORMAL, 3, NULL );
 
         // Refresh ncurses window to display.
         wrefresh( meter_win );
@@ -204,12 +208,15 @@ int main( void )
     gettimeofday( &end, NULL );
 
     elapsed = (( end.tv_sec  - start.tv_sec  ) * 1000 +
-               ( end.tv_usec - start.tv_usec ) / 1000 ) / 10;
+               ( end.tv_usec - start.tv_usec ) / 1000 ) / CALIBRATION_LOOPS;
 
     if ( elapsed < peak_meter.hold_time )
         peak_meter.hold_count = peak_meter.hold_time / elapsed;
 
-//    printf( "Hold count = %d.\n", peak_meter.hold_count );
+    if ( elapsed < peak_meter.fall_time )
+        peak_meter.fall_count = peak_meter.fall_time / elapsed;
+
+    mvwprintw( meter_win, 3, 2, "-40  -35  -30  -25  -20  -15  -10  -5    0 dBFS" );
 
     int ch = ERR;
     while ( ch == ERR )
@@ -223,12 +230,12 @@ int main( void )
         mvwprintw( meter_win, 1, 3, "%s", window_peak_meter[0] );
         mvwprintw( meter_win, 5, 3, "%s", window_peak_meter[1] );
 
-        mvwchgat( meter_win, 1,  3, 30, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 1, 33,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 1, 38,  5, A_NORMAL, 3, NULL );
-        mvwchgat( meter_win, 5,  3, 30, A_NORMAL, 1, NULL );
-        mvwchgat( meter_win, 5, 33,  5, A_NORMAL, 2, NULL );
-        mvwchgat( meter_win, 5, 38,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 1,  3, 31, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 1, 34,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 1, 39,  5, A_NORMAL, 3, NULL );
+        mvwchgat( meter_win, 5,  3, 31, A_NORMAL, 1, NULL );
+        mvwchgat( meter_win, 5, 34,  5, A_NORMAL, 2, NULL );
+        mvwchgat( meter_win, 5, 39,  5, A_NORMAL, 3, NULL );
 
         // Refresh ncurses window to display.
         wrefresh( meter_win );
