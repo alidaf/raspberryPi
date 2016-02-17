@@ -335,6 +335,7 @@ void get_dBfs( struct peak_meter_t *peak_meter )
     uint8_t  channel;
 	size_t   i, wrap;
 	int      offs;
+
 	vis_check();
 
     for ( channel = 0; channel < METER_CHANNELS; channel++ )

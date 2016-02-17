@@ -65,9 +65,16 @@
 //  Functions. ----------------------------------------------------------------
 
 #define METER_LEVELS 41
-#define METER_DELAY  22700
+#define METER_DELAY  5000  // Need a proper timer to match sample rate.
+/*
+    44100 Hz = 22.7 us.
+    48000 Hz = 20.8 us.
 
-#define CALIBRATION_LOOPS 100
+    but we are sampling two channels so sample rate is halved, i.e.
+    44100 Hz = 45.4 us.
+    48000 Hz = 41.7 us.
+*/
+#define CALIBRATION_LOOPS 300
 
 //  ---------------------------------------------------------------------------
 //  Produces string representations of the peak meters.
@@ -87,7 +94,7 @@ void get_peak_strings( struct peak_meter_t peak_meter,
         {
             if (( i <= peak_meter.bar_index[channel] ) ||
                 ( i == peak_meter.dot_index[channel] ))
-                dB_string[channel][i] = '#';
+                dB_string[channel][i] = '=';
             else
                 dB_string[channel][i] = ' ';
         }
@@ -115,13 +122,29 @@ static void reverse_string( char *buffer, size_t start, size_t end )
 
 
 //  ---------------------------------------------------------------------------
+//  Retruns elapsed time in microseconds.
+//  ---------------------------------------------------------------------------
+uint32_t time_elapsed( struct timeval start, struct timeval end )
+{
+    uint32_t start_us, end_us, diff_us = 0;
+
+    start_us = (uint32_t) start.tv_sec * 1000000 + (uint32_t) start.tv_usec;
+    end_us   = (uint32_t) end.tv_sec   * 1000000 + (uint32_t) end.tv_usec;
+
+    diff_us = end_us - start_us;
+
+    return diff_us;
+}
+
+//  ---------------------------------------------------------------------------
 //  Main (functional test).
 //  ---------------------------------------------------------------------------
 int main( void )
 {
     struct timeval start, end;
+    uint32_t diff;
     uint32_t elapsed; // Elapsed time in milliseconds.
-    uint8_t i;
+    uint16_t i;
 
     struct peak_meter_t peak_meter =
     {
@@ -129,9 +152,9 @@ int main( void )
         .samples    = 2,
         .hold_time  = 1000,
         .hold_incs  = 50,
-        .fall_time  = 100,
+        .fall_time  = 50,
         .fall_incs  = 5,
-        .over_peaks = 2,
+        .over_peaks = 10,
         .over_time  = 3000,
         .over_incs  = 150,
         .num_levels = 41,
@@ -164,19 +187,20 @@ int main( void )
 
     // ncurses stuff.
     WINDOW *meter_win;
-    initscr();      // Init ncurses.
-    cbreak();       // Disable line buffering.
-    noecho();       // No screen echo of key presses.
+    initscr();
+    cbreak();
+    noecho();
     meter_win = newwin( 7, 52, 10, 10 );
     box( meter_win, 0, 0 );
     wrefresh( meter_win );
     nodelay( meter_win, TRUE );
     scrollok( meter_win, TRUE );
-    curs_set( 0 );  // Turn cursor off.
+    curs_set( 0 );
 
+    // Meter scale.
     mvwprintw( meter_win, 1, 2, "L" );
     mvwprintw( meter_win, 2, 2, " |....|....|....|....|....|....|....|....|" );
-    mvwprintw( meter_win, 3, 2, "      Calibrating hold and fall times    " );
+    mvwprintw( meter_win, 3, 2, " Calibrating. " );
     mvwprintw( meter_win, 4, 2, " |''''|''''|''''|''''|''''|''''|''''|''''|" );
     mvwprintw( meter_win, 5, 2, "R" );
 
@@ -186,17 +210,23 @@ int main( void )
     init_pair( 2, COLOR_YELLOW, COLOR_BLACK );
     init_pair( 3, COLOR_RED, COLOR_BLACK );
 
-    // Do some loops to test response time.
+    // Calibration.
     gettimeofday( &start, NULL );
+
     for ( i = 0; i < CALIBRATION_LOOPS; i++ )
     {
+        // Get integrated peak dBFS values and indices for meter.
         get_dBfs( &peak_meter );
         get_dB_indices( &peak_meter );
         get_peak_strings( peak_meter, window_peak_meter );
 
+        mvwprintw( meter_win, 3, 2, " Calibrating. Loop %d ", i + 1 );
+
+        // Draw meters.
         mvwprintw( meter_win, 1, 3, "%s", window_peak_meter[0] );
         mvwprintw( meter_win, 5, 3, "%s", window_peak_meter[1] );
 
+        // Overload indicators.
         if ( peak_meter.overload[0] == true )
             mvwprintw( meter_win, 1, 45, "OVER" );
         else
@@ -206,6 +236,7 @@ int main( void )
         else
             mvwprintw( meter_win, 5, 45, "    " );
 
+        // Meter colours.
         mvwchgat( meter_win, 1,  3, 31, A_NORMAL, 1, NULL );
         mvwchgat( meter_win, 1, 34,  5, A_NORMAL, 2, NULL );
         mvwchgat( meter_win, 1, 39, 10, A_NORMAL, 3, NULL );
@@ -213,16 +244,35 @@ int main( void )
         mvwchgat( meter_win, 5, 34,  5, A_NORMAL, 2, NULL );
         mvwchgat( meter_win, 5, 39, 10, A_NORMAL, 3, NULL );
 
-        // Refresh ncurses window to display.
+        // Refresh ncurses window to display meters.
         wrefresh( meter_win );
+
         usleep( METER_DELAY );
-
     }
+
     gettimeofday( &end, NULL );
+    mvwprintw( meter_win, 3, 2, " Finished calibrating." );
+    wrefresh( meter_win );
 
-    elapsed = (( end.tv_sec  - start.tv_sec  ) * 1000 +
-               ( end.tv_usec - start.tv_usec ) / 1000 ) / CALIBRATION_LOOPS;
+    sleep( 2 );
 
+    mvwprintw( meter_win, 3, 2, " Calculating counters." );
+    wrefresh( meter_win );
+
+    diff = time_elapsed( start, end ) / CALIBRATION_LOOPS;
+    elapsed = diff / 1000;
+//    elapsed = (( end.tv_sec  - start.tv_sec  ) * 1000 +
+//               ( end.tv_usec - start.tv_usec ) / 1000 ) / CALIBRATION_LOOPS;
+
+    sleep( 2 );
+
+    mvwprintw( meter_win, 3, 2, " Loop time = %ld us.       ",
+               diff - ( (uint32_t) peak_meter.int_time * 1000 ));
+    wrefresh( meter_win );
+
+    sleep( 2 );
+
+    // Calculate counters.
     if ( elapsed < peak_meter.hold_time )
         peak_meter.hold_incs = peak_meter.hold_time / elapsed;
 
