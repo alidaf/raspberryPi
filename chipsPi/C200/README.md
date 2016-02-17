@@ -41,62 +41,62 @@ There are two connectors to the front panel that provide access to the display a
 
 Pin layout:
 
-        +-----------------------------------------------------+
-        | Pin | Label | Description                           |
-        |-----+-------+---------------------------------------|
-        |   1 |  Vss  | Ground (0V) for logic.                |
-        |   2 |  Vdd  | 5V supply for logic.                  |
-        |   3 |  Vo   | Variable V for contrast.              |
-        |   4 |  Vee  | Voltage output.                       |
-        |   5 |  RS   | Register Select. 0: command, 1: data. |
-        |   6 |  RW   | R/W. 0: write, 1: read.               |
-        |   7 |  E    | Enable bit.                           |
-        |   8 |  DB0  | Data bit 0.                           |
-        |   9 |  DB1  | Data bit 1.                           |
-        |  10 |  DB2  | Data bit 2.                           |
-        |  11 |  DB3  | Data bit 3.                           |
-        |  12 |  DB4  | Data bit 4.                           |
-        |  13 |  DB5  | Data bit 5.                           |
-        |  14 |  DB6  | Data bit 6.                           |
-        |  15 |  DB7  | Data bit 7.                           |
-        |  16 |  CS3  | Chip select (left).                   |
-        |  17 |  CS2  | Chip select (middle).                 |
-        |  18 |  CS1  | Chip select (right).                  |
-        |  19 |  RST  | Reset signal.                         |
-        |  20 |  BLA  | Voltage for backlight (max 5V).       |
-        |  21 |  BLK  | Ground (0V) for backlight.            |
-        +-----------------------------------------------------+
+    +-----------------------------------------------------+
+    | Pin | Label | Description                           |
+    |-----+-------+---------------------------------------|
+    |   1 |  Vss  | Ground (0V) for logic.                |
+    |   2 |  Vdd  | 5V supply for logic.                  |
+    |   3 |  Vo   | Variable V for contrast.              |
+    |   4 |  Vee  | Voltage output.                       |
+    |   5 |  RS   | Register Select. 0: command, 1: data. |
+    |   6 |  RW   | R/W. 0: write, 1: read.               |
+    |   7 |  E    | Enable bit.                           |
+    |   8 |  DB0  | Data bit 0.                           |
+    |   9 |  DB1  | Data bit 1.                           |
+    |  10 |  DB2  | Data bit 2.                           |
+    |  11 |  DB3  | Data bit 3.                           |
+    |  12 |  DB4  | Data bit 4.                           |
+    |  13 |  DB5  | Data bit 5.                           |
+    |  14 |  DB6  | Data bit 6.                           |
+    |  15 |  DB7  | Data bit 7.                           |
+    |  16 |  CS3  | Chip select (left).                   |
+    |  17 |  CS2  | Chip select (middle).                 |
+    |  18 |  CS1  | Chip select (right).                  |
+    |  19 |  RST  | Reset signal.                         |
+    |  20 |  BLA  | Voltage for backlight (max 5V).       |
+    |  21 |  BLK  | Ground (0V) for backlight.            |
+    +-----------------------------------------------------+
 
  * Most displays are combinations of up to 3 64x64 modules, each controlled via the CSx (chip select) registers.
 
 **AMG19264** register bits:
 
-        +-------+ +-------------------------------+
-        |RS |RW | |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|
-        |---+---| |---+---+---+---+---+---+---+---|
-        | 0 | 0 | | 0 | 0 | 1 | 1 | 1 | 1 | 1 | D |
-        | 0 | 0 | | 0 | 1 | Y | Y | Y | Y | Y | Y |
-        | 0 | 0 | | 1 | 0 | 1 | 1 | 1 | P | P | P |
-        | 0 | 0 | | 1 | 1 | X | X | X | X | X | X |
-        | 0 | 1 | | B | 1 | S | R | 0 | 0 | 0 | 0 |
-        | 1 | 0 | |   :   : Write Data:   :   :   |
-        | 1 | 1 | |   :   : Read Data :   :   :   |
-        +-------+ +-------------------------------+
+    +-------+ +-------------------------------+
+    |RS |RW | |DB7|DB6|DB5|DB4|DB3|DB2|DB1|DB0|
+    |---+---| |---+---+---+---+---+---+---+---|
+    | 0 | 0 | | 0 | 0 | 1 | 1 | 1 | 1 | 1 | D |
+    | 0 | 0 | | 0 | 1 | Y | Y | Y | Y | Y | Y |
+    | 0 | 0 | | 1 | 0 | 1 | 1 | 1 | P | P | P |
+    | 0 | 0 | | 1 | 1 | X | X | X | X | X | X |
+    | 0 | 1 | | B | 1 | S | R | 0 | 0 | 0 | 0 |
+    | 1 | 0 | |   :   : Write Data:   :   :   |
+    | 1 | 1 | |   :   : Read Data :   :   :   |
+    +-------+ +-------------------------------+
 
 Key:
 
-       +-------------------------+
-       | Key | Effect            |
-       +-----+-------------------+
-       |  D  | Display on/off.   |
-       |  B  | Busy status.      |
-       |  S  | Display status.   |
-       |  R  | Reset status.     |
-       |  X  | X address (0-63). |
-       |  Y  | Y address (0-63). |
-       |  P  | Page (0-7).       |
-       +-------------------------+
-
+    +-------------------------+
+    | Key | Effect            |
+    +-----+-------------------+
+    |  D  | Display on/off.   |
+    |  B  | Busy status.      |
+    |  S  | Display status.   |
+    |  R  | Reset status.     |
+    |  X  | X address (0-63). |
+    |  Y  | Y address (0-63). |
+    |  P  | Page (0-7).       |
+    +-------------------------+
+    
 Some **AMG19264** commands:
 
     +-------+ +---------------------+
@@ -114,8 +114,26 @@ Some **AMG19264** commands:
 ####MAX7325 I2C port expander:
 
 The **MAX7325** is an **I2C** interface port expander that features 16 I/O ports, divided into 8 push-pull outputs and 8 I/Os with selectable internal pull-ups and transition detection.
+
+    +----------( )----------+
+    |  Fn | pin | pin | Fn  |
+    |-----+-----+-----+-----|
+    | INT |   1 | 24  | V+  |
+    | RST |   2 | 23  | SDA |
+    | AD2 |   3 | 22  | SCL |
+    |  P0 |   4 | 21  | AD0 |
+    |  P1 |   5 | 20  | O15 |
+    |  P2 |   6 | 19  | O14 |
+    |  P3 |   7 | 18  | O13 |
+    |  P4 |   8 | 17  | O12 |
+    |  P5 |   9 | 16  | O11 |
+    |  P6 |  10 | 15  | O10 |
+    |  P7 |  11 | 14  | O9  |
+    | GND |  12 | 13  | O8  |
+    +-----------------------+
+
 The **MAX7325** occupies 2 **I2C** addresses, which are set according to the pin connections AD2 and AD0. These pins can be connected to either V+, GND, SDA or SCL, the combination of which gives 16 possible addresses and also sets the power up port states.
-The addresses used in the **C200** are 0x5d and 0x6d. From Tables 2 and 3 of the reference, these translate as:
+The addresses used in the **C200** are 0x5d (outputs O8-O15) and 0x6d (I/O P0-P7). From Tables 2 and 3 of the reference, these translate as:
 
     +-----------------------------------------------------------------------+
     | addr |O15|O14|O13|O12|O11|O10| O9| O8|| P7| P6| P5| P4| P3| P2| P1| P0|
@@ -123,6 +141,8 @@ The addresses used in the **C200** are 0x5d and 0x6d. From Tables 2 and 3 of the
     | 0x5d | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 || - | - | - | - | - | - | - | - | 
     | 0x6d | - | - | - | - | - | - | - | - || 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 
     +-----------------------------------------------------------------------+
+
+    From physical inspection of the **C200** front panel circuit, it looks like the display data pins (DB0-DB7) are connected directly to the I/O pins (P0-P7). The remaining display functions must therefore be connected to the outputs (O8-O15).
 
 #####Addressing:
 
@@ -144,13 +164,13 @@ The **LM27966** is a charge-pump based display LED driver with an **I2C** compat
  * The **I2C** address is fixed at 0x36.
  * There are three registers:
 
-        +--------------------------------------------------+
-        | Register                                  | Addr |
-        |-------------------------------------------+------|
-        | General purpose register                  | 0x10 |
-        | Main display brightness control register  | 0xa0 |
-        | Auxiliary LED brightness control register | 0xc0 |
-        +--------------------------------------------------+
+    +--------------------------------------------------+
+    | Register                                  | Addr |
+    |-------------------------------------------+------|
+    | General purpose register                  | 0x10 |
+    | Main display brightness control register  | 0xa0 |
+    | Auxiliary LED brightness control register | 0xc0 |
+    +--------------------------------------------------+
 
 #####General purpose register:
 
