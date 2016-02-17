@@ -17,6 +17,10 @@ These libraries can initialise the display into different modes and enable up to
 
 * amg19264i2c will provide support for the display, and backlight control in the Popcorn C200.
 
+###meterPi
+
+A library to provide metering capability for audio streams, displayed on small LCD or OLED displays, or a console via ncurses. The intent is to be IEC compliant but small displays will need some compromise. A demonstration of a PPM using a dBFS scale has been coded but requires Squeezelite running with the -v switch. This will remain a requirement until I can figure out how to use the memory mapping functions in ALSA or JACK audio.
+
 ###alsaPi:
 
 A library to provide some routines to set and change volume. Intended for use with rotencPi. Volume adjustment can be profiled to compensate for, or accentuate the logarithmic response of ALSA. This will allow better control according to the type of use, e.g. headphones need better refinement at low volumes but DACs or line level devices may need better refinement at higher levels.
