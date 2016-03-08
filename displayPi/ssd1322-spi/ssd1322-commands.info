@@ -1,0 +1,487 @@
+// ----------------------------------------------------------------------------
+/*
+    SSD1322 fundamental commands.
+
+    ,------------------------------------------------------------------------,
+    | Set column start & end addresses.                                      |
+    |                                                                        |
+    | Specifies column start and end addresses of the display data RAM. Also |
+    | sets the column address pointer to column start address. If horizontal |
+    | address increment mode is enabled (command 0xa0), after a column read/ |
+    | write, the column address is incremented. Column address is reset      |
+    | after reaching the end column address.                                 |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 1 | 0x15                            |
+    | Data | 0 | A | A | A | A | A | A | A | 0x00-0x77, reset = 0x00         |
+    | Data | 0 | B | B | B | B | B | B | B | 0x00-0x77, reset = 0x77         |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    | Note: End >= Start.                                                    |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Enable write data into RAM.                                            |
+    |                                                                        |
+    | After this command, data is written continuously into display RAM      |
+    | until another command is written.
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 0 | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0x5c                            |
+    | Data |<------------data------------->| Repeat until finished?          |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Enable read data from RAM.                                             |
+    |                                                                        |
+    | After this command, data is read from display RAM  until another       |
+    | command is written. Display RAM cannot be read in SPI mode.            |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 0 | 1 | 0 | 1 | 1 | 1 | 0 | 1 | 0x5d                            |
+    | Data |<------------data------------->| Repeat until finished?          |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set row start & end addresses.                                         |
+    |                                                                        |
+    | Specifies row start and end addresses of the display data RAM. Also    |
+    | sets the row address pointer to row start address. If vertical address |
+    | increment mode is enabled (command 0xa0), after a row read/write, the  |
+    | row address is incremented. Row address is reset after reaching the    |
+    | end row address.                                                       |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 0 | 1 | 1 | 1 | 0 | 1 | 0 | 1 | 0x75                            |
+    | Data | 0 | A | A | A | A | A | A | A | 0x00-0x7f                       |
+    | Data | 0 | B | B | B | B | B | B | B | 0x00-0x7f                       |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    | Note: End >= Start.                                                    |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set re-map and dual COM line mode.                                     |
+    |                                                                        |
+    | Address increment mode A[0]                                            |
+    |   A[0] = 0: Horizontal address increment mode.                         |
+    |   A[0] = 1: Vertical address increment mode.                           |
+    | Column address remap A[1]                                              |
+    |   A[1] = 0: Columns arranged from left to right.                       |
+    |   A[1] = 1: Columns arranged from right to left.                       |
+    | Nibble re-map A[2]                                                     |
+    |   A[2] = 0: Direct mapping (reset).                                    |
+    |   A[2] = 1: The four nibbles of the RAM data bus are re-mapped.        |
+    | COM scan direction re-map A[4]                                         |
+    |   A[4] = 0: Scan from top to bottom.                                   |
+    |   A[4] = 1: Scan from bottom to top.                                   |
+    | Odd/even split of COM pins A[5]                                        |
+    |   A[5] = 0: Sequential pin assignment of COM pins.                     |
+    |   A[5] = 1: Odd/even split of COM pins.                                |
+    | Set dual COM mode B[4]                                                 |
+    |   B[4] = 0: Disable dual COM mode (reset).                             |
+    |   B[4] = 1: Enable dual COM mode. A[5] must be set to 0 and MUX <= 63. |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0xa0                            |
+    | Data | 0 | 0 | A | A | 0 | A | A | A | A0=0 Hor addr increment (reset) |
+    |      |   :   :   :   :   :   :   :   | A0=1 Ver addr increment         |
+    |      |   :   :   :   :   :   :   :   | A1=0 Dis col addr remap (reset) |
+    |      |   :   :   :   :   :   :   :   | A1=1 Ena col addr remap         |
+    |      |   :   :   :   :   :   :   :   | A2=0 Dis nibble remap (reset)   |
+    |      |   :   :   :   :   :   :   :   | A2=1 Ena nibble remap           |
+    |      |   :   :   :   :   :   :   :   | A4=0 Scan COM0-COM[n-1] (reset) |
+    |      |   :   :   :   :   :   :   :   | A4=1 Scan COM[n-1]-COM0         |
+    |      |   :   :   :   :   :   :   :   | A5=0 Dis COM split (reset)      |
+    |      |   :   :   :   :   :   :   :   | A5=1 Ena COM split              |
+    | Data | x | x | 0 | B | 0 | 0 | 0 | 1 | B4=0 Dis dual COM mode (reset)  |
+    |      |                               | B4=1 Ena dual COM mode          |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set display start line.                                                |
+    |                                                                        |
+    | Set display start line register to determine starting address of       |
+    | display RAM.                                                           |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0xa1                            |
+    | Data | x | A | A | A | A | A | A | A | 0x00-0x7f                       |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set display offset.                                                    |
+    |                                                                        |
+    | Set mapping of display start line (COM0). Can be used to rotate image  |
+    | vertically.                                                            |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0xa1                            |
+    | Data | x |<-----vertical scroll----->| 0x00-0x7f                       |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Display modes.                                                         |
+    |                                                                        |
+    | Sets various display modes. The all pixels on/off modes are regardless |
+    | of the contents of the display data RAM.                               |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 0xa4 Normal (reset)             |
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 1 | 0xa5 All pixels on              |
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 1 | 1 | 0 | 0xa6 All pixels off             |
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 1 | 1 | 1 | 0xa7 Inverse mode               |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Partial display mode.                                                  |
+    |                                                                        |
+    | Enables/disables partial display mode. Masks part of the display data  |
+    | RAM to show a partial image.                                           |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 0xa8 Enable partial display     |
+    | Data | 0 | A | A | A | A | A | A | A | 0x00-0x7f Start row             |
+    | Data | 0 | B | B | B | B | B | B | B | 0x00-0x7f End row               |
+    | Cmd  | 1 | 0 | 1 | 0 | 1 | 0 | 0 | 1 | 0xa9 Disable partial display    |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    | Note: End >= Start.                                                    |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set VDD regulator.                                                     |
+    |                                                                        |
+    | Sets VDD regulator to internal or external.                            |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 1 | 0xab                            |
+    | Data | 0 | 0 | 0 | 0 | 0 | 0 | 0 | A | A0=0 Select external VDD        |
+    |      |   :   :   :   :   :   :   :   | A0=1 Enable internal VDD (reset)|
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Display on/off.                                                        |
+    |                                                                        |
+    | Turns display circuits on or off.                                      |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 1 | 1 | 1 | 0 | 0xae Turn display off           |
+    | Cmd  | 1 | 0 | 1 | 0 | 1 | 1 | 1 | 1 | 0xaf Turn display on            |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set clock phase length.                                                |
+    |                                                                        |
+    | Set lengths of phase 1 and 2 of the segment waveform.                  |
+    | Phase 1: Set from 5 DCLKS - 31 DCLKS in steps of 2. Higher OLED        |
+    |          capacitance may require longer period to discharge.           |
+    | Phase 2: Set from 3 DCLKS - 15 DCLKS in steps of 1. Higher OLED        |
+    |          capacitance may require longer period to charge.              |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0xb1                            |
+    | Data | A | A | A | A | 0 | A | A | A | A[3:0] 0x0-0xf                  |
+    |      |   :   :   :   :   :   :   :   | A[7:4] 0x0-0xf                  |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,---------------------------------,                      |
+    |               | A[3:0] | Hex  | Phase 1 period  |                      |
+    |               |--------+------------------------|                      |
+    |               |  0000  | 0x00 | invalid         |                      |
+    |               |  0001  | 0x01 | invalid         |                      |
+    |               |  0010  | 0x02 | 5 DCLKs         |                      |
+    |               |  0011  | 0x03 | 7 DCLKs         |                      |
+    |               |  0100  | 0x04 | 9 DCLKs (reset) |                      |
+    |               |   :    |  :   |   :             |                      |
+    |               |  1111  | 0x0f | 31 DCLKs        |                      |
+    |               '---------------------------------'                      |
+    |                                                                        |
+    |               ,---------------------------------,                      |
+    |               | A[7:4] | Hex  | Phase 2 period  |                      |
+    |               |--------+------------------------|                      |
+    |               |  0000  | 0x00 | invalid         |                      |
+    |               |  0001  | 0x01 | invalid         |                      |
+    |               |  0010  | 0x02 | invalid         |                      |
+    |               |  0011  | 0x03 | 3 DCLKs         |                      |
+    |               |   :    |  :   |   :             |                      |
+    |               |  0111  | 0x07 | 7 DCLKs (reset) |                      |
+    |               |   :    |  :   |   :             |                      |
+    |               |  1111  | 0x0f | 15 DCLKs        |                      |
+    |               '---------------------------------'                      |
+    |                                                                        |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set front clock divider/oscillator frequency.                          |
+    |                                                                        |
+    | Front clock divider  A[3:0] = 0x0-0xa, reset = 0x1                     |
+    |   Determines DCLK frequency from CLK                                   |
+    | Oscillator frequency A[7:4] = 0x0-0xf, reset = 0xc                     |
+    |   Sets FOSC, which is the CLk source if CLS pin is high                |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 1 | 0 | 0 | 1 | 1 | 0xb3                            |
+    | Data | A | A | A | A | A | A | A | A | A[3:0] (divisor)   0x0-0xa      |
+    |      |   :   :   :   :   :   :   :   | A[7:4] (frequency) 0x0-0xf      |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    | Notes:                                                                 |
+    |           Divisor reset   = 0x01                                       |
+    |           Frequency reset = 0xc0                                       |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set GPIO.                                                              |
+    |                                                                        |
+    | Sets the state of GPIO pins 0 and 1.                                   |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 1 | 0xb5                            |
+    | Data | x | x | x | x | A | A | A | A | A[1:0] GPIO0                    |
+    |      |   :   :   :   :   :   :   :   | A[3:2] GPIO1                    |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,----------------------------------,                     |
+    |               | A[1:0] | GPIO0                   |                     |
+    |               |--------+-------------------------|                     |
+    |               |   00   | pin HiZ, input disabled |                     |
+    |               |   01   | pin HiZ, input enabled  |                     |
+    |               |   10   | pin output low (reset)  |                     |
+    |               |   11   | pin output high         |                     |
+    |               '----------------------------------'                     |
+    |                                                                        |
+    |               ,----------------------------------,                     |
+    |               | A[3:2] | GPIO1                   |                     |
+    |               |--------+-------------------------|                     |
+    |               |   00   | pin HiZ, input disabled |                     |
+    |               |   01   | pin HiZ, input enabled  |                     |
+    |               |   10   | pin output low (reset)  |                     |
+    |               |   11   | pin output high         |                     |
+    |               '----------------------------------'                     |
+    |                                                                        |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set second pre-charge period.                                          |
+    |                                                                        |
+    | Sets the second phase 3 pre-charge period from 0 to 15 DCLKs.          |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 1 | 0 | 1 | 1 | 0 | 0xb6                            |
+    | Data | x | x | x | x | A | A | A | A | A[3:0]                          |
+    |      |   :   :   :   :   :   :   :   |                                 |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,---------------------------------------,                |
+    |               | A[3:0] | Hex  | 2nd pre-charge period |                |
+    |               |--------+------+-----------------------|                |
+    |               |  0000  | 0x00 | 0 DCLK                |                |
+    |               |  0001  | 0x01 | 1 DCLK                |                |
+    |               |   :    |  :   |   :                   |                |
+    |               |  1000  | 0x08 | 8 DCLKs (reset)       |                |
+    |               |   :    |  :   |   :                   |                |
+    |               |  1111  | 0x0f | 15 DCLKs              |                |
+    |               '---------------------------------------'                |
+    |                                                                        |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set greyscale table.                                                   |
+    |                                                                        |
+    | Sets the individual greyscale levels GS1-GS15 for the display. GS0 has |
+    | no pre-charge and current drive. The longer the pulse width unit of    |
+    | DCLK, the brighter the pixel when it is turned on.                     |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 0 | 0xb8                            |
+    | Data | A | A | A | A | A | A | A | A | A1[7:0] Gamma for GS1           |
+    | Data | A | A | A | A | A | A | A | A | A2[7:0] Gamma for GS2           |
+    |      |   :   :   :   :   :   :   :   |                                 |
+    | Data | A | A | A | A | A | A | A | A | A14[7:0] Gamma for GS15         |
+    | Cmd  | 1 | 0 | 1 | 1 | 1 | 0 | 0 | 1 | 0xb9 Default settings           |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    | Note:             0 <= GS1 <= GS2 .. <= GS15                           |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set pre-charge voltage level.                                          |
+    |                                                                        |
+    | Sets the first pre-charge voltage level with reference to VCC.         |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 1 | 1 | 0 | 1 | 1 | 0xbb                            |
+    | Data | x | x | x | A | A | A | A | A | A[4:0]                          |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,------------------------------------,                   |
+    |               | A[4:0] | Hex  | Pre-charge voltage |                   |
+    |               |--------+------+--------------------|                   |
+    |               | 00000  | 0x00 |     0.2 x VCC      |                   |
+    |               |   :    |  :   |         :          |                   |
+    |               | 11111  | 0x3e |     0.6 x VCC      |                   |
+    |               '------------------------------------'                   |
+    |                                                                        |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set VCOMH.                                                             |
+    |                                                                        |
+    | Sets the high voltage level VCOMH with reference to VCC.               |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 0 | 0xbe                            |
+    | Data | x | x | x | x | A | A | A | A | A[3:0] 0x00 - 0x07              |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,------------------------------------,                   |
+    |               | A[4:0] | Hex  | Pre-charge voltage |                   |
+    |               |--------+------+--------------------|                   |
+    |               |  0000  | 0x00 |     0.72 x VCC     |                   |
+    |               |   :    |  :   |         :          |                   |
+    |               |  0100  | 0x04 |     0.80 x VCC     |                   |
+    |               |   :    |  :   |         :          |                   |
+    |               |  0111  | 0x07 |     0.86 x VCC     |                   |
+    |               '------------------------------------'                   |
+    |                                                                        |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set contrast.                                                          |
+    |                                                                        |
+    | Sets the display contrast, which varies linearly from 0x00 - 0xff      |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 0xc1                            |
+    | Data | A | A | A | A | A | A | A | A | A[7:0] ISEG current 0x00-0xff   |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    | Note:            ISEG current reset = 0x7f                             |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Master brightness.                                                     |
+    |                                                                        |
+    | Controls the segment output current by a scaling factor from 0x0-0xf.  |
+    | The smaller the factor, the dimmer the display.                        |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 1 | 0 | 0 | 0 | 1 | 1 | 1 | 0xc7                            |
+    | Data | x | x | x | x | A | A | A | A | A[3:0] 0x00 - 0x0f              |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,--------------------------------,                       |
+    |               | A[4:0] | Hex  | Output current |                       |
+    |               |--------+------+----------------|                       |
+    |               |  0000  | 0x00 |      1/16      |                       |
+    |               |  0001  | 0x01 |      2/16      |                       |
+    |               |   :    |  :   |       :        |                       |
+    |               |  1110  | 0x0e |     15/16      |                       |
+    |               |  1111  | 0x0f |     reset      |                       |
+    |               '--------------------------------'                       |
+    |                                                                        |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set MUX ratio.                                                         |
+    |                                                                        |
+    | Switches MUX mode to between 16 & 128 common pins (default 128). The   |
+    | start and end of the enabled common pins depends on the Display Offset |
+    | setting (command 0xa2).                                                |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 1 | 0 | 0 | 1 | 0 | 1 | 0 | 0xca                            |
+    | Data | x | A | A | A | A | A | A | A | A[6:0] 0x0f - 0x7f              |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,-------------------------,                              |
+    |               | A[6:0]  | Hex  | Ratio  |                              |
+    |               |---------+------+--------|                              |
+    |               | 0001111 | 0x0f | 16MUX  |                              |
+    |               |   :     |  :   |   :    |                              |
+    |               | 1111111 | 0x7f | 128MUX |                              |
+    |               '-------------------------'                              |
+    |                                                                        |
+    '------------------------------------------------------------------------'
+
+    ,------------------------------------------------------------------------,
+    | Set command lock.                                                      |
+    |                                                                        |
+    | Prevents the OLED driver from accepting any commands except itself.    |
+    |------------------------------------------------------------------------|
+    | Cmd  |      Command/Data bits        | Command value                   |
+    |  &   |-------------------------------|  &                              |
+    | data | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | data values/ranges              |
+    |------------------------------------------------------------------------|
+    | Cmd  | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 0xfd                            |
+    | Data | 0 | 0 | 0 | 1 | 0 | A | 1 | 0 | A[2] 0x12, 0x16                 |
+    |- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - |
+    |                                                                        |
+    |               ,---------------------------,                            |
+    |               | A[2] | Hex  | Lock/unlock |                            |
+    |               |------+------+-------------|                            |
+    |               |   0  | 0x12 | Unlock      |                            |
+    |               |   1  | 0x16 | Lock        |                            |
+    |               '---------------------------'                            |
+    |                                                                        |
+    | Note: Lock prohibits all commands and memory access except 0xfd.       |
+    '------------------------------------------------------------------------'
+*/
