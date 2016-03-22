@@ -57,42 +57,48 @@
 #define SSD1322_ROWS       64 // No of display lines.
 #define SSD1322_GREYSCALES 16 // No of greyscales.
 
+// SPI properties.
+#define SSD1322_SPI_BAUD 10000000 // SPI baud rate.
+#define SSD1322_SPI_FLAGS       0 // SPI mode.
+
 // Fundamental commands.
-#define SSD1322_CMD_ENABLE_GREYS  0x00
+#define SSD1322_CMD_ENABLE_GREYS  0x00 // Enable greyscale table.
 #define SSD1322_CMD_SET_COLS      0x15 // Start & end cols.
-#define SSD1322_CMD_SET_WRITE     0x5c // Write enable.
-#define SSD1322_CMD_SET_READ      0x5d // Read enable.
-#define SSD1322_CMD_SET_ROWS      0x75 // Start & end rows.
+#define SSD1322_CMD_SET_WRITE     0x5c // Write to RAM enable.
+#define SSD1322_CMD_SET_READ      0x5d // Read from RAM enable.
+#define SSD1322_CMD_SET_ROWS      0x75 // Set start & end rows.
 #define SSD1322_CMD_SET_MODES     0xa0 // RAM addressing modes.
-#define SSD1322_CMD_SET_START     0xa1 // RAM start.
-#define SSD1322_CMD_SET_OFFSET    0xa2 // RAM offset.
-#define SSD1322_CMD_SET_PIX_NORM  0xa4 // Normal display.
+#define SSD1322_CMD_SET_START     0xa1 // Set RAM start line.
+#define SSD1322_CMD_SET_OFFSET    0xa2 // Set RAM offset (vertical scroll).
+#define SSD1322_CMD_SET_PIX_OFF   0xa4 // All pixels off.
 #define SSD1322_CMD_SET_PIX_ON    0xa5 // All pixels on.
-#define SSD1322_CMD_SET_PIX_OFF   0xa6 // All pixels off.
+#define SSD1322_CMD_SET_PIX_NORM  0xa6 // Normal display.
 #define SSD1322_CMD_SET_PIX_INV   0xa7 // Inverse display.
 #define SSD1322_CMD_SET_PART_ON   0xa8 // Partial display on.
 #define SSD1322_CMD_SET_PART_OFF  0xa9 // Partial display off.
 #define SSD1322_CMD_SET_VDD       0xab // Set VDD source.
-#define SSD1322_CMD_SET_DISP_ON   0xae // Display logic on.
-#define SSD1322_CMD_SET_DISP_OFF  0xaf // Display logic off.
+#define SSD1322_CMD_SET_DISP_OFF  0xae // Display logic off.
+#define SSD1322_CMD_SET_DISP_ON   0xaf // Display logic on.
 #define SSD1322_CMD_SET_CLK_PHASE 0xb1 // Clock phase length.
 #define SSD1322_CMD_SET_CLK_FREQ  0xb3 // Clock frequency.
+#define SSD1322_CMD_SET_ENHANCE_A 0xb4 // Display enhancement A.
 #define SSD1322_CMD_SET_GPIOS     0xb5 // GPIO modes.
 #define SSD1322_CMD_SET_PERIOD    0xb6 // Pre-charge period.
-#define SSD1322_CMD_SET_GREYS     0xb8 // Greyscale table.
-#define SSD1322_CMD_SET_GREYS_DEF 0xb9 // Greyscale tabe (default).
+#define SSD1322_CMD_SET_GREYS     0xb8 // Set greyscale table values.
+#define SSD1322_CMD_SET_GREYS_DEF 0xb9 // Set greyscale table to default.
 #define SSD1322_CMD_SET_PRE_VOLT  0xbb // Pre-charge voltage.
 #define SSD1322_CMD_SET_COM_VOLT  0xbe // Common voltage.
 #define SSD1322_CMD_SET_CONTRAST  0xc1 // Contrast.
 #define SSD1322_CMD_SET_BRIGHT    0xc7 // Brightness.
 #define SSD1322_CMD_SET_MUX       0xca // Mux.
+#define SSD1322_CMD_SET_ENHANCE_B 0xd1 // Display enhancement B.
 #define SSD1322_CMD_SET_LOCK      0xfd // Command lock.
 
 // GPIO states.
 #define SSD1322_COMMAND  0 // Enable command mode for D/C pin.
 #define SSD1322_DATA     1 // Enable character mode for D/C pin.
 #define SSD1322_HW_RESET 0 // Hardware reset when RES# pin is pulled low.
-#define SSD1322_HW_RUN   1 // Normal operaton when pulled high.
+#define SSD1322_HW_RUN   1 // Normal operation when pulled high.
 
 // Settings.
 #define SSD1322_COLS_MIN       0x00
@@ -107,8 +113,8 @@
 #define SSD1322_SCAN_UP        0x10 // Scan rows from bottom to top.
 #define SSD1322_RAM_MIN        0x00 //
 #define SSD1322_RAM_MAX        0x7f //
-#define SSD1322_VDD_INT        0x00 // Use internal VDD regulator (default).
-#define SSD1322_VDD_EXT        0x01 // Use external VDD regulator.
+#define SSD1322_VDD_EXT        0x00 // Use internal VDD regulator.
+#define SSD1322_VDD_INT        0x01 // Use external VDD regulator (reset).
 
 // Enable/disable.
 #define SSD1322_PARTIAL_ON           0x01 // Partial mode on.
@@ -131,12 +137,12 @@
 
 struct ssd1322
 {
-    uint8_t handle;    // Display handle.
-    uint8_t gpio_sclk; // GPIO number for SCLK.
-    uint8_t gpio_sdin; // GPIO number for SDIN (MOSI).
-    uint8_t gpio_dc;   // GPIO number for D/C#. High = data, Low = command.
-    uint8_t gpio_res;  // GPIO number for hardware reset. Pull low to reset.
-    uint8_t gpio_cs;   // GPIO number for CS#. Pull low for communication.
+    uint8_t handle;     // SPI handle.
+    uint8_t gpio_sclk;  // GPIO number for SCLK.
+    uint8_t gpio_sdin;  // GPIO number for SDIN (MOSI).
+    uint8_t gpio_dc;    // GPIO number for D/C#. High = data, Low = command.
+    uint8_t gpio_reset; // GPIO number for hardware reset. Pull low to reset.
+    uint8_t gpio_cs;    // GPIO number for CS#. Pull low for communication.
 };
 
 // Hardware functions. --------------------------------------------------------
@@ -150,7 +156,14 @@ struct ssd1322
     Redundant if RES# pin is wired to VCC.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_reset( uint8_t reset_gpio );
+void ssd1322_reset( uint8_t id );
+
+// ----------------------------------------------------------------------------
+/*
+    Enables grey scale lookup table.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_enable_greys( uint8_t id);
 
 // ----------------------------------------------------------------------------
 /*
@@ -163,7 +176,7 @@ void ssd1322_reset( uint8_t reset_gpio );
     is reset after reaching the end column address.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_cols( uint8_t handle, uint8_t dc_gpio, char start, char end );
+void ssd1322_set_cols( uint8_t id, uint8_t start, uint8_t end );
 
 // ----------------------------------------------------------------------------
 /*
@@ -173,21 +186,21 @@ void ssd1322_set_cols( uint8_t handle, uint8_t dc_gpio, char start, char end );
     End   = 0x77 (119).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_cols_reset( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_cols_reset( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Enables writing data continuously into display RAM.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_write_data_enable( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_write_data_enable( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Enables reading data continuously from display RAM. Not used in SPI mode.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_read_data_enable( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_read_data_enable( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
@@ -200,7 +213,7 @@ void ssd1322_read_data_enable( uint8_t handle, uint8_t dc_gpio );
     is reset after reaching the end column address.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_rows( uint8_t handle, uint8_t dc_gpio, char start, char end );
+void ssd1322_set_rows( uint8_t id, uint8_t start, uint8_t end );
 
 // ----------------------------------------------------------------------------
 /*
@@ -210,34 +223,33 @@ void ssd1322_set_rows( uint8_t handle, uint8_t dc_gpio, char start, char end );
     End   = 0x7f (127).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_rows_reset( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_rows_reset( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Sets various addressing configurations.
 
-    Address increment mode A[0]
-        d1[0] = 0: Increment display RAM by column (horizontal).
-        d1[0] = 1: Increment display RAM by row (vertical).
-    Column address remap A[1]
-        d1[1] = 0: Columns incremented left to right.
-        d1[1] = 1: Columns incremented right to left.
-    Nibble re-map A[2]
-        d1[2] = 0: Direct mapping (reset).
-        d1[2] = 1: The four nibbles of the RAM data bus are re-mapped.
-    COM scan direction re-map A[4]
-        d1[4] = 0: Rows incremented from top to bottom.
-        d1[4] = 1: Rows incremented from bottom to top.
-    Odd/even split of COM pins A[5]
-        d1[5] = 0: Sequential pin assignment of COM pins.
-        d1[5] = 1: Odd/even split of COM pins.
-    Set dual COM mode B[4]
-        d2[4] = 0: Disable dual COM mode.
-        d2[4] = 1: Enable dual COM mode. A[5] must be disabled and
-                   MUX <= 63.
+    a[0] = 0: Increment display RAM by column (horizontal).
+    a[0] = 1: Increment display RAM by row (vertical).
+    a[1] = 0: Columns incremented left to right.
+    a[1] = 1: Columns incremented right to left.
+    a[2] = 0: Direct mapping (reset).
+    a[2] = 1: The four nibbles of the RAM data bus are re-mapped.
+    a[3] = 0.
+    a[4] = 0: Rows incremented from top to bottom.
+    a[4] = 1: Rows incremented from bottom to top.
+    a[5] = 0: Sequential pin assignment of COM pins.
+    a[5] = 1: Odd/even split of COM pins.
+    a[7:6] = 0x00.
+    b[3:0] = 0x01.
+    b[4] = 0: Disable dual COM mode.
+    b[4] = 1: Enable dual COM mode. A[5] must be disabled and MUX <= 63.
+    b[5] = 0.
+
+    Typical values: a = 0x14, b = 0x11.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_addr_modes( uint8_t handle, uint8_t dc_gpio, char d1, char d2 );
+void ssd1322_set_addr_modes( uint8_t id, uint8_t a, uint8_t b );
 
 // ----------------------------------------------------------------------------
 /*
@@ -246,7 +258,7 @@ void ssd1322_set_addr_modes( uint8_t handle, uint8_t dc_gpio, char d1, char d2 )
     0 <= start <= 127 (0x7f).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_ram_start( uint8_t handle, uint8_t dc_gpio, char start );
+void ssd1322_set_ram_start( uint8_t id, uint8_t start );
 
 // ----------------------------------------------------------------------------
 /*
@@ -255,35 +267,35 @@ void ssd1322_set_ram_start( uint8_t handle, uint8_t dc_gpio, char start );
     0 <= start <= 127 (0x7f).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_ram_offset( uint8_t handle, uint8_t dc_gpio, char offset );
+void ssd1322_set_ram_offset( uint8_t id, uint8_t offset );
 
 // ----------------------------------------------------------------------------
 /*
     Sets display mode to normal (display shows contents of display RAM).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_display_normal( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_display_normal( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Sets all pixels on regardless of display RAM content.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_display_all_on( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_display_all_on( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Sets all pixels off regardless of display RAM content.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_display_all_off( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_display_all_off( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Displays inverse of display RAM content.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_display_inverse( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_display_inverse( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
@@ -292,7 +304,7 @@ void ssd1322_set_display_inverse( uint8_t handle, uint8_t dc_gpio );
     0 <= start <= end <= 0x7f.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_part_on( uint8_t handle, uint8_t dc_gpio, char start, char end );
+void ssd1322_set_part_on( uint8_t id, uint8_t start, uint8_t end );
 
 // ----------------------------------------------------------------------------
 /*
@@ -301,35 +313,35 @@ void ssd1322_set_part_on( uint8_t handle, uint8_t dc_gpio, char start, char end 
     0 <= start <= end <= 0x7f.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_part_off( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_part_off( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Enables internal VDD regulator.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_vdd_enable( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_vdd_internal( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Disables internal VDD regulator (requires external regulator).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_vdd_disable( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_vdd_external( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Turns display circuit on.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_display_on( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_display_on( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Turns display circuit off.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_display_off( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_display_off( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
@@ -341,17 +353,31 @@ void ssd1322_set_display_off( uint8_t handle, uint8_t dc_gpio );
              capacitance may require longer period to charge.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_clk_phase( uint8_t handle, uint8_t dc_gpio, char phase );
+void ssd1322_set_clk_phase( uint8_t id, uint8_t phase );
 
 // ----------------------------------------------------------------------------
 /*
     Sets clock divisor/frequency.
 
-    Front clock divider  A[3:0] = 0x0-0xa, reset = 0x1.
-    Oscillator frequency A[7:4] = 0x0-0xf, reset = 0xc.
+    Front clock divider  freq[3:0] = 0x0-0xa, reset = 0x1.
+    Oscillator frequency freq[7:4] = 0x0-0xf, reset = 0xc.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_clk_freq( uint8_t handle, uint8_t dc_gpio, char freq );
+void ssd1322_set_clk_freq( uint8_t id, uint8_t freq );
+
+// ----------------------------------------------------------------------------
+/*
+    Sets display enhancement A.
+
+    a[1:0] 0x00 = external VSL, 0x02 = internal VSL.
+    a[7:2] = 0xa0.
+    b[2:0] = 0x05.
+    b[7:3] 0xf8 = enhanced, 0xb0 = normal.
+
+    Typical values: a = 0xa0, b = 0xfd.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_set_enhance_a( uint8_t id, uint8_t a, uint8_t b );
 
 // ----------------------------------------------------------------------------
 /*
@@ -361,7 +387,7 @@ void ssd1322_set_clk_freq( uint8_t handle, uint8_t dc_gpio, char freq );
     gpio[3:2] GPIO1
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_gpios( uint8_t handle, uint8_t dc_gpio, char gpio );
+void ssd1322_set_gpios( uint8_t id, uint8_t gpio );
 
 // ----------------------------------------------------------------------------
 /*
@@ -370,7 +396,7 @@ void ssd1322_set_gpios( uint8_t handle, uint8_t dc_gpio, char gpio );
     period[3:0] 0 to 15DCLK.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_period( uint8_t handle, uint8_t dc_gpio, char period );
+void ssd1322_set_period( uint8_t id, uint8_t period );
 
 // ----------------------------------------------------------------------------
 /*
@@ -379,14 +405,14 @@ void ssd1322_set_period( uint8_t handle, uint8_t dc_gpio, char period );
     gs[7:0] 0 <= GS1 <= GS2 .. <= GS15.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_greys( uint8_t handle, uint8_t dc_gpio, char *gs[16] );
+void ssd1322_set_greys( uint8_t id, uint8_t gs[16] );
 
 // ----------------------------------------------------------------------------
 /*
     Sets greyscale lookup table to default linear values.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_greys_def( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_greys_def( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
@@ -395,7 +421,7 @@ void ssd1322_set_greys_def( uint8_t handle, uint8_t dc_gpio );
     voltage[4:0] 0.2xVCC (0x00) to 0.6xVCC (0x3e).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_pre_volt( uint8_t handle, uint8_t dc_gpio, uint8_t volts );
+void ssd1322_set_pre_volt( uint8_t id, uint8_t volts );
 
 // ----------------------------------------------------------------------------
 /*
@@ -404,7 +430,7 @@ void ssd1322_set_pre_volt( uint8_t handle, uint8_t dc_gpio, uint8_t volts );
     voltage[3:0] 0.72xVCC (0x00) to 0.86xVCC (0x07).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_com_volt( uint8_t handle, uint8_t dc_gpio, char volts );
+void ssd1322_set_com_volt( uint8_t id, uint8_t volts );
 
 // ----------------------------------------------------------------------------
 /*
@@ -413,7 +439,7 @@ void ssd1322_set_com_volt( uint8_t handle, uint8_t dc_gpio, char volts );
     contrast[7:0]. Contrast varies linearly from 0x00 to 0xff.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_contrast( uint8_t handle, uint8_t dc_gpio, char contrast );
+void ssd1322_set_contrast( uint8_t id, uint8_t contrast );
 
 // ----------------------------------------------------------------------------
 /*
@@ -423,7 +449,7 @@ void ssd1322_set_contrast( uint8_t handle, uint8_t dc_gpio, char contrast );
     The smaller the value, the dimmer the display.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_bright( uint8_t handle, uint8_t dc_gpio, char factor );
+void ssd1322_set_brightness( uint8_t id, uint8_t factor );
 
 // ----------------------------------------------------------------------------
 /*
@@ -432,20 +458,52 @@ void ssd1322_set_bright( uint8_t handle, uint8_t dc_gpio, char factor );
     ratio[6:0] 16 (0x00) to 128 (0x7f).
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_mux( uint8_t handle, uint8_t dc_gpio, char ratio );
+void ssd1322_set_mux( uint8_t id, uint8_t ratio );
+
+// ----------------------------------------------------------------------------
+/*
+    Sets display enhancement B.
+
+    a[3:0] = 0x02.
+    a[5:4] 0x00 = reserved, 0x02 = normal (reset).
+    a[7:6] = 0x80.
+    b[7:0] = 0x20.
+
+    typical values: a = 0x82, b = 0x20.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_set_enhance_b( uint8_t id, uint8_t a, uint8_t b );
 
 // ----------------------------------------------------------------------------
 /*
     Sets command lock - prevents all command except unlock.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_lock( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_set_lock( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Unsets command lock.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_command_unlock( uint8_t handle, uint8_t dc_gpio );
+void ssd1322_command_unlock( uint8_t id );
+
+// ----------------------------------------------------------------------------
+/*
+    Clears display RAM.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_clear_ram( uint8_t id );
+
+// ----------------------------------------------------------------------------
+/*
+    Initialises display.
+*/
+// ----------------------------------------------------------------------------
+int8_t ssd1322_init( uint8_t sclk,      // GPIO for SPI SCLK.
+                     uint8_t sdin,      // GPIO for SPI MOSI.
+                     uint8_t cs,        // GPIO for CS#
+                     uint8_t dc,        // GPIO for DC#.
+                     uint8_t reset );   // GPIO for RESET#.
 
 #endif
