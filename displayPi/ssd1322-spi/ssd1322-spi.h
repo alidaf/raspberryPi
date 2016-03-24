@@ -28,34 +28,15 @@
 #ifndef SSD1322SPI_H
 #define SSD1322SPI_H
 
-// Pin states.
-#define GPIO_HIGH 1 // Pin level high.
-#define GPIO_LOW  0 // Pin level low.
-
-// BCOM GPIO pin numbers for SPI0 (Board revision 2).
-#define GPIO_SPI0_CE0_N  8 // Chip Select SPI0 0.
-#define GPIO_SPI0_CE1_N  7 // Chip Select SPI0 1.
-#define GPIO_SPI0_MISO   9 // SPI Master In, Slave Out.
-#define GPIO_SPI0_MOSI  10 // SPI Master Out, Slave In.
-#define GPIO_SPI0_SCLK  11 // SPI Clock.
-
-// BCOM GPIO pin numbers for SPI1 (Board revision 2).
-#define GPIO_SPI1_CE0_N 18 // Chip Select SPI1 0.
-#define GPIO_SPI1_CE1_N 17 // Chip Select SPI1 1.
-#define GPIO_SPI1_CE2_N 16 // Chip Select SPI1 2.
-#define GPIO_SPI1_MISO  19 // SPI Master In, Slave Out.
-#define GPIO_SPI1_MOSI  20 // SPI Master Out, Slave In.
-#define GPIO_SPI1_SCLK  21 // SPI Clock.
-
 // Default GPIO assignments.
 #define GPIO_DC         23 // Data/Command (DC#) pin.
 #define GPIO_RESET      24 // Hardware reset (RES#) pin.
 
 // Display properties.
-#define SSD1322_DISPLAYS    1 // No of displays.
-#define SSD1322_COLS      256 // No of display columns.
-#define SSD1322_ROWS       64 // No of display lines.
-#define SSD1322_GREYSCALES 16 // No of greyscales.
+#define SSD1322_DISPLAYS_MAX 2 // No of displays.
+#define SSD1322_COLS       256 // No of display columns.
+#define SSD1322_ROWS        64 // No of display lines.
+#define SSD1322_GREYSCALES  16 // No of greyscales.
 
 // SPI default properties for RPi.
 #define SPI_CHANNEL    0 // Channel.
@@ -71,15 +52,15 @@
     +-----------------------------------------------------------------+
 
     SSD1322 SPI interface:
-        mm      = 3 (Clock idle high, trailing edge).
-        px      = 0 (CS# is active low).
-        ux      = 0 (CEx GPIO is reserved for SPI).
-        A       = 0 (Standard SPI device).
-        W       = 0 (4-wire interface).
-        nnnn    = 0 (N/A).
-        T       = 0 (MSB first).
-        R       = 0 (N/A).
-        bbbbbb  = 0 (N/A).
+        mm      = 0x03 (Clock idle high, trailing edge).
+        px      = 0x00 (CS# is active low).
+        ux      = 0x00 (CEx GPIO is reserved for SPI).
+        A       = 0x00 (Standard SPI device).
+        W       = 0x00 (4-wire interface).
+        nnnn    = 0x00 (N/A).
+        T       = 0x00 (MSB first).
+        R       = 0x00 (N/A).
+        bbbbbb  = 0x00 (N/A).
 */
 
 // Fundamental commands.
@@ -158,8 +139,8 @@
 #define SSD1322_SCAN_LEFT      0x02 // Scan columns right to left.
 #define SSD1322_SCAN_DOWN      0x00 // Scan rows from top to bottom.
 #define SSD1322_SCAN_UP        0x10 // Scan rows from bottom to top.
-#define SSD1322_VDD_EXTERNAL   0x00 // Use internal VDD regulator.
-#define SSD1322_VDD_INTERNAL   0x01 // Use external VDD regulator (reset).
+#define SSD1322_VDD_EXTERNAL   0x00 // Use external VDD regulator.
+#define SSD1322_VDD_INTERNAL   0x01 // Use internal VDD regulator (reset).
 
 // Enable/disable.
 #define SSD1322_PARTIAL_ON      0x01 // Partial mode on.
@@ -187,35 +168,7 @@ struct ssd1322_t
     uint8_t gpio_reset; // GPIO for hardware reset.
 };
 
-struct ssd1322_settings_t
-{
-    uint8_t col1;
-    uint8_t col2;
-    uint8_t row1;
-    uint8_t row2;
-    uint8_t remap1;
-    uint8_t remap2;
-    uint8_t start;
-    uint8_t offset;
-    uint8_t vdd;
-    uint8_t phase;
-    uint8_t clock;
-    uint8_t enhance_a1;
-    uint8_t enhance_a2;
-    uint8_t gpio;
-    uint8_t period;
-    uint8_t voltage;
-    uint8_t vcomh;
-    uint8_t contrast;
-    uint8_t brightness;
-    uint8_t mux;
-    uint8_t enhance_b1;
-    uint8_t enhance_b2;
-};
-
-extern struct ssd1322_settings_t ssd1322_default;
-
-struct ssd1322_t *ssd1322[SSD1322_DISPLAYS];
+struct ssd1322_t *ssd1322[SSD1322_DISPLAYS_MAX];
 
 uint8_t ssd1322_greys[16];  // Greyscale definitions.
 
@@ -397,7 +350,7 @@ void ssd1322_set_display_inverse( uint8_t id );
     0 <= start <= end <= 0x7f.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_part_on( uint8_t id, uint8_t start, uint8_t end );
+void ssd1322_set_part_display_on( uint8_t id, uint8_t start, uint8_t end );
 
 // ----------------------------------------------------------------------------
 /*
@@ -406,7 +359,7 @@ void ssd1322_set_part_on( uint8_t id, uint8_t start, uint8_t end );
     0 <= start <= end <= 0x7f.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_part_off( uint8_t id );
+void ssd1322_set_part_display_off( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
@@ -665,17 +618,17 @@ void ssd1322_clear_ram( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
-    Sets display operation settings.
-*/
-// ----------------------------------------------------------------------------
-void ssd1322_set_operation( uint8_t id, struct ssd1322_settings_t settings);
-
-// ----------------------------------------------------------------------------
-/*
     Sets default display operation settings.
 */
 // ----------------------------------------------------------------------------
 void ssd1322_set_defaults( uint8_t id );
+
+// ----------------------------------------------------------------------------
+/*
+    Sets typical display operation settings.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_set_typical( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
@@ -684,5 +637,12 @@ void ssd1322_set_defaults( uint8_t id );
 // ----------------------------------------------------------------------------
 int8_t ssd1322_init( uint8_t  dc,   uint8_t  reset, uint8_t channel,
                      uint32_t baud, uint32_t flags );
+
+// ----------------------------------------------------------------------------
+/*
+    Display test - checkerboard pattern.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_test_display( uint8_t id );
 
 #endif

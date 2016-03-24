@@ -76,5 +76,7 @@ int main()
         printf( "\tRESET:%d\n", ssd1322[id]->gpio_reset );
     }
 
+    ssd1322_test_display( id );
+
     return 0;
 }

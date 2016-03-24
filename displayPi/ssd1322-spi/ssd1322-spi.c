@@ -30,35 +30,6 @@
 
 #include "ssd1322-spi.h"
 
-
-// Data. ----------------------------------------------------------------------
-
-struct ssd1322_settings_t ssd1322_defaults =
-{
-    .col1        = SSD1322_DEFAULT_COL1,
-    .col2        = SSD1322_DEFAULT_COL2,
-    .row1        = SSD1322_DEFAULT_ROW1,
-    .row2        = SSD1322_DEFAULT_ROW2,
-    .remap1      = SSD1322_DEFAULT_REMAP1,
-    .remap2      = SSD1322_DEFAULT_REMAP2,
-    .start       = SSD1322_DEFAULT_START,
-    .offset      = SSD1322_DEFAULT_OFFSET,
-    .vdd         = SSD1322_DEFAULT_VDD,
-    .phase       = SSD1322_DEFAULT_PHASE,
-    .clock       = SSD1322_DEFAULT_CLOCK,
-    .enhance_a1  = SSD1322_DEFAULT_ENHANCE_A1,
-    .enhance_a2  = SSD1322_DEFAULT_ENHANCE_A2,
-    .gpio        = SSD1322_DEFAULT_GPIOS,
-    .period      = SSD1322_DEFAULT_PERIOD,
-    .voltage     = SSD1322_DEFAULT_PRE_VOLT,
-    .vcomh       = SSD1322_DEFAULT_COM_VOLT,
-    .contrast    = SSD1322_DEFAULT_CONTRAST,
-    .brightness  = SSD1322_DEFAULT_BRIGHTNESS,
-    .mux         = SSD1322_DEFAULT_MUX,
-    .enhance_b1  = SSD1322_DEFAULT_ENHANCE_B1,
-    .enhance_b2  = SSD1322_DEFAULT_ENHANCE_B2
-};
-
 // Hardware functions. --------------------------------------------------------
 
 // ----------------------------------------------------------------------------
@@ -361,7 +332,7 @@ void ssd1322_set_display_inverse( uint8_t id )
     0 <= start <= end <= 0x7f.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_part_on( uint8_t id, uint8_t start, uint8_t end )
+void ssd1322_set_part_display_on( uint8_t id, uint8_t start, uint8_t end )
 {
     if (( end   < start ) ||
         ( start > SSD1322_ROWS_MAX ) ||
@@ -379,7 +350,7 @@ void ssd1322_set_part_on( uint8_t id, uint8_t start, uint8_t end )
     0 <= start <= end <= 0x7f.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_part_off( uint8_t id )
+void ssd1322_set_part_display_off( uint8_t id )
 {
     ssd1322_write_command( id, SSD1322_CMD_SET_PART_OFF );
 }
@@ -570,6 +541,7 @@ void ssd1322_set_greys( uint8_t id, uint8_t gs[SSD1322_GREYSCALES] )
 {
     ssd1322_write_command( id, SSD1322_CMD_SET_GREYS );
     ssd1322_write_stream( id, gs, SSD1322_GREYSCALES );
+    ssd1322_set_enable_greys( id );
 }
 
 // ----------------------------------------------------------------------------
@@ -759,86 +731,19 @@ void ssd1322_set_command_unlock( uint8_t id )
     Clears display RAM.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_clear_ram( uint8_t id )
+void ssd1322_clear_display( uint8_t id )
 {
     ssd1322_set_cols_default( id );
     ssd1322_set_rows_default( id );
     ssd1322_set_write_stream( id );
-
     uint8_t col, row;
-    for ( row = SSD1322_ROWS_MIN; row < SSD1322_ROWS_MAX; row++ )
+    for ( row = SSD1322_ROWS_MIN; row <= SSD1322_ROWS_MAX; row++ )
     {
-        for ( col = SSD1322_COLS_MIN; col < SSD1322_COLS_MAX; col++ )
+        for ( col = SSD1322_COLS_MIN; col <= SSD1322_COLS_MAX; col++ )
         {
             ssd1322_write_data( id, 0x00 );
         }
     }
-}
-
-// ----------------------------------------------------------------------------
-/*
-    Sets display operation settings.
-*/
-// ----------------------------------------------------------------------------
-void ssd1322_set_operation( uint8_t id, struct ssd1322_settings_t settings)
-{
-    ssd1322_set_command_unlock( id );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_COLS );
-    ssd1322_write_data( id, settings.col1 );
-    ssd1322_write_data( id, settings.col2 );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_ROWS );
-    ssd1322_write_data( id, settings.row1 );
-    ssd1322_write_data( id, settings.row2 );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_REMAP );
-    ssd1322_write_data( id, settings.remap1 );
-    ssd1322_write_data( id, settings.remap2 );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_START );
-    ssd1322_write_data( id, settings.start );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_OFFSET );
-    ssd1322_write_data( id, settings.offset );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_VDD );
-    ssd1322_write_data( id, settings.vdd );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_PHASE );
-    ssd1322_write_data( id, settings.phase );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_CLOCK );
-    ssd1322_write_data( id, settings.clock );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_ENHANCE_A );
-    ssd1322_write_data( id, settings.enhance_a1 );
-    ssd1322_write_data( id, settings.enhance_a2 );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_GPIOS );
-    ssd1322_write_data( id, settings.gpio );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_PERIOD );
-    ssd1322_write_data( id, settings.period );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_PRE_VOLT );
-    ssd1322_write_data( id, settings.voltage );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_COM_VOLT );
-    ssd1322_write_data( id, settings.vcomh );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_CONTRAST );
-    ssd1322_write_data( id, settings.contrast );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_BRIGHTNESS );
-    ssd1322_write_data( id, settings.brightness );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_MUX );
-    ssd1322_write_data( id, settings.mux );
-
-    ssd1322_write_command( id, SSD1322_CMD_SET_ENHANCE_B );
-    ssd1322_write_data( id, settings.enhance_b1 );
-    ssd1322_write_data( id, settings.enhance_b2 );
 }
 
 // ----------------------------------------------------------------------------
@@ -848,11 +753,59 @@ void ssd1322_set_operation( uint8_t id, struct ssd1322_settings_t settings)
 // ----------------------------------------------------------------------------
 void ssd1322_set_defaults( uint8_t id )
 {
-    ssd1322_set_operation( id, ssd1322_defaults );
+    ssd1322_set_command_unlock( id );
+    ssd1322_set_clock_default( id );
+    ssd1322_set_mux_default( id );
+    ssd1322_set_offset_default( id );
+    ssd1322_set_start_default( id );
+    ssd1322_set_remap_default( id );
+    ssd1322_set_gpios_default( id );
     ssd1322_set_vdd_internal( id );
-    ssd1322_set_part_off( id );
+    ssd1322_set_enhance_a_default( id );
+    ssd1322_set_contrast_default( id );
+    ssd1322_set_brightness_default( id );
     ssd1322_set_greys_default( id );
+    ssd1322_set_phase_default( id );
+    ssd1322_set_enhance_b_default( id );
+    ssd1322_set_pre_volt_default( id );
+    ssd1322_set_period_default( id );
+    ssd1322_set_com_volt_default( id );
     ssd1322_set_display_normal( id );
+    ssd1322_set_part_display_off( id );
+    gpioDelay( 1000000 );
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Sets typical display operation settings.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_set_typical( uint8_t id )
+{
+    ssd1322_set_command_unlock( id );
+    ssd1322_set_display_off( id );
+    ssd1322_set_cols( id, 0x1c, 0x5b );
+    ssd1322_set_rows( id, 0x00, 0x3f );
+    ssd1322_set_clock( id, 0x91 );
+    ssd1322_set_mux( id, 0x3f );
+    ssd1322_set_offset( id, 0x00 );
+    ssd1322_set_start( id, 0x00 );
+    ssd1322_set_remap( id, 0x14, 0x11 );
+    ssd1322_set_gpios( id, 0x00 );
+    ssd1322_set_vdd_internal( id );
+    ssd1322_set_enhance_a( id, 0xa0, 0xfd );
+    ssd1322_set_contrast( id, 0x9f );
+    ssd1322_set_brightness( id, 0x0f );
+    ssd1322_set_greys_default( id );
+    ssd1322_set_phase( id, 0xe2 );
+    ssd1322_set_enhance_b( id, 0x00, 0x20 );
+    ssd1322_set_pre_volt( id, 0x1f );
+    ssd1322_set_period( id, 0x08 );
+    ssd1322_set_com_volt( id, 0x07 );
+    ssd1322_set_display_normal( id );
+    ssd1322_set_part_display_off( id );
+    ssd1322_set_display_on( id );
+    gpioDelay( 1000000 );
 }
 
 // ----------------------------------------------------------------------------
@@ -873,20 +826,19 @@ int8_t ssd1322_init( uint8_t  dc,   uint8_t  reset, uint8_t channel,
     // 1st call - clear ssd1322 structs.
     if ( !init )
     {
-        for ( display = 0; display < SSD1322_DISPLAYS; display++ )
+        for ( display = 0; display < SSD1322_DISPLAYS_MAX; display++ )
         ssd1322[display] = NULL;
-        printf( "1st Call - Initialising GPIOs.\n" );
         gpioInitialise();
     }
 
     // Get next available display ID.
-    for ( display = 0; display < SSD1322_DISPLAYS; display++ )
+    for ( display = 0; display < SSD1322_DISPLAYS_MAX; display++ )
     {
         if ( ssd1322[display] == NULL )
         {
             id = display;
-            display = SSD1322_DISPLAYS;
             handle = spiOpen( channel, baud, flags );
+            break;
         }
     }
 
@@ -906,14 +858,76 @@ int8_t ssd1322_init( uint8_t  dc,   uint8_t  reset, uint8_t channel,
 
     init = true;
 
-    ssd1322_set_command_unlock( id );
-    ssd1322_set_display_off( id );
+    gpioSetMode( dc, PI_OUTPUT );
+    gpioSetMode( reset, PI_OUTPUT );
+    gpioSetPullUpDown( dc, PI_PUD_UP );
+    gpioSetPullUpDown( reset, PI_PUD_UP );
+
     ssd1322_reset( id );
-    ssd1322_set_defaults( id );
-    ssd1322_set_display_on( id );
-    ssd1322_set_display_normal( id );
-    gpioDelay( 1000000 );
-    ssd1322_clear_ram( id );
+    ssd1322_set_typical( id );
+    ssd1322_clear_display( id );
 
     return id;
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Display tests.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_test_display( uint8_t id )
+{
+    uint8_t i, j, k, l;
+    // Checkerboard pattern.
+    ssd1322_set_cols_default( id );
+    ssd1322_set_rows_default( id );
+    ssd1322_set_write_stream( id );
+    for ( i = 0; i < 64; i++ )
+    {
+        for ( j = 0; j < 120; j++ )
+        {
+            ssd1322_write_data( id, 0xf0 );
+            ssd1322_write_data( id, 0xf0 );
+        }
+        for ( j = 0; j < 120; j++ )
+        {
+            ssd1322_write_data( id, 0x0f );
+            ssd1322_write_data( id, 0x0f );
+        }
+    }
+
+    gpioDelay( 1000000 );
+
+    // Show greyscales.
+    j = 0;
+    ssd1322_set_rows( id, 0x00, 0x3f );
+    ssd1322_set_cols( id, 0x1c, 0x5b );
+    ssd1322_set_write_stream( id );
+
+    for ( l = 0; l < 32; l++ )
+    {
+        for ( k = 0; k < 16; k++ )
+        {
+            for ( i = 0; i < 8; i++ )
+            {
+                ssd1322_write_data( id, j );
+            }
+            j+= 0x11;
+        }
+        j = 0;
+    }
+    for ( l = 0; l < 32; l++ )
+    {
+        for ( k = 0; k < 16; k++ )
+        {
+            for ( i = 0; i < 8; i++ )
+            {
+                ssd1322_write_data( id, j );
+            }
+            j-= 0x11;
+        }
+        j = 0xff;
+    }
+
+    gpioDelay( 1000000 );
 }
