@@ -34,8 +34,8 @@
 
 // Display properties.
 #define SSD1322_DISPLAYS_MAX 2 // No of displays.
-#define SSD1322_COLS       256 // No of display columns.
-#define SSD1322_ROWS        64 // No of display lines.
+#define SSD1322_COLS       256 // No of display columns (pixels).
+#define SSD1322_ROWS        64 // No of display lines (pixels).
 #define SSD1322_GREYSCALES  16 // No of greyscales.
 
 // SPI default properties for RPi.
@@ -176,6 +176,27 @@ uint8_t ssd1322_greys[16];  // Greyscale definitions.
 
 // ----------------------------------------------------------------------------
 /*
+    Writes a command.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_write_command( uint8_t id, uint8_t command );
+
+// ----------------------------------------------------------------------------
+/*
+    Writes a data byte.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_write_data( uint8_t id, uint8_t data );
+
+// ----------------------------------------------------------------------------
+/*
+    Writes a data stream.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_write_stream( uint8_t id, uint8_t *buf, unsigned count );
+
+// ----------------------------------------------------------------------------
+/*
     Triggers a hardware reset:
 
     Hardware is reset when RES# pin is pulled low.
@@ -220,14 +241,14 @@ void ssd1322_set_cols_default( uint8_t id );
     Enables writing data continuously into display RAM.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_write_stream( uint8_t id );
+void ssd1322_set_write_continuous( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
     Enables reading data continuously from display RAM. Not used in SPI mode.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_read_stream( uint8_t id );
+void ssd1322_set_read_continuous( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*
@@ -637,12 +658,5 @@ void ssd1322_set_typical( uint8_t id );
 // ----------------------------------------------------------------------------
 int8_t ssd1322_init( uint8_t  dc,   uint8_t  reset, uint8_t channel,
                      uint32_t baud, uint32_t flags );
-
-// ----------------------------------------------------------------------------
-/*
-    Display test - checkerboard pattern.
-*/
-// ----------------------------------------------------------------------------
-void ssd1322_test_display( uint8_t id );
 
 #endif

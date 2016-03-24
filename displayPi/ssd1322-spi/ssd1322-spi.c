@@ -139,7 +139,7 @@ void ssd1322_set_cols_default( uint8_t id )
     Enables writing data continuously into display RAM.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_write_stream( uint8_t id )
+void ssd1322_set_write_continuous( uint8_t id )
 {
     ssd1322_write_command( id, SSD1322_CMD_SET_WRITE );
     gpioWrite( ssd1322[id]->gpio_dc, SSD1322_INPUT_DATA );
@@ -150,7 +150,7 @@ void ssd1322_set_write_stream( uint8_t id )
     Enables reading data continuously from display RAM. Not used in SPI mode.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_set_read_stream( uint8_t id )
+void ssd1322_set_read_continuous( uint8_t id )
 {
     ssd1322_write_command( id, SSD1322_CMD_SET_READ );
 }
@@ -735,7 +735,7 @@ void ssd1322_clear_display( uint8_t id )
 {
     ssd1322_set_cols_default( id );
     ssd1322_set_rows_default( id );
-    ssd1322_set_write_stream( id );
+    ssd1322_set_write_continuous( id );
     uint8_t col, row;
     for ( row = SSD1322_ROWS_MIN; row <= SSD1322_ROWS_MAX; row++ )
     {
@@ -795,7 +795,7 @@ void ssd1322_set_typical( uint8_t id )
     ssd1322_set_vdd_internal( id );
     ssd1322_set_enhance_a( id, 0xa0, 0xfd );
     ssd1322_set_contrast( id, 0x9f );
-    ssd1322_set_brightness( id, 0x0f );
+    ssd1322_set_brightness( id, 0x04 );
     ssd1322_set_greys_default( id );
     ssd1322_set_phase( id, 0xe2 );
     ssd1322_set_enhance_b( id, 0x00, 0x20 );
@@ -868,66 +868,4 @@ int8_t ssd1322_init( uint8_t  dc,   uint8_t  reset, uint8_t channel,
     ssd1322_clear_display( id );
 
     return id;
-}
-
-// ----------------------------------------------------------------------------
-/*
-    Display tests.
-*/
-// ----------------------------------------------------------------------------
-void ssd1322_test_display( uint8_t id )
-{
-    uint8_t i, j, k, l;
-    // Checkerboard pattern.
-    ssd1322_set_cols_default( id );
-    ssd1322_set_rows_default( id );
-    ssd1322_set_write_stream( id );
-    for ( i = 0; i < 64; i++ )
-    {
-        for ( j = 0; j < 120; j++ )
-        {
-            ssd1322_write_data( id, 0xf0 );
-            ssd1322_write_data( id, 0xf0 );
-        }
-        for ( j = 0; j < 120; j++ )
-        {
-            ssd1322_write_data( id, 0x0f );
-            ssd1322_write_data( id, 0x0f );
-        }
-    }
-
-    gpioDelay( 1000000 );
-
-    // Show greyscales.
-    j = 0;
-    ssd1322_set_rows( id, 0x00, 0x3f );
-    ssd1322_set_cols( id, 0x1c, 0x5b );
-    ssd1322_set_write_stream( id );
-
-    for ( l = 0; l < 32; l++ )
-    {
-        for ( k = 0; k < 16; k++ )
-        {
-            for ( i = 0; i < 8; i++ )
-            {
-                ssd1322_write_data( id, j );
-            }
-            j+= 0x11;
-        }
-        j = 0;
-    }
-    for ( l = 0; l < 32; l++ )
-    {
-        for ( k = 0; k < 16; k++ )
-        {
-            for ( i = 0; i < 8; i++ )
-            {
-                ssd1322_write_data( id, j );
-            }
-            j-= 0x11;
-        }
-        j = 0xff;
-    }
-
-    gpioDelay( 1000000 );
 }

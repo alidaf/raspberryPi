@@ -55,8 +55,116 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <pigpio.h>
 
 #include "ssd1322-spi.h"
+
+// SSD1322 supports 480x128 but display is 256x64.
+#define COLS_VIS_MIN 0x00 // Visible cols - start.
+#define COLS_VIS_MAX 0x3f // Visible cols - end.
+#define ROWS_VIS_MIN 0x00 // Visible rows - start.
+#define ROWS_VIS_MAX 0x3f // Visible rows - end.
+
+// ----------------------------------------------------------------------------
+/*
+    Display test - checkerboard pattern.
+*/
+// ----------------------------------------------------------------------------
+void test_checkerboard( uint8_t id )
+{
+    uint8_t row, col;
+
+    ssd1322_set_cols( id, COLS_VIS_MIN + 0x1c, COLS_VIS_MAX + 0x1c );
+    ssd1322_set_rows( id, ROWS_VIS_MIN, ROWS_VIS_MAX );
+    ssd1322_set_write_continuous( id );
+    for ( row = 0; row <= ROWS_VIS_MAX; row++ )
+    {
+        for ( col = 0; col <= COLS_VIS_MAX; col++ )
+        {
+            ssd1322_write_data( id, 0xf0 );
+            ssd1322_write_data( id, 0xf0 );
+        }
+        for ( col = 0; col < COLS_VIS_MAX; col++ )
+        {
+            ssd1322_write_data( id, 0x0f );
+            ssd1322_write_data( id, 0x0f );
+        }
+    }
+
+    gpioDelay( 1000000 );
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Fills a block with a greyscale.
+*/
+// ----------------------------------------------------------------------------
+void fill_block( uint8_t id,
+                 uint8_t col1, uint8_t col2,
+                 uint8_t row1, uint8_t row2,
+                 uint8_t grey )
+{
+    uint8_t row, col;
+    ssd1322_set_cols( id, col1 + 0x1c, col2 + 0x1c );
+    ssd1322_set_rows( id, row1, row2 );
+    ssd1322_set_write_continuous( id );
+
+    for ( row = 0; row < ( row2 - row1 + 1 ); row++ )
+    {
+        for ( col = 0; col < ( col2 - col1 + 1 ); col++ )
+        {
+            ssd1322_write_data( id, grey );
+            ssd1322_write_data( id, grey );
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Display test - display greyscales.
+*/
+// ----------------------------------------------------------------------------
+void test_greyscales( uint8_t id )
+{
+    // Upper 32 rows.
+    fill_block( id, 0x00, 0x03, 0x00, 0x1f, 0xff ); // Col   0- 15.
+    fill_block( id, 0x04, 0x07, 0x00, 0x1f, 0xee ); // Col  16- 31.
+    fill_block( id, 0x08, 0x0b, 0x00, 0x1f, 0xdd ); // Col  32- 47.
+    fill_block( id, 0x0c, 0x0f, 0x00, 0x1f, 0xcc ); // Col  48- 63.
+    fill_block( id, 0x10, 0x13, 0x00, 0x1f, 0xbb ); // Col  64- 79.
+    fill_block( id, 0x14, 0x17, 0x00, 0x1f, 0xaa ); // Col  80- 95.
+    fill_block( id, 0x18, 0x1b, 0x00, 0x1f, 0x99 ); // Col  96-111.
+    fill_block( id, 0x1c, 0x1f, 0x00, 0x1f, 0x88 ); // Col 112-127.
+    fill_block( id, 0x20, 0x23, 0x00, 0x1f, 0x77 ); // Col 128-143.
+    fill_block( id, 0x24, 0x27, 0x00, 0x1f, 0x66 ); // Col 144-159.
+    fill_block( id, 0x28, 0x2b, 0x00, 0x1f, 0x55 ); // Col 160-175.
+    fill_block( id, 0x2c, 0x2f, 0x00, 0x1f, 0x44 ); // Col 176-191.
+    fill_block( id, 0x30, 0x33, 0x00, 0x1f, 0x33 ); // Col 192-207.
+    fill_block( id, 0x34, 0x37, 0x00, 0x1f, 0x22 ); // Col 208-223.
+    fill_block( id, 0x38, 0x3b, 0x00, 0x1f, 0x11 ); // Col 224-239.
+    fill_block( id, 0x3c, 0x3f, 0x00, 0x1f, 0x00 ); // Col 240-255.
+    // Lower 32 rows.
+    fill_block( id, 0x00, 0x03, 0x20, 0x3f, 0x00 ); // Col   0- 15.
+    fill_block( id, 0x04, 0x07, 0x20, 0x3f, 0x11 ); // Col  16- 31.
+    fill_block( id, 0x08, 0x0b, 0x20, 0x3f, 0x22 ); // Col  32- 47.
+    fill_block( id, 0x0c, 0x0f, 0x20, 0x3f, 0x33 ); // Col  48- 63.
+    fill_block( id, 0x10, 0x13, 0x20, 0x3f, 0x44 ); // Col  64- 79.
+    fill_block( id, 0x14, 0x17, 0x20, 0x3f, 0x55 ); // Col  80- 95.
+    fill_block( id, 0x18, 0x1b, 0x20, 0x3f, 0x66 ); // Col  96-111.
+    fill_block( id, 0x1c, 0x1f, 0x20, 0x3f, 0x77 ); // Col 112-127.
+    fill_block( id, 0x20, 0x23, 0x20, 0x3f, 0x88 ); // Col 128-143.
+    fill_block( id, 0x24, 0x27, 0x20, 0x3f, 0x99 ); // Col 144-159.
+    fill_block( id, 0x28, 0x2b, 0x20, 0x3f, 0xaa ); // Col 160-175.
+    fill_block( id, 0x2c, 0x2f, 0x20, 0x3f, 0xbb ); // Col 176-191.
+    fill_block( id, 0x30, 0x33, 0x20, 0x3f, 0xcc ); // Col 192-207.
+    fill_block( id, 0x34, 0x37, 0x20, 0x3f, 0xdd ); // Col 208-223.
+    fill_block( id, 0x38, 0x3b, 0x20, 0x3f, 0xee ); // Col 224-239.
+    fill_block( id, 0x3c, 0x3f, 0x20, 0x3f, 0xff ); // Col 240-255.
+
+    gpioDelay( 1000000 );
+}
+
+
 
 int main()
 {
@@ -76,7 +184,8 @@ int main()
         printf( "\tRESET:%d\n", ssd1322[id]->gpio_reset );
     }
 
-    ssd1322_test_display( id );
+    test_checkerboard( id );
+    test_greyscales( id );
 
     return 0;
 }
