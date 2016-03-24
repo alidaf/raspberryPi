@@ -58,6 +58,7 @@
 #include <pigpio.h>
 
 #include "ssd1322-spi.h"
+#include "beach.h"
 
 // SSD1322 supports 480x128 but display is 256x64.
 #define COLS_VIS_MIN 0x00 // Visible cols - start.
@@ -164,8 +165,43 @@ void test_greyscales( uint8_t id )
     gpioDelay( 1000000 );
 }
 
+// ----------------------------------------------------------------------------
+/*
+    Display test - display 256x64 4-bit image.
+*/
+// ----------------------------------------------------------------------------
+void test_draw_image( uint8_t id, uint8_t image[8192] )
+{
+    ssd1322_set_cols( id, COLS_VIS_MIN + 0x1c, COLS_VIS_MAX + 0x1c );
+    ssd1322_set_rows( id, ROWS_VIS_MIN, ROWS_VIS_MAX );
+    ssd1322_set_write_continuous( id );
+    ssd1322_write_stream( id, image, 8192 );
+}
 
+// ----------------------------------------------------------------------------
+/*
+    Display test - 256x64 4bpp image.
+*/
+// ----------------------------------------------------------------------------
+void test_load_image( uint8_t id )
+{
+    uint16_t i;
+    uint8_t  image[8192];
 
+    for ( i = 0; i < 8192; i++ )
+    {
+        printf( "%u: %u, %u -> 0x%x.\n", i, beach[i*2], beach[i*2+1],
+                                          ( beach[i*2]<<4 | beach[i*2+1] ));
+        image[i] = ( beach[i*2]<<4 | beach[i*2+1] );
+    }
+    test_draw_image( id, image );
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Main
+*/
+// ----------------------------------------------------------------------------
 int main()
 {
     uint8_t id;
@@ -186,6 +222,8 @@ int main()
 
     test_checkerboard( id );
     test_greyscales( id );
+    test_load_image( id );
+
 
     return 0;
 }

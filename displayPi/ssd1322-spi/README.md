@@ -69,3 +69,11 @@ For SPI mode, the pin designations and relevant RPi pins are:
 SPI mode does not allow reads so MISO is not used.
 
 Command/Data mode is set by the /DC flag (low for command, high for data). SDIN is shifted into an 8-bit register on every rising edge of SCLK (DB0) with the MSB first, i.e. D7, D6, D5, D4, D3, D2, D1, D0.
+
+####Operation:
+
+The display I have is 256x64 but the SSD1322 controller supports up to 480x128. This means that there is additional ram that can be used and shifted or scrolled.
+
+Rows correspond to the number of pixels top to bottom but the columns group 4 pixels in each, hence there are 120 columns of 4 pixels. Each pixel has a 4-bit address in the display RAM.
+
+Drawing an arbitrary pixel therefore requires setting the row and column and writing 2 bytes of data that contain the pixel to set.
