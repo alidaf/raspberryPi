@@ -159,6 +159,9 @@
 #define SSD1322_CLOCK_FREQ_RESET 0xc0
 #define SSD1322_PERIOD_RESET     0x08
 
+// Column offset
+#define SSD1322_COL_OFFSET       0x1c // Based on example code.
+
 // Data structures. -----------------------------------------------------------
 
 struct ssd1322_t
@@ -171,6 +174,8 @@ struct ssd1322_t
 struct ssd1322_t *ssd1322[SSD1322_DISPLAYS_MAX];
 
 uint8_t ssd1322_greys[16];  // Greyscale definitions.
+
+//uint8_t ssd1322_buffer[SSD1322_COLS_MAX * SSD1322_ROWS_MAX / 2];
 
 // Hardware functions. --------------------------------------------------------
 
@@ -635,7 +640,7 @@ void ssd1322_command_unlock( uint8_t id );
     Clears display RAM.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_clear_ram( uint8_t id );
+void ssd1322_clear_display( uint8_t id );
 
 // ----------------------------------------------------------------------------
 /*

@@ -106,17 +106,19 @@ void ssd1322_set_enable_greys( uint8_t id )
     If horizontal address increment mode is enabled, column address pointer is
     automatically incremented after a column read/write. Column address pointer
     is reset after reaching the end column address.
+
+    Note: columns are in groups of 4.
 */
 // ----------------------------------------------------------------------------
 void ssd1322_set_cols( uint8_t id, uint8_t start, uint8_t end )
 {
     if (( end   < start ) ||
-        ( start > SSD1322_COLS_MAX ) ||
-        ( end   > SSD1322_COLS_MAX )) return;
+        ( start > SSD1322_COLS_MAX * 4 ) ||
+        ( end   > SSD1322_COLS_MAX * 4 )) return;
 
     ssd1322_write_command( id, SSD1322_CMD_SET_COLS );
-    ssd1322_write_data( id, start );
-    ssd1322_write_data( id, end );
+    ssd1322_write_data( id, start / 4 + SSD1322_COL_OFFSET );
+    ssd1322_write_data( id, end / 4 + SSD1322_COL_OFFSET );
 }
 
 // ----------------------------------------------------------------------------

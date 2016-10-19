@@ -33,24 +33,33 @@
 /*
         Configuration used.
 
-                 RPi        ,---------------------------------------,
-                 1 2        |           |                           |
-                [o o]+5V----(-----------(---,                       |
-                [o o]       |       ,---(---(-------------------,   |
-                [o o]GND----'       |   |   |       16 15       |   |
-                [o o]       ,-------(---(---(----CS#[o o]RESET#-'   |
-                [o o]       |   ,---(---(---(----DC#[o o]WR#--------|
-                [o o]       |   |   |   |   |   ,---[o o]-------,   |
-                [o o]       |   |   |   '---(---+---[o o]-------+---|
-                [o o]GPIO23-(---'   |       |   '---[o o]-------'   |
-                [o o]GPIO24-(-------'       |       [o o]SDIN---,   |
-    ,-------MOSI[o o]       |       ,-------(---SCLK[o o]       |   |
-    |           [o o]       |       |       '----+5V[o o]GND----(---'
-    |   ,---SCLK[o o]CE0----'       |                2 1        |
-    |   |       [o o]               |              SSD1322      |
-    |   |       25 26               |                           |
-    |   '---------------------------'                           |
-    '-----------------------------------------------------------'
+    ---------------------------------------------------------------------GND
+                                            |                   |
+                 RPi                        |                   |
+                 1 2                        |                   |
+                [o o]                       |                   |
+                [o o]                       |      SSD1322      |
+                [o o]                       |        1 2        |
+                [o o]                       |----GND[o o]+5V----(-----------,
+                [o o]                       |       [o o]SCLK---(-------,   |
+                [o o]                   ,---(---SDIN[o o]       |       |   |
+                [o o]                   |   |-------[o o]-------|       |   |
+                [o o]GPIO23-----,       |   |-------[o o]-------|       |   |
+                [o o]GPIO24-----(---,   |   |-------[o o]-------'       |   |
+    ,-------MOSI[o o]           |   |   |   '--- WR#[o o]DC#--------,   |   |
+    |           [o o]           |   '---(-----RESET#[o o]CS#----,   |   |   |
+    |   ,---SCLK[o o]CE0----,   |       |            2 1        |   |   |   |
+    |   |       [o o]       |   |       |                       |   |   |   |
+    |   |       25 26       '---(-------|-----------------------'   |   |   |
+    |   |                       |       |                           |   |   |
+    |   |                       '-------(---------------------------'   |   |
+    |   |                               |                               |   |
+    |   '-------------------------------(-------------------------------'   |
+    |                                   |                                   |
+    '-----------------------------------'               ,-------------------'
+                                                        |
+    ---------------------------------------------------------------------+5V
+
 */
 
 #include <stdio.h>
@@ -66,6 +75,9 @@
 #define ROWS_VIS_MIN 0x00 // Visible rows - start.
 #define ROWS_VIS_MAX 0x3f // Visible rows - end.
 
+// Display buffer.
+uint8_t ssd1322_buffer[SSD1322_COLS_MAX * SSD1322_ROWS_MAX / 2];
+
 // ----------------------------------------------------------------------------
 /*
     Display test - checkerboard pattern.
@@ -75,7 +87,8 @@ void test_checkerboard( uint8_t id )
 {
     uint8_t row, col;
 
-    ssd1322_set_cols( id, COLS_VIS_MIN + 0x1c, COLS_VIS_MAX + 0x1c );
+    ssd1322_clear_display( id );
+    ssd1322_set_cols( id, COLS_VIS_MIN, COLS_VIS_MAX  );
     ssd1322_set_rows( id, ROWS_VIS_MIN, ROWS_VIS_MAX );
     ssd1322_set_write_continuous( id );
     for ( row = 0; row <= ROWS_VIS_MAX; row++ )
@@ -101,19 +114,20 @@ void test_checkerboard( uint8_t id )
 */
 // ----------------------------------------------------------------------------
 void fill_block( uint8_t id,
-                 uint8_t col1, uint8_t col2,
-                 uint8_t row1, uint8_t row2,
+                 uint8_t x, uint8_t y,
+                 uint8_t dx, uint8_t dy,
                  uint8_t grey )
 {
-    uint8_t row, col;
-    ssd1322_set_cols( id, col1 + 0x1c, col2 + 0x1c );
-    ssd1322_set_rows( id, row1, row2 );
+    uint8_t i, j;
+    ssd1322_set_cols( id, x, x + dx );
+    ssd1322_set_rows( id, y, y + dy );
     ssd1322_set_write_continuous( id );
 
-    for ( row = 0; row < ( row2 - row1 + 1 ); row++ )
+    for ( j = 0; j < ( dy / 2 + 1 ); j++ )
     {
-        for ( col = 0; col < ( col2 - col1 + 1 ); col++ )
+        for ( i = 0; i < ( dx + 1 ); i++ )
         {
+            // Need to replace with draw_pixel.
             ssd1322_write_data( id, grey );
             ssd1322_write_data( id, grey );
         }
@@ -127,42 +141,128 @@ void fill_block( uint8_t id,
 // ----------------------------------------------------------------------------
 void test_greyscales( uint8_t id )
 {
-    // Upper 32 rows.
-    fill_block( id, 0x00, 0x03, 0x00, 0x1f, 0xff ); // Col   0- 15.
-    fill_block( id, 0x04, 0x07, 0x00, 0x1f, 0xee ); // Col  16- 31.
-    fill_block( id, 0x08, 0x0b, 0x00, 0x1f, 0xdd ); // Col  32- 47.
-    fill_block( id, 0x0c, 0x0f, 0x00, 0x1f, 0xcc ); // Col  48- 63.
-    fill_block( id, 0x10, 0x13, 0x00, 0x1f, 0xbb ); // Col  64- 79.
-    fill_block( id, 0x14, 0x17, 0x00, 0x1f, 0xaa ); // Col  80- 95.
-    fill_block( id, 0x18, 0x1b, 0x00, 0x1f, 0x99 ); // Col  96-111.
-    fill_block( id, 0x1c, 0x1f, 0x00, 0x1f, 0x88 ); // Col 112-127.
-    fill_block( id, 0x20, 0x23, 0x00, 0x1f, 0x77 ); // Col 128-143.
-    fill_block( id, 0x24, 0x27, 0x00, 0x1f, 0x66 ); // Col 144-159.
-    fill_block( id, 0x28, 0x2b, 0x00, 0x1f, 0x55 ); // Col 160-175.
-    fill_block( id, 0x2c, 0x2f, 0x00, 0x1f, 0x44 ); // Col 176-191.
-    fill_block( id, 0x30, 0x33, 0x00, 0x1f, 0x33 ); // Col 192-207.
-    fill_block( id, 0x34, 0x37, 0x00, 0x1f, 0x22 ); // Col 208-223.
-    fill_block( id, 0x38, 0x3b, 0x00, 0x1f, 0x11 ); // Col 224-239.
-    fill_block( id, 0x3c, 0x3f, 0x00, 0x1f, 0x00 ); // Col 240-255.
-    // Lower 32 rows.
-    fill_block( id, 0x00, 0x03, 0x20, 0x3f, 0x00 ); // Col   0- 15.
-    fill_block( id, 0x04, 0x07, 0x20, 0x3f, 0x11 ); // Col  16- 31.
-    fill_block( id, 0x08, 0x0b, 0x20, 0x3f, 0x22 ); // Col  32- 47.
-    fill_block( id, 0x0c, 0x0f, 0x20, 0x3f, 0x33 ); // Col  48- 63.
-    fill_block( id, 0x10, 0x13, 0x20, 0x3f, 0x44 ); // Col  64- 79.
-    fill_block( id, 0x14, 0x17, 0x20, 0x3f, 0x55 ); // Col  80- 95.
-    fill_block( id, 0x18, 0x1b, 0x20, 0x3f, 0x66 ); // Col  96-111.
-    fill_block( id, 0x1c, 0x1f, 0x20, 0x3f, 0x77 ); // Col 112-127.
-    fill_block( id, 0x20, 0x23, 0x20, 0x3f, 0x88 ); // Col 128-143.
-    fill_block( id, 0x24, 0x27, 0x20, 0x3f, 0x99 ); // Col 144-159.
-    fill_block( id, 0x28, 0x2b, 0x20, 0x3f, 0xaa ); // Col 160-175.
-    fill_block( id, 0x2c, 0x2f, 0x20, 0x3f, 0xbb ); // Col 176-191.
-    fill_block( id, 0x30, 0x33, 0x20, 0x3f, 0xcc ); // Col 192-207.
-    fill_block( id, 0x34, 0x37, 0x20, 0x3f, 0xdd ); // Col 208-223.
-    fill_block( id, 0x38, 0x3b, 0x20, 0x3f, 0xee ); // Col 224-239.
-    fill_block( id, 0x3c, 0x3f, 0x20, 0x3f, 0xff ); // Col 240-255.
 
+    uint8_t i;
+
+    ssd1322_clear_display( id );
+    for ( i = 0; i < 16; i++ )
+    {
+        fill_block( id, i * 16, 0, 16, 32, i );
+        fill_block( id, i * 16, 32, 16, 32, 15 - i );
+    }
     gpioDelay( 1000000 );
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Sets the RAM address for position x,y.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_gotoXY( uint8_t id, uint8_t x, uint8_t y )
+{
+
+    uint8_t col, row;
+
+    col = x / 4;
+    row = y;
+    ssd1322_set_cols( id, col, col + 1 );
+    ssd1322_set_rows( id, row, row + 1 );
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Display test - draw a pixel.
+    Display columns are grouped into 4s, 4 bits per column. Hence, 4 columns
+    is 2 bytes. The pixel to draw should be masked with the existing buffer.
+*/
+// ----------------------------------------------------------------------------
+void ssd1322_draw_pixel( uint8_t id, uint8_t x, uint8_t y, uint8_t grey )
+{
+
+    uint8_t pixel[2];
+
+    switch ( x % 4 )
+    {
+        case 0: pixel[0] = ( grey << 4 ) | ( pixel[0] & 0x0f );
+                break;
+        case 1: pixel[0] = ( grey ) | ( pixel[0] & 0xf0 );
+                break;
+        case 2: pixel[1] = ( grey << 4 ) | ( pixel[1] & 0x0f );
+                break;
+        case 3: pixel[1] = ( grey ) | ( pixel[1] & 0xf0 );
+                break;
+    }
+    ssd1322_gotoXY( id, x, y );
+    ssd1322_write_data( id, pixel[0] );
+    ssd1322_write_data( id, pixel[1] );
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Display test - draws a rectangle using ssd1322_draw_pixel function.
+*/
+// ----------------------------------------------------------------------------
+void test_draw_pixel( uint8_t id )
+{
+
+    uint8_t x, y;
+    uint8_t grey;
+
+    ssd1322_clear_display( id );
+    for ( grey = 0; grey < 16; grey++ )
+    {
+        for ( y = 16; y < 48; y++ )
+            for ( x = 64; x < 128; x++ )
+                ssd1322_draw_pixel( id, x, y, grey );
+        gpioDelay( 100000 );
+    }
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Display test - Continuously streams pixels to the display.
+*/
+// ----------------------------------------------------------------------------
+void test_stream_pixel( uint8_t id )
+{
+
+    uint16_t i;
+    uint8_t grey;
+
+    uint8_t x, y;
+    uint8_t rows, cols;
+
+    ssd1322_clear_display( id );
+    x = 32;
+    y = 16;
+    cols = 32;
+    rows = 32;
+/*
+    for ( grey = 0; grey < 16; grey++ )
+    {
+        ssd1322_set_cols( id, x, x + cols );
+        ssd1322_set_rows( id, y, y + rows );
+        ssd1322_set_write_continuous( id );
+        for ( i = 0; i < rows * cols; i++ )
+        {
+            ssd1322_write_data( id, grey );
+            gpioDelay( 1000 );
+        }
+    }
+*/
+    ssd1322_set_cols( id, 0, 255);
+    ssd1322_set_rows( id, 0, 63 );
+    ssd1322_set_write_continuous( id );
+    for ( i = 0; i < 64; i++ )
+    {
+        ssd1322_write_data( id, 0xaa );
+        ssd1322_write_data( id, 0x00 );
+    }
+    for ( i = 0; i < 64; i++ )
+    {
+        ssd1322_write_data( id, 0x00 );
+        ssd1322_write_data( id, 0xaa );
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -172,7 +272,8 @@ void test_greyscales( uint8_t id )
 // ----------------------------------------------------------------------------
 void test_draw_image( uint8_t id, uint8_t image[8192] )
 {
-    ssd1322_set_cols( id, COLS_VIS_MIN + 0x1c, COLS_VIS_MAX + 0x1c );
+    ssd1322_clear_display( id );
+    ssd1322_set_cols( id, COLS_VIS_MIN, COLS_VIS_MAX );
     ssd1322_set_rows( id, ROWS_VIS_MIN, ROWS_VIS_MAX );
     ssd1322_set_write_continuous( id );
     ssd1322_write_stream( id, image, 8192 );
@@ -220,10 +321,13 @@ int main()
         printf( "\tRESET:%d\n", ssd1322[id]->gpio_reset );
     }
 
-    test_checkerboard( id );
-    test_greyscales( id );
-    test_load_image( id );
-
-
+    ssd1322_clear_display( id );
+//    test_checkerboard( id );
+//    test_greyscales( id );
+//    test_load_image( id );
+    test_stream_pixel( id );
+//    ssd1322_clear_display( id );
+//    test_draw_pixel( id );
+//    ssd1322_clear_display( id );
     return 0;
 }
