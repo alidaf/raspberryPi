@@ -163,7 +163,7 @@ void ssd1322_gotoXY( uint8_t id, uint8_t x, uint8_t y )
 
     uint8_t col, row;
 
-    col = x / 4;
+    col = x;
     row = y;
     ssd1322_set_cols( id, col, col + 1 );
     ssd1322_set_rows( id, row, row + 1 );
@@ -179,7 +179,11 @@ void ssd1322_gotoXY( uint8_t id, uint8_t x, uint8_t y )
 void ssd1322_draw_pixel( uint8_t id, uint8_t x, uint8_t y, uint8_t grey )
 {
 
-    uint8_t pixel[2];
+    uint8_t pixel[2] = { 0, 0 };
+
+    printf( "x       = %u.\n", x );
+    printf( "x mod 4 = %u.\n", x%4 );
+    printf( "x norm  = %u.\n", x/4*4 );
 
     switch ( x % 4 )
     {
@@ -192,7 +196,11 @@ void ssd1322_draw_pixel( uint8_t id, uint8_t x, uint8_t y, uint8_t grey )
         case 3: pixel[1] = ( grey ) | ( pixel[1] & 0xf0 );
                 break;
     }
-    ssd1322_gotoXY( id, x, y );
+//    ssd1322_gotoXY( id, x, y );
+    ssd1322_set_cols( id, x/4*4, x/4*4 );
+    ssd1322_set_rows( id, y, y );
+    ssd1322_set_write_continuous( id );
+    printf( "Pixel bytes: 0x%02x:0x%02x.\n", pixel[0], pixel[1] );
     ssd1322_write_data( id, pixel[0] );
     ssd1322_write_data( id, pixel[1] );
 }
@@ -206,16 +214,10 @@ void test_draw_pixel( uint8_t id )
 {
 
     uint8_t x, y;
-    uint8_t grey;
 
-    ssd1322_clear_display( id );
-    for ( grey = 0; grey < 16; grey++ )
-    {
-        for ( y = 16; y < 48; y++ )
-            for ( x = 64; x < 128; x++ )
-                ssd1322_draw_pixel( id, x, y, grey );
-        gpioDelay( 100000 );
-    }
+    for ( y = 48; y < 63; y++ )
+        for ( x = 48; x < 64; x++ )
+            ssd1322_draw_pixel( id, x, y, 0x4 );
 }
 
 // ----------------------------------------------------------------------------
@@ -227,38 +229,31 @@ void test_stream_pixel( uint8_t id )
 {
 
     uint16_t i;
-    uint8_t grey;
+//    uint8_t grey;
 
-    uint8_t x, y;
-    uint8_t rows, cols;
+//    uint8_t x, y;
+//    uint8_t rows, cols;
 
     ssd1322_clear_display( id );
-    x = 32;
-    y = 16;
-    cols = 32;
-    rows = 32;
-/*
-    for ( grey = 0; grey < 16; grey++ )
-    {
-        ssd1322_set_cols( id, x, x + cols );
-        ssd1322_set_rows( id, y, y + rows );
-        ssd1322_set_write_continuous( id );
-        for ( i = 0; i < rows * cols; i++ )
-        {
-            ssd1322_write_data( id, grey );
-            gpioDelay( 1000 );
-        }
-    }
-*/
+//    x = 32;
+//    y = 16;
+//    cols = 32;
+//    rows = 32;
+
     ssd1322_set_cols( id, 0, 255);
-    ssd1322_set_rows( id, 0, 63 );
+    ssd1322_set_rows( id, 20, 63 );
     ssd1322_set_write_continuous( id );
     for ( i = 0; i < 64; i++ )
     {
         ssd1322_write_data( id, 0xaa );
         ssd1322_write_data( id, 0x00 );
     }
-    for ( i = 0; i < 64; i++ )
+
+
+    ssd1322_set_cols( id, 32, 63);
+    ssd1322_set_rows( id, 16, 63 );
+    ssd1322_set_write_continuous( id );
+    for ( i = 0; i < 8; i++ )
     {
         ssd1322_write_data( id, 0x00 );
         ssd1322_write_data( id, 0xaa );
@@ -307,6 +302,7 @@ int main()
 {
     uint8_t id;
     int8_t err;
+    uint8_t i;
 
     err = ssd1322_init( GPIO_DC, GPIO_RESET, SPI_CHANNEL, SPI_BAUD, SPI_FLAGS );
 
@@ -327,7 +323,18 @@ int main()
 //    test_load_image( id );
     test_stream_pixel( id );
 //    ssd1322_clear_display( id );
-//    test_draw_pixel( id );
+
+    for ( i = 25; i < 36; i++ )
+    {
+        ssd1322_draw_pixel( id, i, i, 0xa );
+    }
+    ssd1322_draw_pixel( id, 40, 40, 0x4 );
+    ssd1322_draw_pixel( id, 0, 0, 0x4 );
+    ssd1322_draw_pixel( id, 0, 63, 0x4 );
+    ssd1322_draw_pixel( id, 255, 0, 0x4 );
+    ssd1322_draw_pixel( id, 255, 63, 0x4 );
+
+    test_draw_pixel( id );
 //    ssd1322_clear_display( id );
     return 0;
 }
