@@ -69,7 +69,7 @@
 #include <stdlib.h>
 
 #include "ssd1322-spi.h"
-//#include "beach.h"
+#include "graphics.h"
 
 // SSD1322 supports 480x128 but display is 256x64.
 #define COLS_VIS_MIN 0x00 // Visible cols - start.
@@ -82,6 +82,8 @@ uint8_t *ssd1322_fb[SSD1322_DISPLAYS_MAX];
 
 // Mutex for locking updates to FB while buffer is being written to display.
 pthread_mutex_t ssd1322_display_busy;
+
+uint8_t ssd1322_fb_kill = 0;
 
 // Structure for passing parameters through pthread void function.
 struct ssd1322_display_struct
@@ -120,19 +122,21 @@ void *ssd1322_fb_write( void *params )
     ssd1322_set_rows( id, 0, 63 );
     ssd1322_set_write_continuous( id );
 
-    while ( 1 )
+    while ( !ssd1322_fb_kill )
     {
-//        pthread_mutex_lock( &ssd1322_display_busy );
+        pthread_mutex_lock( &ssd1322_display_busy );
         for ( i = 0; i < SSD1322_COLS * SSD1322_ROWS / 2; i++ )
         {
             data = ssd1322_fb[id][i*2] << 4 | ssd1322_fb[id][i*2+1];
             ssd1322_write_data( id, data );
 //            gpioDelay( 1000 );
         }
-//        pthread_mutex_unlock( &ssd1322_display_busy );
+        pthread_mutex_unlock( &ssd1322_display_busy );
 //        gpioDelay( 10000 );
     }
 
+    printf( "Thread kill!\n" );
+//    gpioDelay( 1000000 );
     pthread_exit( NULL );
 
 }
@@ -142,11 +146,13 @@ void *ssd1322_fb_write( void *params )
     Fill the framebuffer.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_fill_display( uint8_t id, uint8_t grey )
+void ssd1322_fb_fill_display( uint8_t id, uint8_t grey )
 {
     uint16_t i;
+//    pthread_mutex_lock( &ssd1322_display_busy );
     for ( i = 0; i < SSD1322_COLS * SSD1322_ROWS; i++ )
         ssd1322_fb[ id ][ i ] = grey;
+//    pthread_mutex_unlock( &ssd1322_display_busy );
 }
 
 // ----------------------------------------------------------------------------
@@ -154,10 +160,44 @@ void ssd1322_fill_display( uint8_t id, uint8_t grey )
     Draw a pixel in the framebuffer.
 */
 // ----------------------------------------------------------------------------
-void ssd1322_draw_pixel( uint8_t id, uint8_t x, uint8_t y, uint8_t grey )
+void ssd1322_fb_draw_pixel( uint8_t id, uint8_t x, uint8_t y, uint8_t grey )
 {
     printf( "\tx = %u, y = %u, i = %u.\n", x, y, y * SSD1322_COLS + x );
+//    pthread_mutex_lock( &ssd1322_display_busy );
     ssd1322_fb[id][ y * SSD1322_COLS + x ] = grey;
+//    pthread_mutex_unlock( &ssd1322_display_busy );
+}
+
+// ----------------------------------------------------------------------------
+/*
+    Draw a graphic in the framebuffer.
+*/
+// ----------------------------------------------------------------------------
+int8_t ssd1322_fb_draw_image( uint8_t id, uint8_t x, uint8_t y,
+                              uint16_t dx, uint8_t dy, uint8_t image[] )
+{
+    uint16_t i, j, k;
+
+    if ( x + dx > SSD1322_COLS ) return -1;
+    if ( y + dy > SSD1322_ROWS ) return -1;
+
+    printf( "Drawing %ux%u graphic at %u,%u.\n", dx, dy, x, y );
+
+    k = 0;
+//    pthread_mutex_lock( &ssd1322_display_busy );
+    for ( j = y; j < y + dy; j++ )
+    {
+        for ( i = x; i < x + dx; i++ )
+        {
+            ssd1322_fb[id][ j * SSD1322_COLS + i ] = image[k];
+            k++;
+        }
+//    printf( "\n" );
+    }
+//    pthread_mutex_unlock( &ssd1322_display_busy );
+
+    printf( "i = %u, j = %u, k = %u.\n", i, j, k );
+    return 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -169,7 +209,7 @@ int main()
 {
     uint8_t id;
     int8_t err;
-    uint8_t i;
+    uint8_t i, j;
 
     err = ssd1322_init( GPIO_DC, GPIO_RESET, SPI_CHANNEL, SPI_BAUD, SPI_FLAGS );
 
@@ -211,29 +251,40 @@ int main()
     pthread_t threads[1];
     pthread_create( &threads[0], NULL, ssd1322_fb_write, (void *) &ssd1322_display );
 
-    ssd1322_fill_display( id, 0 );
-
     printf( "Drawing pixels - individuals.\n" );
-    ssd1322_draw_pixel( id, 0, 0, 0x4 );
-    ssd1322_draw_pixel( id, 255, 0, 0x4 );
-    ssd1322_draw_pixel( id, 0, 63, 0x4 );
-    ssd1322_draw_pixel( id, 255, 63, 0x4 );
+    ssd1322_fb_draw_pixel( id, 0, 0, 0x4 );
+    ssd1322_fb_draw_pixel( id, 255, 0, 0x4 );
+    ssd1322_fb_draw_pixel( id, 0, 63, 0x4 );
+    ssd1322_fb_draw_pixel( id, 255, 63, 0x4 );
 
-    printf( "Drawing pixels - for loop.\n" );
-    for ( i = 25; i < 36; i++ )
+    printf( "Drawing graphic - fallout animation loop.\n" );
+    for ( i = 0; i < 5; i++ )
     {
-        ssd1322_draw_pixel( id, i, i, 0xa );
+        for ( j = 0; j < 7; j++ )
+        {
+            ssd1322_fb_draw_image( id, 20, 0, 64, 64, graphics_falloutOK[j] );
+            gpioDelay( 200000 );
+        }
     }
 
-    while (1)
-    {
-    };
+    printf( "Drawing graphic - beach.\n" );
+//    ssd1322_fb_fill_display( id, 0 );
+//    gpioDelay( 100000 );
+    ssd1322_fb_draw_image( id, 0, 0, 256, 64, graphics_beach );
+    gpioDelay( 100000 );
 
-    ssd1322_clear_display( id );
+    // Tell framebuffer thread to stop.
+    ssd1322_fb_kill = 1;
+    gpioDelay( 5000000 );
+
+    // Gracefully stop framebuffer thread.
+    pthread_join( threads[0], NULL );
 
     // Clean up threads.
     pthread_mutex_destroy( &ssd1322_display_busy );
-    pthread_exit( NULL );
+//    pthread_exit( NULL );
+
+    gpioTerminate();
 
     return 0;
 }
