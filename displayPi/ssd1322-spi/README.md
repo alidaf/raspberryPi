@@ -77,3 +77,11 @@ The display I have is 256x64 but the SSD1322 controller supports up to 480x128. 
 Rows correspond to the number of pixels top to bottom but the columns group 4 pixels in each, hence there are 120 columns of 4 pixels. Each pixel has a 4-bit address in the display RAM.
 
 Drawing an arbitrary pixel therefore requires setting the row and column and writing 2 bytes of data that contain the pixel to set.
+
+####Framebuffer:
+
+In order to remove the complexity of drawing individual pixels and accounting for any already underlying image, I have implemented a very basic framebuffer as a thread. The framebuffer thread simply writes the entire content of the buffer to the display in a constant loop. Graphics are simply drawn to the buffer instead, which has a 1:1 pixel mapping with the display. The test incorporates an animation of a 64x64 image (from Fallout 4) and an other 256x64 image.
+
+###To-Do:
+
+Drawing text with predefined fonts. I have some designed a font that I want to use with the display but haven't yet implemented it while I'm busy working on the graphics and graphic primitives. Testing with an Arduino library shows up some kerning issues that I want to hae a look at.
