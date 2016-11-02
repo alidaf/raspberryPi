@@ -267,11 +267,16 @@ int main()
         }
     }
 
-    printf( "Drawing graphic - beach.\n" );
+    printf( "Drawing graphic - Vault-Tec symbols.\n" );
+    ssd1322_fb_draw_image( id, 0, 0, 128, 64, graphics_vaultteclogo64 );
+    ssd1322_fb_draw_image( id, 192, 16, 64, 32, graphics_vaultteclogo32 );
+    gpioDelay( 200000 );
+
+//    printf( "Drawing graphic - beach.\n" );
 //    ssd1322_fb_fill_display( id, 0 );
 //    gpioDelay( 100000 );
-    ssd1322_fb_draw_image( id, 0, 0, 256, 64, graphics_beach );
-    gpioDelay( 100000 );
+//    ssd1322_fb_draw_image( id, 0, 0, 256, 64, graphics_beach );
+//    gpioDelay( 100000 );
 
     // Tell framebuffer thread to stop.
     ssd1322_fb_kill = 1;

@@ -67,7 +67,7 @@
 #include <pigpio.h>
 
 #include "ssd1322-spi.h"
-#include "beach.h"
+#include "graphics.h"
 
 // SSD1322 supports 480x128 but display is 256x64.
 #define COLS_VIS_MIN 0x00 // Visible cols - start.
@@ -286,9 +286,11 @@ void test_load_image( uint8_t id )
 
     for ( i = 0; i < 8192; i++ )
     {
-        printf( "%u: %u, %u -> 0x%x.\n", i, beach[i*2], beach[i*2+1],
-                                          ( beach[i*2]<<4 | beach[i*2+1] ));
-        image[i] = ( beach[i*2]<<4 | beach[i*2+1] );
+        printf( "%u: %u, %u -> 0x%x.\n", i, graphics_beach[i*2],
+                                            graphics_beach[i*2+1],
+                                          ( graphics_beach[i*2]<<4 |
+                                            graphics_beach[i*2+1] ));
+        image[i] = ( graphics_beach[i*2]<<4 | graphics_beach[i*2+1] );
     }
     test_draw_image( id, image );
 }
