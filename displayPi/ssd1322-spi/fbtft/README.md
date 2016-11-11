@@ -16,29 +16,28 @@ Get the code for the SSD1322 driver from the presslab-us repo and store the file
 
 The FBTFT_REGISTER_DRIVER function has changed so the call needs to be updated in the source code:
 
-*cd [location of source code]*
-Edit the source file (fb_ssd1322.c). I use nano, so:
-*nano fb_ssd1322.c*
+*>cd [location of source code]*
+*Edit the source file (fb_ssd1322.c). I use nano, so:
+*>nano fb_ssd1322.c*
 
-Find the following line (near the end of the file)...
+*Find the following line (near the end of the file)...
 
->FBTFT_REGISTER_DRIVER(DRVNAME, &display);
+*>FBTFT_REGISTER_DRIVER(DRVNAME, &display);
 
-and change it to...
+*and change it to...
 
->FBTFT_REGISTER_DRIVER(DRVNAME, "SSD1322 driver", &display);
+*>FBTFT_REGISTER_DRIVER(DRVNAME, "SSD1322 driver", &display);
     
-Save and exit (Ctrl-x using nano.)
+*Save and exit (Ctrl-x using nano.)
     
-Install bc:
+*Install bc:
 
->sudo apt-get install bc
+*>sudo apt-get install bc
     
-Update the system to ensure parity with the kernel we are about to compile:
+*Update the system to ensure parity with the kernel we are about to compile:
 
->sudo apt-get update
-
->sudo apt-get dist-upgrade
+*>sudo apt-get update
+*>sudo apt-get dist-upgrade
     
 ####Preparation: 
 
