@@ -4,7 +4,7 @@ I managed to write a very basic framebuffer driver for this display and while it
 
 There is a framebuffer project by [notro](https://github.com/notro/fbtft) that aims to provide drivers for small display modules. The project includes devices for well over 20 different displays, plus a further 10 or more in the fork by presslab-us. The original notro project has now been included in the Linux kernel staging tree and further development has pretty much ceased. The fork by presslab-us hasn't been synched with the parent for some time and there are now some disparities. Following the guides for either has been very difficult but, with the patient help of [notro](https://github.com/notro), I have pieced together a guide that has enabled me to compile and test a driver for the SSD1322 display. This guide may also be applicable to some of the other displays provided by [presslab-us](https://github.com/presslab-us).
 
-#####Thanks:
+**Thanks:**
 
 Thanks to [notro](https://github.com/notro) for the original driver code and helping me through the empirical process of trying to combine what remains of the projects into something useable for me.
 
