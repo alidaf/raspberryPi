@@ -1,12 +1,14 @@
 ###SSD1322(SPI) - Using notro's fbtft framebuffer driver (Raspbian):
 
-There is a framebuffer project by notro that aims to provide drivers for small display modules. The project includes devices for well over 20 different displays, plus a further 10 or more in the fork by presslab-us. The original notro project has now been included in the Linux kernel staging tree and further development has pretty much ceased. The fork by presslab-us hasn't been synched with the parent for some time and there are now some disparities. Following the guides for either has been very difficult but, with the patient help of notro, I have pieced together a guide that has enabled me to compile and test a driver for the SSD1322 display, which follows.
+I managed to write a very basic framebuffer driver for this display and while it can handle animations and the like, it doesn't have scheduling and does not provide any hooks into the kernel. It will not be able to provide console output during booting, which is a requirement for what I want to use it for. Consequently I have tried to find a framebuffer driver that allows this.
+
+There is a framebuffer project by [notro](https://github.com/notro/fbtft) that aims to provide drivers for small display modules. The project includes devices for well over 20 different displays, plus a further 10 or more in the fork by presslab-us. The original notro project has now been included in the Linux kernel staging tree and further development has pretty much ceased. The fork by presslab-us hasn't been synched with the parent for some time and there are now some disparities. Following the guides for either has been very difficult but, with the patient help of notro, I have pieced together a guide that has enabled me to compile and test a driver for the SSD1322 display, which follows.
 
 Thanks:
 
-Thanks to [notro](https://github.com/notro/fbtft) for the original driver code and helping me through the empirical process of trying to combine what remains of the projects into something useable for me.
+Thanks to [notro](https://github.com/notro) for the original driver code and helping me through the empirical process of trying to combine what remains of the projects into something useable for me.
 
-Thanks also to [presslab-us](https://github.com/presslab-us/fbtft) for adding additional drivers, including the one for the SSD1322.
+Thanks also to [presslab-us](https://github.com/presslab-us) for adding additional drivers, including the one for the SSD1322.
 
 ####Prerequisites:
 
