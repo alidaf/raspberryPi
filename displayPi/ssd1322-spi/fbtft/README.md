@@ -4,9 +4,9 @@ There is a framebuffer project by notro that aims to provide drivers for small d
 
 Thanks:
 
-Thanks to notro (https://github.com/notro/fbtft) for the original driver code and helping me through the empirical process of trying to combine what remains of the projects into something useable for me.
+Thanks to [notro](https://github.com/notro/fbtft) for the original driver code and helping me through the empirical process of trying to combine what remains of the projects into something useable for me.
 
-Thanks also to presslab-us (https://github.com/presslab-us/fbtft) for adding additional drivers, including the one for the SSD1322.
+Thanks also to [presslab-us](https://github.com/presslab-us/fbtft) for adding additional drivers, including the one for the SSD1322.
 
 ####Prerequisites:
 
