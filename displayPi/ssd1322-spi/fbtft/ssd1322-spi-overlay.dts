@@ -1,0 +1,92 @@
+/*
+    Device Tree overlay for SSD1322 SPI controller.
+
+    Based on overlay for Sainsmart 3.2" display by Alexander Lehmann
+    https://github.com/Flugtiger
+
+    Default pins:
+    DC#    = GPIO23
+    RESET# = GPIO24
+
+*/
+ 
+/dts-v1/;
+/plugin/;
+ 
+/ {
+    compatible = "brcm,bcm2835", "brcm,bcm2708", "brcm,bcm2709";
+ 
+    fragment@0
+    {
+        target = <&spi0>;
+        __overlay__
+        {
+            status = "okay";
+  
+            spidev@0
+            {
+                status = "disabled";
+            };
+ 
+            spidev@1
+            {
+                status = "disabled";
+            };
+        };
+    };
+ 
+    fragment@1
+    {
+        target = <&gpio>;
+        __overlay__
+        {
+            ssd1322_pins: ssd1322_pins
+            {
+                brcm,pins = <23 24>;
+                brcm,function = <1 1>;
+            };
+        };
+    };
+ 
+    fragment@2
+    {
+        target = <&spi0>;
+        __overlay__
+        {
+            #address-cells = <1>;
+            #size-cells = <0>;
+ 
+            ssd1322: ssd1322@0
+            {
+                compatible = "solomon,ssd1322";
+                reg = <0>;
+ 
+                pinctrl-names = "default";
+                pinctrl-0 = <&ssd1322_pins>;
+                buswidth = <8>;
+                bgr;
+ 
+                spi-max-frequency = <16000000>;
+                rotate = <0>;
+                fps = <20>;
+                reset-gpios = <&gpio 24 0>;
+                dc-gpios = <&gpio 23 1>;
+                debug = <0>;
+            };
+ 
+        };
+    };
+
+    __overrides__
+    {
+        speed     = <&ssd1322>,"spi-max-frequency:0";
+        rotate    = <&ssd1322>,"rotate:0";
+        fps       = <&ssd1322>,"fps:0";
+        resetgpio = <&ssd1322>,"reset-gpios:4",
+                    <&ssd1322_pins>, "brcm,pins:1";
+        dcgpio    = <&ssd1322>,"dc-gpios:4",
+                    <&ssd1322_pins>, "brcm,pins:2";
+        debug     = <&ssd1322>,"debug:0";
+    };
+};
+ 
