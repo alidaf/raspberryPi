@@ -158,10 +158,13 @@ static struct fbtft_display display = {
 		.set_gamma = set_gamma,
 	},
 };
+
 FBTFT_REGISTER_DRIVER(DRVNAME, "SSD1322", &display);
 
 MODULE_ALIAS("spi:" DRVNAME);
 MODULE_ALIAS("platform:" DRVNAME);
+MODULE_ALIAS("spi:ssd1322");
+MODULE_ALIAS("platform:ssd1322");
 
 MODULE_DESCRIPTION("SSD1322 OLED Driver");
 MODULE_AUTHOR("Ryan Press");

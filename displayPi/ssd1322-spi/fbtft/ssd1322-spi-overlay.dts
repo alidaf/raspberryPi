@@ -63,15 +63,16 @@
  
                 pinctrl-names = "default";
                 pinctrl-0 = <&ssd1322_pins>;
-                buswidth = <8>;
-                bgr;
- 
+
                 spi-max-frequency = <16000000>;
+                buswidth = <8>;
                 rotate = <0>;
+                bgr = <0>;
                 fps = <20>;
+
                 reset-gpios = <&gpio 24 0>;
                 dc-gpios = <&gpio 23 1>;
-                debug = <0>;
+                debug = <3>;
             };
  
         };
@@ -81,6 +82,7 @@
     {
         speed     = <&ssd1322>,"spi-max-frequency:0";
         rotate    = <&ssd1322>,"rotate:0";
+        bgr       = <&ssd1322>,"bgr:0";
         fps       = <&ssd1322>,"fps:0";
         resetgpio = <&ssd1322>,"reset-gpios:4",
                     <&ssd1322_pins>, "brcm,pins:1";
