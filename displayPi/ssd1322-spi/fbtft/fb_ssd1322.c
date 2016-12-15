@@ -159,7 +159,7 @@ static struct fbtft_display display = {
 	},
 };
 
-FBTFT_REGISTER_DRIVER(DRVNAME, "SSD1322", &display);
+FBTFT_REGISTER_DRIVER(DRVNAME, "solomon,ssd1322", &display);
 
 MODULE_ALIAS("spi:" DRVNAME);
 MODULE_ALIAS("platform:" DRVNAME);
