@@ -91,19 +91,19 @@ The **MCP42x1** has 4 commands:
 
 For testing, LEDs were connected via a breadboard as follows:
 
-                        +-----------( )-----------+
-                        |  Fn  | pin | pin |  Fn  |
-                        |------+-----+-----+------|
-               CE0 <----| CS   |  01 | 14  |  VDD |-----------> +5V
-             SCKL1 <----| SCK  |  02 | 13  |  SDO |----> MISO
-              MOSI <----| SDI  |  03 | 12  | SHDN |
-   GND <-;--------------| VSS  |  04 | 11  |   NC |--------------;-> GND
-         |         R    | P1B  |  05 | 10  |  P0B |    R         |
-         '--|<|--/\/\/--| P1W  |  06 | 09  |  P0W |--/\/\/--|>|--'
-            //        ,-| P1A  |  07 | 08  |  P0A |-,        \\
-            LED       | +-------------------------+ |       LED
-                      |                             |
-                      '-----------------------------'---------> +5V
+                         +-----------( )-----------+
+                         |  Fn  | pin | pin |  Fn  |
+                         |------+-----+-----+------|
+                CE0 <----| CS   |  01 | 14  |  VDD |-----------> +5V
+              SCKL1 <----| SCK  |  02 | 13  |  SDO |----> MISO
+               MOSI <----| SDI  |  03 | 12  | SHDN |
+    GND <-,--------------| VSS  |  04 | 11  |   NC |--------------,-> GND
+          |         R    | P1B  |  05 | 10  |  P0B |    R         |
+          '--|<|--/\/\/--| P1W  |  06 | 09  |  P0W |--/\/\/--|>|--'
+             //        ,-| P1A  |  07 | 08  |  P0A |-,        \\
+             LED       | +-------------------------+ |       LED
+                       |                             |
+                       '-----------------------------'---------> +5V
 
 The LEDs have a forward voltage of 1.8 V and a maximum operating current of 20 mA, therefore a 160 Ohm resistance is ideal (for 5V **VDD**) for placing in series with it. However, the wiper resistance is 75 Ohms so only an 85 Ohms resistor is needed. The closest I have is 75 Ohms, which seems fine.
 
