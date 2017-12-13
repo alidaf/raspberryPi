@@ -84,4 +84,4 @@ In order to remove the complexity of drawing individual pixels and accounting fo
 
 ###To-Do:
 
-Drawing text with predefined fonts. I have some designed a font that I want to use with the display but haven't yet implemented it while I'm busy working on the graphics and graphic primitives. Testing with an Arduino library shows up some kerning issues that I want to hae a look at.
+Drawing text with predefined fonts. I have designed a font that I want to use with the display but haven't yet implemented it while I'm busy working on the graphics and graphic primitives. Testing with an Arduino library shows up some kerning issues that I want to have a look at.
